@@ -1,0 +1,11 @@
+{
+  "timestamp": 1781165201.1455736,
+  "articles_indexed": 0,
+  "smoke_test_query": "Apple unveils new AI chip",
+  "smoke_test_latency_ms": 16.82,
+  "smoke_test_top_k_returned": 0,
+  "index_size_bytes": 16384,
+  "index_size_mb": 0.02,
+  "recall": "N/A (unsupervised)",
+  "top_results": []
+}

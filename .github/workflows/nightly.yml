@@ -1,0 +1,339 @@
+# Future additions (Phase 3C+):
+# - Locust
+# - Benchmarks
+# - validate_live.py
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # Daily at 03:00 UTC
+  workflow_dispatch:      # Manual trigger for debugging
+
+concurrency:
+  group: nightly-main
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql+asyncpg://postgres:postgres_ci_pass@localhost:5432/tech_news_test
+  REDIS_URL: redis://localhost:6379/0
+  REDIS_HOST: localhost
+  REDIS_PORT: "6379"
+  ENV: test
+  PYTHONPATH: .
+
+jobs:
+  thumbnail-certification:
+    name: Thumbnail Certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-backend-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            pip-backend-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run validate_snapshots
+        run: python -m tests.thumbnail_validation.validate_snapshots
+
+      - name: Write step summary
+        if: always()
+        run: |
+          python -c '
+          import json, os
+          report_path = "tests/thumbnail_validation/reports/json/report_snapshot.json"
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if os.path.exists(report_path) and summary_file:
+              with open(report_path) as f:
+                  data = json.load(f)
+              with open(summary_file, "a") as sf:
+                  sf.write("### Thumbnail Certification\n\n")
+                  sf.write("| Grade | Fixtures | Fallback Rate | Duplicate Rate | Status |\n")
+                  sf.write("|:---:|:---:|:---:|:---:|:---:|\n")
+                  sf.write("| **{}** | {} | {}% | {}% | **{}** |\n\n".format(
+                      data.get("grade"),
+                      data.get("total_articles"),
+                      data.get("fallback_rate"),
+                      data.get("duplicate_rate"),
+                      data.get("status")
+                  ))
+          '
+
+      - name: Upload certification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-thumbnail-certification
+          path: backend/tests/thumbnail_validation/reports/
+          retention-days: 14
+
+  full-playwright:
+    name: Full Playwright Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_pass
+          POSTGRES_DB: tech_news_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tech_news_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-backend-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            pip-backend-
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Initialize database
+        run: python -m app.core.init_db
+        working-directory: backend
+
+      - name: Ensure test admin user
+        run: >
+          python scripts/manage_test_user.py ensure
+          test_admin_playwright@example.com
+          test_password_secure_123!
+          super_admin
+        working-directory: backend
+
+      - name: Start backend server
+        run: python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+        working-directory: backend
+
+      - name: Wait for backend readiness
+        run: |
+          echo "Waiting for backend /health/ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/api/v1/health/ready > /dev/null 2>&1; then
+              echo "Backend is ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend failed to become ready within 60 seconds"
+          exit 1
+        working-directory: .
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=html,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-report.json
+
+      - name: Write step summary
+        if: always()
+        run: |
+          python -c '
+          import json, os
+          report_path = "playwright-report.json"
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if os.path.exists(report_path) and summary_file:
+              with open(report_path) as f:
+                  data = json.load(f)
+              stats = data.get("stats", {})
+              passed = stats.get("expected", 0)
+              failed = stats.get("unexpected", 0)
+              flaky = stats.get("flaky", 0)
+              skipped = stats.get("skipped", 0)
+              with open(summary_file, "a") as sf:
+                  sf.write("### Playwright Regression\n\n")
+                  sf.write("| Passed | Failed | Flaky | Skipped |\n")
+                  sf.write("|:---:|:---:|:---:|:---:|\n")
+                  sf.write("| {} | {} | {} | {} |\n\n".format(passed, failed, flaky, skipped))
+          '
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-test-results
+          path: frontend/test-results/
+          retention-days: 14
+
+  backend-coverage-report:
+    name: Backend Coverage Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_pass
+          POSTGRES_DB: tech_news_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tech_news_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-backend-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            pip-backend-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest-cov
+
+      - name: Initialize database
+        run: python -m app.core.init_db
+
+      - name: Run pytest with full coverage
+        run: >
+          pytest
+          -ra
+          --cov=app
+          --cov-report=xml:coverage.xml
+          --cov-report=html:htmlcov
+          --cov-report=term-missing
+          --junitxml=junit.xml
+
+      - name: Write step summary
+        if: always()
+        run: |
+          python -c '
+          import xml.etree.ElementTree as ET
+          import os
+          junit_path = "junit.xml"
+          coverage_path = "coverage.xml"
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_file:
+              total = 0
+              failed = 0
+              errors = 0
+              skipped = 0
+              passed = 0
+              coverage_pct = 0.0
+              if os.path.exists(junit_path):
+                  tree = ET.parse(junit_path)
+                  root = tree.getroot()
+                  suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+                  for s in suites:
+                      total += int(s.attrib.get("tests", 0))
+                      failed += int(s.attrib.get("failures", 0))
+                      errors += int(s.attrib.get("errors", 0))
+                      skipped += int(s.attrib.get("skipped", 0))
+                  passed = total - failed - errors - skipped
+              if os.path.exists(coverage_path):
+                  tree = ET.parse(coverage_path)
+                  root = tree.getroot()
+                  line_rate = float(root.attrib.get("line-rate", 0))
+                  coverage_pct = round(line_rate * 100, 1)
+              with open(summary_file, "a") as sf:
+                  sf.write("### Backend Tests\n\n")
+                  sf.write("| Passed | Failed | Skipped | Coverage |\n")
+                  sf.write("|:---:|:---:|:---:|:---:|\n")
+                  sf.write("| {} | {} | {} | {}% |\n\n".format(passed, failed + errors, skipped, coverage_pct))
+          '
+
+      - name: Upload coverage XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-backend-coverage-xml
+          path: backend/coverage.xml
+          retention-days: 14
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-backend-coverage-html
+          path: backend/htmlcov/
+          retention-days: 14

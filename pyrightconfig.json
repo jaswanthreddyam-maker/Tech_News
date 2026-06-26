@@ -1,0 +1,10 @@
+{
+  "venvPath": "backend",
+  "venv": "venv",
+  "pythonPath": "C:/Users/HP/Downloads/tech_news/backend/venv/Scripts/python.exe",
+  "extraPaths": [
+    "backend",
+    "backend/app",
+    "backend/venv/Lib/site-packages"
+  ]
+}

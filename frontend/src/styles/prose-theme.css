@@ -1,0 +1,224 @@
+/* ============================================================
+   PROSE THEME — Article body typography
+   ALL colors use semantic --article-* tokens defined in globals.css.
+   NO hardcoded hex values. Both light and dark themes are fully
+   supported automatically via CSS custom property redefinition.
+   Reader preferences are applied via --reader-* variables set on
+   document.documentElement by ReadingPreferences.tsx.
+   ============================================================ */
+
+.prose-theme {
+  font-family: var(--reader-font-family, 'Georgia', 'Times New Roman', serif);
+  font-size: var(--reader-font-size, 1.125rem);
+  line-height: var(--reader-line-height, 1.8);
+  color: var(--article-text);
+  max-width: var(--reader-max-width, 72ch);
+}
+
+/* ── Headings ── */
+.prose-theme h2 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 1.25rem;
+  color: var(--article-heading);
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+  font-family: var(--reader-font-family, 'Georgia', 'Times New Roman', serif);
+}
+
+.prose-theme h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--article-heading);
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  font-family: var(--reader-font-family, 'Georgia', 'Times New Roman', serif);
+}
+
+.prose-theme h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--article-heading);
+  font-family: var(--reader-font-family, 'Georgia', 'Times New Roman', serif);
+}
+
+/* ── Paragraphs ── */
+.prose-theme p {
+  margin-bottom: var(--reader-paragraph-spacing, 1.5rem);
+  color: var(--article-text);
+}
+
+/* ── Links ── */
+.prose-theme a {
+  color: var(--article-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: opacity 0.15s ease;
+}
+
+.prose-theme a:hover {
+  opacity: 0.75;
+}
+
+/* ── Lists ── */
+.prose-theme ul,
+.prose-theme ol {
+  margin-bottom: var(--reader-paragraph-spacing, 1.5rem);
+  padding-left: 1.5rem;
+}
+
+.prose-theme ul {
+  list-style-type: disc;
+}
+
+.prose-theme ol {
+  list-style-type: decimal;
+}
+
+.prose-theme li {
+  margin-bottom: 0.5rem;
+  color: var(--article-text);
+  line-height: var(--reader-line-height, 1.8);
+}
+
+/* ── Tables ── */
+.prose-theme table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-collapse: collapse;
+  margin-top: 2rem;
+  margin-bottom: var(--reader-paragraph-spacing, 1.5rem);
+  font-size: 0.95rem;
+}
+
+.prose-theme th {
+  background-color: var(--article-table-header-bg);
+  color: var(--article-heading);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--article-table-border);
+}
+
+.prose-theme td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--article-table-border);
+  color: var(--article-text);
+}
+
+.prose-theme tr:hover td {
+  background-color: var(--article-surface);
+}
+
+/* ── Blockquotes ── */
+.prose-theme blockquote {
+  border-left: 3px solid var(--article-link);
+  padding-left: 1.5rem;
+  font-style: italic;
+  margin: var(--reader-paragraph-spacing, 1.5rem) 0;
+  color: var(--article-quote);
+}
+
+.prose-theme blockquote cite {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--article-muted);
+  margin-top: 0.5rem;
+  font-style: normal;
+}
+
+/* ── Code ── */
+.prose-theme pre {
+  background-color: var(--article-surface);
+  border: 1px solid var(--article-border);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  overflow-x: auto;
+  max-width: 100%;
+  width: 100%;
+  margin-top: 1.5rem;
+  margin-bottom: var(--reader-paragraph-spacing, 1.5rem);
+}
+
+.prose-theme code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875em;
+  background-color: var(--article-code-bg);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  color: var(--article-code-text);
+  word-break: break-word;
+}
+
+.prose-theme pre code {
+  background-color: transparent;
+  padding: 0;
+  color: var(--article-text);
+  font-size: 0.9rem;
+  word-break: normal;
+  white-space: pre;
+}
+
+/* ── Figures & Captions ── */
+.prose-theme figure {
+  margin: 2.5rem 0;
+}
+
+.prose-theme figcaption {
+  font-size: 0.875rem;
+  color: var(--article-muted);
+  text-align: center;
+  margin-top: 0.75rem;
+  line-height: 1.4;
+}
+
+/* ── Horizontal Rules ── */
+.prose-theme hr {
+  border: 0;
+  border-top: 1px solid var(--article-border);
+  margin: 3rem 0;
+}
+
+/* ── Strong / Em ── */
+.prose-theme strong {
+  color: var(--article-heading);
+  font-weight: 700;
+}
+
+.prose-theme em {
+  color: var(--article-quote);
+}
+
+/* ── Heading anchor links (hover reveal) ── */
+.prose-theme-heading-link {
+  opacity: 0;
+  margin-left: 0.5rem;
+  transition: opacity 0.2s ease-in-out;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.8em;
+  color: var(--article-link);
+}
+
+.prose-theme h2:hover .prose-theme-heading-link,
+.prose-theme h3:hover .prose-theme-heading-link,
+.prose-theme h4:hover .prose-theme-heading-link {
+  opacity: 1;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .prose-theme a,
+  .prose-theme-heading-link {
+    transition: none;
+  }
+}

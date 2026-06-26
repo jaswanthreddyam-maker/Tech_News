@@ -1,0 +1,33 @@
+{
+  "status": "success",
+  "correlation_id": "209ac1fc-1c9a-4eda-8ba6-b1af3bde6f74",
+  "timestamp": "2026-06-12T15:43:35.543795",
+  "data": {
+    "schema_version": 1,
+    "generated_at": "2026-06-12T15:43:35.543767+00:00",
+    "data": {
+      "postgres": {
+        "database_size_bytes": 13745175,
+        "cache_hit_ratio": 1.0,
+        "longest_running_query_sec": 0.0
+      },
+      "redis": {
+        "uptime_seconds": 37375,
+        "connected_clients": 69,
+        "used_memory_bytes": 2923472,
+        "key_count": 762,
+        "fragmentation_ratio": 3.31
+      },
+      "queue": {
+        "queue_depth": 0,
+        "processing_rate_jobs_min": 0,
+        "growth_rate_jobs_5s": 0
+      },
+      "thumbnails": {
+        "total_processed": 35,
+        "success_rate": 0.0,
+        "download_failures": 0
+      }
+    }
+  }
+}

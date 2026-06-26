@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://techcrunch.com/2026/06/09/ios-27-features-we-didnt-see-on-stage/",
+  "expected_domain": "techcrunch.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 9,
+  "expected_thumbnail_source": "article_body_hero",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "date": "2026-06-24 10:04:23",
+  "python_version": "3.13.12",
+  "os": "Windows 11",
+  "git_commit": "967c495",
+  "run_type": "snapshot",
+  "grade": "B",
+  "status": "FAIL",
+  "total_articles": 45,
+  "fallback_count": 2,
+  "fallback_rate": 4.44,
+  "duplicate_count": 0,
+  "duplicate_rate": 0.0,
+  "avg_html_bytes": 578931.0,
+  "avg_candidates": 4.36,
+  "avg_processing_time": 5.7748,
+  "download_failure_rate": 4.44,
+  "quality_gates": {
+    "fallback_rate": false,
+    "avg_candidates": true,
+    "duplicate_rate": true,
+    "avg_html_bytes": true,
+    "download_failure_rate": false,
+    "avg_processing_time": false
+  },
+  "domains": {
+    "arstechnica.com": {
+      "total": 10,
+      "fallback_pct": 20.0,
+      "duplicate_pct": 0.0,
+      "avg_html_kb": 159.3,
+      "avg_candidates": 1.0,
+      "avg_time_sec": 6.11
+    },
+    "blogs.nvidia.com": {
+      "total": 3,
+      "fallback_pct": 0.0,
+      "duplicate_pct": 0.0,
+      "avg_html_kb": 114.5,
+      "avg_candidates": 2.3,
+      "avg_time_sec": 22.64
+    },
+    "nvidianews.nvidia.com": {
+      "total": 2,
+      "fallback_pct": 0.0,
+      "duplicate_pct": 0.0,
+      "avg_html_kb": 75.3,
+      "avg_candidates": 1.0,
+      "avg_time_sec": 5.15
+    },
+    "techcrunch.com": {
+      "total": 10,
+      "fallback_pct": 0.0,
+      "duplicate_pct": 0.0,
+      "avg_html_kb": 227.1,
+      "avg_candidates": 3.5,
+      "avg_time_sec": 5.0
+    },
+    "theverge.com": {
+      "total": 10,
+      "fallback_pct": 0.0,
+      "duplicate_pct": 0.0,
+      "avg_html_kb": 552.8,
+      "avg_candidates": 3.4,
+      "avg_time_sec": 3.19
+    },
+    "tomshardware.com": {
+      "total": 10,
+      "fallback_pct": 0.0,
+      "duplicate_pct": 0.0,
+      "avg_html_kb": 1555.4,
+      "avg_candidates": 10.8,
+      "avg_time_sec": 3.86
+    }
+  },
+  "winner_distribution": {
+    "og:image": 43,
+    "fallback": 2
+  },
+  "failure_reasons": {
+    "network_timeout": 2
+  },
+  "trends": {
+    "fallback_rate": "\u2014",
+    "avg_candidates": "\u2192 No change",
+    "avg_html_kb": "\u2192 No change",
+    "duplicate_rate": "\u2014",
+    "avg_time": "\u2191 1.3 \u2192 5.8 \u26a0\ufe0f Regressed"
+  }
+}

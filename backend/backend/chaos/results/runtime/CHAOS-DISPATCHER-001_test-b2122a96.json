@@ -1,0 +1,15 @@
+{
+  "scenario_id": "CHAOS-DISPATCHER-001",
+  "correlation_id": "test-b2122a96",
+  "failure_injected_at": "2026-06-23T06:19:04.597283+00:00",
+  "detected_at": "2026-06-23T06:19:15.821596+00:00",
+  "recovered_at": "2026-06-23T06:19:30.825986+00:00",
+  "detection_seconds": 11.224313,
+  "recovery_seconds": 26.228703,
+  "root_cause_seconds": 0,
+  "explanation_seconds": 0,
+  "event_loss": false,
+  "projection_consistent": true,
+  "chain_complete": false,
+  "sla_passed": true
+}

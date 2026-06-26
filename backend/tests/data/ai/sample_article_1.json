@@ -1,0 +1,5 @@
+{
+  "title": "Quantum Computing Breakthrough at MIT",
+  "content": "Researchers at MIT have achieved a major milestone in quantum computing by successfully maintaining a stable quantum state for a record-breaking 10 seconds. This development could pave the way for practical quantum computers capable of solving complex problems in cryptography and materials science that are currently intractable for classical computers. The team utilized a novel cooling technique that reduces thermal noise near absolute zero. Further experiments are planned to scale the system from 50 to 100 qubits.",
+  "expected_keywords": ["quantum", "MIT", "qubits"]
+}

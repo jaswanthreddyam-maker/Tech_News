@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.tomshardware.com/pc-components/cooling/levelplay-shows-off-magnetically-attached-fans-that-are-reversible-connect-via-pogo-pins-and-usb-c-plus-an-aio-that-trades-a-screen-for-a-big-knob",
+  "expected_domain": "tomshardware.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 7,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

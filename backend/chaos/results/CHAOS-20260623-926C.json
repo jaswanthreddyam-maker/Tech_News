@@ -1,0 +1,17 @@
+{
+  "scenario": "CHAOS-TEST",
+  "correlation_id": "CHAOS-20260623-926C",
+  "detection_seconds": 5.6,
+  "recovery_seconds": 5.6,
+  "root_cause_seconds": 5.6,
+  "explanation_seconds": 5.6,
+  "sla_passed": true,
+  "no_silent_failures": true,
+  "success": true,
+  "validation_details": {
+    "health_check_detected": true,
+    "recovery_triggered": true,
+    "root_cause_generated": true,
+    "explanation_generated": true
+  }
+}

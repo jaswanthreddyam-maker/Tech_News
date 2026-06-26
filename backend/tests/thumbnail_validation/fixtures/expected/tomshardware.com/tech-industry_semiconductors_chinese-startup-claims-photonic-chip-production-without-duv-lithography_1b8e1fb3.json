@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.tomshardware.com/tech-industry/semiconductors/chinese-startup-claims-photonic-chip-production-without-duv-lithography-says-nanoimprint-process-cuts-costs-by-90-percent-8-inch-wafers-produced-without-conventional-optical-lithography",
+  "expected_domain": "tomshardware.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 12,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

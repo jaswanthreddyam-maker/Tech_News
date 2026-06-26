@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://arstechnica.com/space/2026/06/tests-suggest-russian-satellites-can-jam-gps-on-a-continental-scale/",
+  "expected_domain": "arstechnica.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 1,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "folders": [
+    {
+      "path": "backend",
+      "name": "Backend"
+    },
+    {
+      "path": "frontend",
+      "name": "Frontend"
+    },
+    {
+      "path": "docs",
+      "name": "Docs"
+    },
+    {
+      "path": "scripts",
+      "name": "Scripts"
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/node_modules": true,
+      "**/.next": true,
+      "runtime/**": true
+    },
+    "editor.formatOnSave": true,
+    "terminal.integrated.cwd": "${workspaceFolder}"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "charliermarsh.ruff",
+      "ms-azuretools.vscode-docker",
+      "bradlc.vscode-tailwindcss",
+      "ckolkman.vscode-postgres",
+      "dbaeumer.vscode-eslint"
+    ]
+  }
+}

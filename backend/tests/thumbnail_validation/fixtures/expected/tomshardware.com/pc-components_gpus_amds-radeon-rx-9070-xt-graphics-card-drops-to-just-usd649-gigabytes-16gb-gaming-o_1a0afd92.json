@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.tomshardware.com/pc-components/gpus/amds-radeon-rx-9070-xt-graphics-card-drops-to-just-usd649-gigabytes-16gb-gaming-oc-gpu-is-usd90-cheaper-in-todays-amazon-deal",
+  "expected_domain": "tomshardware.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 7,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

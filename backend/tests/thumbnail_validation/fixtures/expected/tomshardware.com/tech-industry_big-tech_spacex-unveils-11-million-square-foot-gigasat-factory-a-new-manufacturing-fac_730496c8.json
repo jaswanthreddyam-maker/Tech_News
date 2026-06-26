@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.tomshardware.com/tech-industry/big-tech/spacex-unveils-11-million-square-foot-gigasat-factory-a-new-manufacturing-facility-for-space-based-data-centers-aims-for-1-gw-year-of-space-ai-compute-by-late-2027-from-its-satellites",
+  "expected_domain": "tomshardware.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 12,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

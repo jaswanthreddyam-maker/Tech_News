@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://blogs.nvidia.com/blog/nvidia-and-doosan-group-physical-ai/",
+  "expected_domain": "blogs.nvidia.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 2,
+  "expected_thumbnail_source": "og:image",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "scenario_id": "CHAOS-OUTBOX-001",
+  "correlation_id": "test-7fdbe6aa",
+  "failure_injected_at": "2026-06-23T06:17:43.546501+00:00",
+  "detected_at": "2026-06-23T06:17:46.729738+00:00",
+  "recovered_at": "2026-06-23T06:17:57.164272+00:00",
+  "detection_seconds": 3.183237,
+  "recovery_seconds": 13.617771,
+  "root_cause_seconds": 0,
+  "explanation_seconds": 0,
+  "event_loss": false,
+  "projection_consistent": true,
+  "chain_complete": false,
+  "sla_passed": true
+}

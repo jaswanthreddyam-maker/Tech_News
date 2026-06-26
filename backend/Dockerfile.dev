@@ -1,0 +1,29 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies (build-essential, curl for health checks, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    libpq-dev \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend codebase
+COPY . .
+
+# Set dynamic path variables
+ENV PYTHONPATH=/app
+
+EXPOSE 8000
+
+# Make scripts executable
+RUN chmod +x scripts/*.sh
+
+# Default starter dev command
+CMD ["bash", "./scripts/start_backend.sh"]

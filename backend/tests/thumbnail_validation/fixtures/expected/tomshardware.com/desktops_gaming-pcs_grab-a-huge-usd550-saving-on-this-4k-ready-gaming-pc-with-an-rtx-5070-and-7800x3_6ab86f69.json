@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.tomshardware.com/desktops/gaming-pcs/grab-a-huge-usd550-saving-on-this-4k-ready-gaming-pc-with-an-rtx-5070-and-7800x3d-right-now-just-usd1-449-for-this-liquid-cooled-ibuypower-rig-with-16gb-ddr5-and-a-1tb-ssd",
+  "expected_domain": "tomshardware.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 11,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://arstechnica.com/gadgets/2026/06/ios-27-and-ipados-27-dont-drop-support-for-any-iphones-and-just-a-few-ipads/",
+  "expected_domain": "arstechnica.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 1,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

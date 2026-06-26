@@ -1,0 +1,49 @@
+# Gitleaks Configuration
+# Secret scanning rules for Tech News Today
+# See: https://github.com/gitleaks/gitleaks
+
+title = "Tech News Today - Secret Scanning Rules"
+
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''node_modules''',
+    '''\.next''',
+    '''venv''',
+    '''\.git''',
+    '''package-lock\.json''',
+    '''\.env\.example''',
+  ]
+
+# Custom rules for project-specific secrets
+[[rules]]
+  id = "openai-api-key"
+  description = "OpenAI API Key"
+  regex = '''sk-[a-zA-Z0-9]{20,}'''
+  tags = ["key", "openai"]
+
+[[rules]]
+  id = "google-oauth-secret"
+  description = "Google OAuth Client Secret"
+  regex = '''GOCSPX-[a-zA-Z0-9_-]{28}'''
+  tags = ["key", "google"]
+
+[[rules]]
+  id = "jwt-secret-value"
+  description = "JWT Secret in configuration"
+  regex = '''(?i)jwt[_-]?secret\s*[=:]\s*["']?[a-zA-Z0-9+/=]{32,}["']?'''
+  tags = ["key", "jwt"]
+  [rules.allowlist]
+    paths = ['''\.env\.example''']
+
+[[rules]]
+  id = "database-password-inline"
+  description = "Database password hardcoded"
+  regex = '''(?i)(?:postgres|mysql|db)(?:_)?password\s*[=:]\s*["']?(?!postgres_ci_pass)[a-zA-Z0-9!@#$%^&*]{8,}["']?'''
+  tags = ["password", "database"]
+  [rules.allowlist]
+    paths = [
+      '''docker-compose\.yml''',
+      '''\.env\.example''',
+      '''\.github/workflows/.*\.yml''',
+    ]

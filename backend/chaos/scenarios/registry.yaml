@@ -1,0 +1,21 @@
+scenarios:
+  - id: CHAOS-SRC-001
+    name: Disable RSS Source
+    description: Simulates an upstream ingestion failure by marking a source as degraded.
+    expected_root_cause: External Asset Download Failure
+    expected_recovery: Source Isolation
+    expected_confidence: 0.95
+
+  - id: CHAOS-WORKER-001
+    name: Celery Worker Termination
+    description: Kills the celery worker process to simulate infrastructure failure.
+    expected_root_cause: Worker Infrastructure Offline
+    expected_recovery: Worker Restart
+    expected_confidence: 0.95
+
+  - id: CHAOS-CQRS-001
+    name: Projection Drift Simulator
+    description: Introduces a malformed event or pauses projection to force drift.
+    expected_root_cause: CQRS Projection Lag
+    expected_recovery: Batch Replay
+    expected_confidence: 0.95

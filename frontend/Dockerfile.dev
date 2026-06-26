@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install build dependencies for native node-gyp packages if any
+RUN apk add --no-cache libc6-compat
+
+# Install package dependencies using npm cache and resolving peer deps
+COPY package.json ./
+RUN npm install --legacy-peer-deps
+
+# Copy source code
+COPY . .
+
+EXPOSE 3000
+
+ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
+
+# Default dev command
+CMD ["npm", "run", "dev"]

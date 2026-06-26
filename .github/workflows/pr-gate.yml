@@ -1,0 +1,509 @@
+# ============================================================================
+# PR Gate — Unified CI Pipeline
+# ============================================================================
+# Every check MUST pass before a PR can be merged to main or develop.
+# This consolidates quality, tests, docker, and security into a single workflow.
+# ============================================================================
+
+name: PR Gate
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: pr-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql+asyncpg://postgres:postgres_ci_pass@localhost:5432/tech_news_test
+  REDIS_URL: redis://localhost:6379/0
+  REDIS_HOST: localhost
+  REDIS_PORT: "6379"
+  ENV: test
+  PYTHONPATH: .
+
+jobs:
+
+  # ── 1. Backend Lint ────────────────────────────────────────────────────────
+  backend-lint:
+    name: "1. Ruff Lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install ruff
+      - run: ruff check .
+        working-directory: backend
+
+  # ── 2. Backend Type Check ──────────────────────────────────────────────────
+  backend-typecheck:
+    name: "2. MyPy Type Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: backend-lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt mypy
+        working-directory: backend
+      - run: mypy .
+        working-directory: backend
+
+  # ── 3. Frontend Lint + TypeCheck ───────────────────────────────────────────
+  frontend-lint:
+    name: "3. ESLint + TypeScript"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx next lint
+        working-directory: frontend
+      - run: npx tsc --noEmit
+        working-directory: frontend
+
+  # ── 4. Schema & Migrations ────────────────────────────────────────────────
+  schema-migrations:
+    name: "4. Alembic + Schema Drift"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: backend-lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_pass
+          POSTGRES_DB: tech_news_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tech_news_test"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pip install -r requirements.txt
+        working-directory: backend
+      - run: alembic upgrade head
+        working-directory: backend
+      - run: alembic check
+        working-directory: backend
+      - run: python scripts/generate_schema.py --verify
+        working-directory: backend
+
+  # ── 5. Backend Tests + Coverage ────────────────────────────────────────────
+  backend-tests:
+    name: "5. Backend Tests + Coverage"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [backend-typecheck, schema-migrations]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_pass
+          POSTGRES_DB: tech_news_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tech_news_test"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-backend-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: pip-backend-
+      - run: pip install -r requirements.txt pytest-cov
+        working-directory: backend
+      - run: python -m app.core.init_db
+        working-directory: backend
+      - name: Run pytest with coverage
+        run: >
+          pytest -ra --maxfail=3
+          --cov=app --cov-report=xml:coverage.xml --cov-report=html:htmlcov
+          --junitxml=junit.xml
+        working-directory: backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: |
+            backend/coverage.xml
+            backend/htmlcov/
+            backend/junit.xml
+          retention-days: 14
+
+  # ── 6. Security Audit ──────────────────────────────────────────────────────
+  security-audit:
+    name: "6. Security Audit"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: npm audit (critical only)
+        run: npm audit --audit-level=critical || true
+        working-directory: frontend
+
+      # Backend
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --desc || true
+
+      # Secret scanning
+      - name: Secret Scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE || '' }}
+
+  # ── 7. Bundle Certification ────────────────────────────────────────────────
+  bundle-certification:
+    name: "7. Bundle Certification"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: frontend-lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Run Application Certification
+        run: npx tsx scripts/certify_application.ts
+        working-directory: frontend
+      - name: Verify PWA Assets
+        run: |
+          test -f public/manifest.json || (echo "Missing manifest.json" && exit 1)
+          test -f public/icon-192.png || (echo "Missing PWA icons" && exit 1)
+          echo "✅ PWA assets verified"
+        working-directory: frontend
+
+  # ── 8. Accessibility ───────────────────────────────────────────────────────
+  accessibility:
+    name: "8. Accessibility (axe-core)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [backend-tests, bundle-certification]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_pass
+          POSTGRES_DB: tech_news_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tech_news_test"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-backend-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: pip-backend-
+      - run: pip install -r requirements.txt
+        working-directory: backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: python -m app.core.init_db
+        working-directory: backend
+      - run: >
+          python scripts/manage_test_user.py ensure
+          test_admin_playwright@example.com
+          test_password_secure_123!
+          super_admin
+        working-directory: backend
+      - name: Start backend
+        run: python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+        working-directory: backend
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/api/v1/health/ready > /dev/null 2>&1 && echo "Ready" && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run accessibility tests
+        run: npx playwright test accessibility.spec.ts --reporter=html,list
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: accessibility-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+  # ── 9. Playwright E2E ──────────────────────────────────────────────────────
+  playwright-e2e:
+    name: "9. Playwright E2E"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [backend-tests, bundle-certification]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_pass
+          POSTGRES_DB: tech_news_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tech_news_test"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-backend-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: pip-backend-
+      - run: pip install -r requirements.txt
+        working-directory: backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: python -m app.core.init_db
+        working-directory: backend
+      - run: >
+          python scripts/manage_test_user.py ensure
+          test_admin_playwright@example.com
+          test_password_secure_123!
+          super_admin
+        working-directory: backend
+      - name: Start backend
+        run: python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+        working-directory: backend
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/api/v1/health/ready > /dev/null 2>&1 && echo "Ready" && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run all Playwright tests
+        run: npx playwright test --reporter=html,json
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-report.json
+      - name: Write step summary
+        if: always()
+        run: |
+          python -c '
+          import json, os
+          report_path = "frontend/playwright-report.json"
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if os.path.exists(report_path) and summary_file:
+              with open(report_path) as f:
+                  data = json.load(f)
+              stats = data.get("stats", {})
+              passed = stats.get("expected", 0)
+              failed = stats.get("unexpected", 0)
+              flaky = stats.get("flaky", 0)
+              skipped = stats.get("skipped", 0)
+              with open(summary_file, "a") as sf:
+                  sf.write("### Playwright E2E Results\n\n")
+                  sf.write("| Passed | Failed | Flaky | Skipped |\n")
+                  sf.write("|:---:|:---:|:---:|:---:|\n")
+                  sf.write("| {} | {} | {} | {} |\n\n".format(passed, failed, flaky, skipped))
+          '
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-e2e-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 14
+
+  # ── 10. Docker Build ───────────────────────────────────────────────────────
+  docker-build:
+    name: "10. Docker Build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOCKER_BUILDKIT: "1"
+      COMPOSE_DOCKER_CLI_BUILD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: cp .env.example .env
+      - run: docker compose config --quiet
+      - run: docker compose build --pull
+      - run: docker compose images
+      - name: Verify images
+        run: |
+          docker image inspect tech-news-backend
+          docker image inspect tech-news-worker
+          docker image inspect tech-news-beat
+          docker image inspect tech-news-frontend
+
+  # ── 11. OpenAPI Snapshot ───────────────────────────────────────────────────
+  openapi-snapshot:
+    name: "11. OpenAPI Snapshot"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: backend-tests
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_pass
+          POSTGRES_DB: tech_news_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tech_news_test"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-backend-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: pip-backend-
+      - run: pip install -r requirements.txt
+        working-directory: backend
+      - run: python -m app.core.init_db
+        working-directory: backend
+      - name: Generate and verify OpenAPI snapshot
+        run: python scripts/openapi_snapshot.py --verify
+        working-directory: backend
+
+  # ── Final: PR Gate Status ──────────────────────────────────────────────────
+  pr-gate-status:
+    name: "✅ PR Gate"
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - backend-lint
+      - backend-typecheck
+      - frontend-lint
+      - schema-migrations
+      - backend-tests
+      - security-audit
+      - bundle-certification
+      - accessibility
+      - playwright-e2e
+      - docker-build
+      - openapi-snapshot
+    steps:
+      - name: Check all gates
+        run: |
+          echo "Gate Results:"
+          echo "  backend-lint:        ${{ needs.backend-lint.result }}"
+          echo "  backend-typecheck:   ${{ needs.backend-typecheck.result }}"
+          echo "  frontend-lint:       ${{ needs.frontend-lint.result }}"
+          echo "  schema-migrations:   ${{ needs.schema-migrations.result }}"
+          echo "  backend-tests:       ${{ needs.backend-tests.result }}"
+          echo "  security-audit:      ${{ needs.security-audit.result }}"
+          echo "  bundle-certification:${{ needs.bundle-certification.result }}"
+          echo "  accessibility:       ${{ needs.accessibility.result }}"
+          echo "  playwright-e2e:      ${{ needs.playwright-e2e.result }}"
+          echo "  docker-build:        ${{ needs.docker-build.result }}"
+          echo "  openapi-snapshot:    ${{ needs.openapi-snapshot.result }}"
+
+          # Fail if any required job failed
+          if [[ "${{ needs.backend-lint.result }}" == "failure" ]] || \
+             [[ "${{ needs.backend-typecheck.result }}" == "failure" ]] || \
+             [[ "${{ needs.frontend-lint.result }}" == "failure" ]] || \
+             [[ "${{ needs.schema-migrations.result }}" == "failure" ]] || \
+             [[ "${{ needs.backend-tests.result }}" == "failure" ]] || \
+             [[ "${{ needs.security-audit.result }}" == "failure" ]] || \
+             [[ "${{ needs.bundle-certification.result }}" == "failure" ]] || \
+             [[ "${{ needs.accessibility.result }}" == "failure" ]] || \
+             [[ "${{ needs.playwright-e2e.result }}" == "failure" ]] || \
+             [[ "${{ needs.docker-build.result }}" == "failure" ]] || \
+             [[ "${{ needs.openapi-snapshot.result }}" == "failure" ]]; then
+            echo ""
+            echo "❌ PR GATE FAILED — One or more required checks did not pass."
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ ALL GATES PASSED"

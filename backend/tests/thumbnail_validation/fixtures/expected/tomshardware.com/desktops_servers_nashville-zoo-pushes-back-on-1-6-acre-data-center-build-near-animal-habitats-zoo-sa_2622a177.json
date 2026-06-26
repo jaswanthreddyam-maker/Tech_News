@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.tomshardware.com/desktops/servers/nashville-zoo-pushes-back-on-1-6-acre-data-center-build-near-animal-habitats-zoo-says-it-planned-to-use-lot-for-education-and-conservation-center",
+  "expected_domain": "tomshardware.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 12,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

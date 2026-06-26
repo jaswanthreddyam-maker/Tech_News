@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.theverge.com/entertainment/946717/kingdom-hearts-4-switch-2",
+  "expected_domain": "theverge.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 1,
+  "expected_thumbnail_source": "og:image",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

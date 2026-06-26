@@ -1,0 +1,17 @@
+{
+  "scenario": "CHAOS-CQRS-001",
+  "correlation_id": "CHAOS-20260622-5A69",
+  "detection_seconds": 0.7,
+  "recovery_seconds": null,
+  "root_cause_seconds": null,
+  "explanation_seconds": null,
+  "sla_passed": false,
+  "no_silent_failures": false,
+  "success": false,
+  "validation_details": {
+    "health_check_detected": true,
+    "recovery_triggered": false,
+    "root_cause_generated": false,
+    "explanation_generated": false
+  }
+}

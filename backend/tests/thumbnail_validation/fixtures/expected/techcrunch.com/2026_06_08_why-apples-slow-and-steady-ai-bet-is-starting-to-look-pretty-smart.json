@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://techcrunch.com/2026/06/08/why-apples-slow-and-steady-ai-bet-is-starting-to-look-pretty-smart/",
+  "expected_domain": "techcrunch.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 3,
+  "expected_thumbnail_source": "article_body_hero",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

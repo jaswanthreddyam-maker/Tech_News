@@ -1,0 +1,15 @@
+{
+  "scenario_id": "CHAOS-NGINX-001",
+  "correlation_id": "test-4a6ca57c",
+  "failure_injected_at": "2026-06-23T06:19:55.882516+00:00",
+  "detected_at": "2026-06-23T06:20:01.580254+00:00",
+  "recovered_at": "2026-06-23T06:20:11.957456+00:00",
+  "detection_seconds": 5.697738,
+  "recovery_seconds": 16.07494,
+  "root_cause_seconds": 0,
+  "explanation_seconds": 0,
+  "event_loss": false,
+  "projection_consistent": true,
+  "chain_complete": false,
+  "sla_passed": true
+}

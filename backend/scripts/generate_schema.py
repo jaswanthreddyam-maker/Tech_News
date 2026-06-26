@@ -1,0 +1,232 @@
+import argparse
+import asyncio
+import os
+import subprocess
+import sys
+import urllib.parse
+from datetime import datetime, timezone
+
+import asyncpg
+
+# Import settings
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.core.config import settings
+
+TEMP_DB_NAME = "tech_news_schema_temp"
+
+
+def get_admin_url(db_url: str) -> str:
+    # Replace asyncpg driver prefix and replace db name with postgres
+    base = db_url.replace("postgresql+asyncpg://", "postgresql://")
+    parsed = urllib.parse.urlparse(base)
+    # Reconstruct with "postgres" as database
+    return f"postgresql://{parsed.username}:{parsed.password}@{parsed.hostname}:{parsed.port or 5432}/postgres"
+
+
+def get_temp_db_url(db_url: str) -> str:
+    base = db_url.replace("postgresql+asyncpg://", "postgresql://")
+    parsed = urllib.parse.urlparse(base)
+    return f"postgresql://{parsed.username}:{parsed.password}@{parsed.hostname}:{parsed.port or 5432}/{TEMP_DB_NAME}"
+
+
+async def recreate_temp_db(admin_url: str):
+    print(f"Connecting to admin database to recreate temp DB: {TEMP_DB_NAME}")
+    conn = await asyncpg.connect(admin_url)
+    # Terminate active sessions
+    await conn.execute(f"""
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = '{TEMP_DB_NAME}' AND pid <> pg_backend_pid();
+    """)
+    await conn.execute(f"DROP DATABASE IF EXISTS {TEMP_DB_NAME};")
+    await conn.execute(f"CREATE DATABASE {TEMP_DB_NAME};")
+    await conn.close()
+    print("Temporary database created.")
+
+
+async def drop_temp_db(admin_url: str):
+    print(f"Cleaning up temporary database: {TEMP_DB_NAME}")
+    conn = await asyncpg.connect(admin_url)
+    await conn.execute(f"""
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = '{TEMP_DB_NAME}' AND pid <> pg_backend_pid();
+    """)
+    await conn.execute(f"DROP DATABASE IF EXISTS {TEMP_DB_NAME};")
+    await conn.close()
+    print("Temporary database dropped.")
+
+
+def run_migrations(temp_url: str):
+    print("Running migrations on temporary database...")
+    env = os.environ.copy()
+    # Force alembic to connect to the temp DB
+    env["DATABASE_URL"] = temp_url.replace("postgresql://", "postgresql+asyncpg://")
+    subprocess.run(["alembic", "upgrade", "head"], check=True, env=env)
+    print("Migrations complete.")
+
+
+def dump_schema(temp_url: str) -> str:
+    print("Dumping schema from temporary database...")
+    parsed = urllib.parse.urlparse(temp_url)
+    env = os.environ.copy()
+    password = parsed.password
+    if password is not None:
+        env["PGPASSWORD"] = password
+
+    hostname: str = parsed.hostname if parsed.hostname is not None else "localhost"
+    username: str = parsed.username if parsed.username is not None else "postgres"
+    port_val = parsed.port
+    port: str = str(port_val) if port_val is not None else "5432"
+
+    cmd: list[str] = [
+        "pg_dump",
+        "-h",
+        hostname,
+        "-p",
+        port,
+        "-U",
+        username,
+        "-d",
+        TEMP_DB_NAME,
+        "--schema-only",
+        "--no-owner",
+        "--no-privileges",
+    ]
+    res = subprocess.run(cmd, check=True, capture_output=True, text=True, env=env)
+    print("Schema dump complete.")
+    return res.stdout
+
+
+def get_current_head_revision() -> str:
+    # Get the head revision identifier using alembic heads
+    res = subprocess.run(["alembic", "heads"], check=True, capture_output=True, text=True)
+    # Parse revision number (e.g. "6f679dff3088 (head)")
+    line = res.stdout.strip()
+    if line:
+        return line.split()[0]
+    return "unknown"
+
+
+def process_schema_sql(dumped_sql: str) -> str:
+    # Sanitize/normalize the dumped SQL (strip comments and blank lines if desired, or keep structure)
+    # Let's clean up schema dump comments and search paths to keep diffs minimal
+    lines = []
+    for line in dumped_sql.splitlines():
+        # Strip pg_dump version headers and empty lines at start/end
+        if line.startswith("-- Dumped by pg_dump") or line.startswith("-- Dumped from database"):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip() + "\n"
+
+
+def update_schema_file(schema_sql_path: str, new_schema: str, revision: str, verify_only: bool = False) -> bool:
+    if not os.path.exists(schema_sql_path):
+        print(f"Error: Schema SQL file does not exist at {schema_sql_path}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(schema_sql_path, encoding="utf-8") as f:
+        content = f.read()
+
+    begin_marker = "-- BEGIN GENERATED SCHEMA"
+    end_marker = "-- END GENERATED SCHEMA"
+
+    if begin_marker not in content or end_marker not in content:
+        print("Error: Block markers not found in schema.sql", file=sys.stderr)
+        sys.exit(1)
+
+    # Format the generated block with comment headers
+    timestamp = datetime.now(timezone.utc).isoformat() + "Z"
+    header = f"-- Generated by generate_schema.py\n-- Schema Revision: {revision}\n-- Generated: {timestamp}\n\n"
+    generated_block = header + new_schema
+
+    parts = content.split(begin_marker)
+    prefix = parts[0]
+    suffix_parts = parts[1].split(end_marker)
+    existing_block = suffix_parts[0]
+    suffix = suffix_parts[1]
+
+    # Reconstruct
+    new_content = f"{prefix}{begin_marker}\n{generated_block}{end_marker}{suffix}"
+
+    # Normalize newlines
+    new_content = new_content.replace("\r\n", "\n")
+    content = content.replace("\r\n", "\n")
+
+    # Clean existing block string and generated block string for comparison
+    # Strip generation timestamp lines from comparison to avoid false positive matches on verify!
+    def clean_for_compare(block_text: str) -> str:
+        lines = []
+        for line in block_text.splitlines():
+            if (
+                line.startswith("-- Generated:")
+                or line.startswith("-- Schema Revision:")
+                or line.startswith("-- Generated by")
+            ):
+                continue
+            lines.append(line.strip())
+        return "\n".join(lines).strip()
+
+    if clean_for_compare(existing_block) == clean_for_compare(generated_block):
+        print("Schema is already up to date. No changes detected.")
+        return True
+
+    if verify_only:
+        print(
+            "Error: Database schema and committed schema.sql have drifted! Please run 'python scripts/generate_schema.py' locally to update schema.sql.",
+            file=sys.stderr,
+        )
+        return False
+
+    with open(schema_sql_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(new_content)
+    print(f"Successfully updated schema.sql at {schema_sql_path}")
+    return True
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="Auto-generate database schema.sql from SQLAlchemy models.")
+    parser.add_argument("--verify", action="store_true", help="Only verify matching schema, do not write files.")
+    args = parser.parse_args()
+
+    db_url = settings.DATABASE_URL
+    admin_url = get_admin_url(db_url)
+    temp_url = get_temp_db_url(db_url)
+
+    try:
+        # 1. Create a fresh temp DB
+        await recreate_temp_db(admin_url)
+
+        # 2. Run migrations to head
+        run_migrations(temp_url)
+
+        # 3. Dump the schema-only SQL
+        dumped_sql = dump_schema(temp_url)
+
+        # 4. Get the active revision
+        revision = get_current_head_revision()
+
+        # 5. Clean/sanitize the dumped schema
+        sanitized_schema = process_schema_sql(dumped_sql)
+
+        # 6. Update the schema.sql file
+        schema_file_path = "/app/database/schema.sql"
+        if not os.path.exists(schema_file_path):
+            schema_file_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "database", "schema.sql"
+            )
+
+        success = update_schema_file(schema_file_path, sanitized_schema, revision, verify_only=args.verify)
+        if not success:
+            sys.exit(1)
+
+    finally:
+        # 7. Always clean up temp DB
+        try:
+            await drop_temp_db(admin_url)
+        except Exception as e:
+            print(f"Warning: Cleanup failed: {e}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

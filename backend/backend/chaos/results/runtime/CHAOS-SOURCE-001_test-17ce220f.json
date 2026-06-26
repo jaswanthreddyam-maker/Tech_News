@@ -1,0 +1,15 @@
+{
+  "scenario_id": "CHAOS-SOURCE-001",
+  "correlation_id": "test-17ce220f",
+  "failure_injected_at": "2026-06-23T06:18:37.639058+00:00",
+  "detected_at": "2026-06-23T06:18:44.477711+00:00",
+  "recovered_at": "2026-06-23T06:18:59.844910+00:00",
+  "detection_seconds": 6.838653,
+  "recovery_seconds": 22.205852,
+  "root_cause_seconds": 0,
+  "explanation_seconds": 0,
+  "event_loss": false,
+  "projection_consistent": true,
+  "chain_complete": false,
+  "sla_passed": true
+}

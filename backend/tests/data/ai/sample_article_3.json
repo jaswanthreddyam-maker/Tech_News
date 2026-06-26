@@ -1,0 +1,6 @@
+{
+    "title": "New Framework 'Rspack' Challenges Webpack Dominance",
+    "content": "A new Rust-based bundler called Rspack has been released, promising to be a drop-in replacement for Webpack with significantly faster build times. Created by ByteDance, Rspack leverages Rust's performance capabilities to deliver up to 10x faster cold starts and lightning-fast HMR (Hot Module Replacement) compared to legacy JavaScript bundlers. The team aims to provide seamless migration for existing Webpack projects by maintaining high compatibility with the Webpack plugin ecosystem.",
+    "source": "DevDaily",
+    "source_url": "https://devdaily.example.com/rspack-release"
+}

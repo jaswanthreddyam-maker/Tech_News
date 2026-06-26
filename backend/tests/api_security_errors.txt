@@ -1,0 +1,151 @@
+..F...F...F..F.FF......FFFF                                              [100%]
+=================================== FAILURES ===================================
+________ test_auth_required_anonymous_is_401[GET-/api/v1/events/stream] ________
+tests/test_api_security.py:168: in test_auth_required_anonymous_is_401
+    assert status == 401, (
+E   AssertionError: GET /api/v1/events/stream: expected 401 for anonymous request, got 200
+E   assert 200 == 401
+_______ test_auth_required_invalid_jwt_is_401[GET-/api/v1/events/stream] _______
+tests/test_api_security.py:178: in test_auth_required_invalid_jwt_is_401
+    assert status == 401, (
+E   AssertionError: GET /api/v1/events/stream: expected 401 for invalid JWT, got 200
+E   assert 200 == 401
+_______ test_auth_required_expired_jwt_is_401[GET-/api/v1/events/stream] _______
+tests/test_api_security.py:188: in test_auth_required_expired_jwt_is_401
+    assert status == 401, (
+E   AssertionError: GET /api/v1/events/stream: expected 401 for expired JWT, got 200
+E   assert 200 == 401
+__ test_auth_required_valid_token_passes_auth[GET-/api/v1/ai/summary/999999] ___
+tests/test_api_security.py:202: in test_auth_required_valid_token_passes_auth
+    assert status not in (401, 403), (
+E   AssertionError: GET /api/v1/ai/summary/999999: expected auth to pass with valid token, got 401
+E   assert 401 not in (401, 403)
+_ test_auth_required_valid_token_passes_auth[POST-/api/v1/growth/flags/evaluate] _
+tests/test_api_security.py:202: in test_auth_required_valid_token_passes_auth
+    assert status not in (401, 403), (
+E   AssertionError: POST /api/v1/growth/flags/evaluate: expected auth to pass with valid token, got 401
+E   assert 401 not in (401, 403)
+_ test_auth_required_valid_token_passes_auth[POST-/api/v1/experiments/evaluate] _
+tests/test_api_security.py:202: in test_auth_required_valid_token_passes_auth
+    assert status not in (401, 403), (
+E   AssertionError: POST /api/v1/experiments/evaluate: expected auth to pass with valid token, got 401
+E   assert 401 not in (401, 403)
+____ test_admin_non_admin_is_403[GET-/api/v1/distribution/manifests/999999] ____
+tests/test_api_security.py:249: in test_admin_non_admin_is_403
+    assert status == 403, (
+E   AssertionError: GET /api/v1/distribution/manifests/999999: expected 403 for non-admin user, got 401
+E   assert 401 == 403
+______ test_admin_non_admin_is_403[GET-/api/v1/distribution/jobs/999999] _______
+tests/test_api_security.py:249: in test_admin_non_admin_is_403
+    assert status == 403, (
+E   AssertionError: GET /api/v1/distribution/jobs/999999: expected 403 for non-admin user, got 401
+E   assert 401 == 403
+___ test_admin_token_passes_auth[GET-/api/v1/distribution/manifests/999999] ____
+tests/test_api_security.py:262: in test_admin_token_passes_auth
+    assert status not in (401, 403), (
+E   AssertionError: GET /api/v1/distribution/manifests/999999: expected admin token to pass, got 401
+E   assert 401 not in (401, 403)
+______ test_admin_token_passes_auth[GET-/api/v1/distribution/jobs/999999] ______
+tests/test_api_security.py:262: in test_admin_token_passes_auth
+    assert status not in (401, 403), (
+E   AssertionError: GET /api/v1/distribution/jobs/999999: expected admin token to pass, got 401
+E   assert 401 not in (401, 403)
+=============================== warnings summary ===============================
+app/growth/schemas.py:63
+  /app/app/growth/schemas.py:63: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class FeatureFlagResponse(FeatureFlagCreate):
+
+app/growth/schemas.py:78
+  /app/app/growth/schemas.py:78: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ExperimentVariantResponse(ExperimentVariantSchema):
+
+app/growth/schemas.py:96
+  /app/app/growth/schemas.py:96: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ExperimentResponse(ExperimentCreate):
+
+app/growth/schemas.py:105
+  /app/app/growth/schemas.py:105: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ExperimentAssignmentSchema(BaseModel):
+
+app/growth/schemas.py:126
+  /app/app/growth/schemas.py:126: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class FunnelStepResponse(FunnelStepSchema):
+
+app/growth/schemas.py:143
+  /app/app/growth/schemas.py:143: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class FunnelResponse(FunnelCreate):
+
+app/growth/schemas.py:152
+  /app/app/growth/schemas.py:152: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class FunnelMetricsResponse(BaseModel):
+
+app/growth/schemas.py:180
+  /app/app/growth/schemas.py:180: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class CohortResponse(CohortCreate):
+
+app/growth/schemas.py:188
+  /app/app/growth/schemas.py:188: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class CohortMembershipResponse(BaseModel):
+
+app/growth/schemas.py:206
+  /app/app/growth/schemas.py:206: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class CohortSnapshotResponse(BaseModel):
+
+app/schemas/distribution.py:7
+  /app/app/schemas/distribution.py:7: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DeliveryReportResponse(BaseModel):
+
+app/schemas/distribution.py:22
+  /app/app/schemas/distribution.py:22: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DistributionJobResponse(BaseModel):
+
+app/schemas/distribution.py:37
+  /app/app/schemas/distribution.py:37: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DistributionManifestResponse(BaseModel):
+
+app/schemas/editorial.py:7
+  /app/app/schemas/editorial.py:7: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DraftVersionResponse(BaseModel):
+
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:386
+  /usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:386: UserWarning: Valid config keys have changed in V2:
+  * 'orm_mode' has been renamed to 'from_attributes'
+    warnings.warn(message, UserWarning)
+
+app/schemas/editorial.py:33
+  /app/app/schemas/editorial.py:33: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class EditorialPatchResponse(BaseModel):
+
+app/schemas/editorial.py:52
+  /app/app/schemas/editorial.py:52: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class EditorialReviewResponse(BaseModel):
+
+app/schemas/editorial.py:96
+  /app/app/schemas/editorial.py:96: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DraftCommentResponse(BaseModel):
+
+app/schemas/editorial.py:107
+  /app/app/schemas/editorial.py:107: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DiscussionThreadResponse(BaseModel):
+
+app/schemas/editorial.py:126
+  /app/app/schemas/editorial.py:126: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class PublicationRecordResponse(BaseModel):
+
+app/schemas/editorial.py:141
+  /app/app/schemas/editorial.py:141: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class EditorialDraftResponse(EditorialDraftBase):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_api_security.py::test_auth_required_anonymous_is_401[GET-/api/v1/events/stream]
+FAILED tests/test_api_security.py::test_auth_required_invalid_jwt_is_401[GET-/api/v1/events/stream]
+FAILED tests/test_api_security.py::test_auth_required_expired_jwt_is_401[GET-/api/v1/events/stream]
+FAILED tests/test_api_security.py::test_auth_required_valid_token_passes_auth[GET-/api/v1/ai/summary/999999]
+FAILED tests/test_api_security.py::test_auth_required_valid_token_passes_auth[POST-/api/v1/growth/flags/evaluate]
+FAILED tests/test_api_security.py::test_auth_required_valid_token_passes_auth[POST-/api/v1/experiments/evaluate]
+FAILED tests/test_api_security.py::test_admin_non_admin_is_403[GET-/api/v1/distribution/manifests/999999]
+FAILED tests/test_api_security.py::test_admin_non_admin_is_403[GET-/api/v1/distribution/jobs/999999]
+FAILED tests/test_api_security.py::test_admin_token_passes_auth[GET-/api/v1/distribution/manifests/999999]
+FAILED tests/test_api_security.py::test_admin_token_passes_auth[GET-/api/v1/distribution/jobs/999999]
+10 failed, 17 passed, 21 warnings in 92.60s (0:01:32)

@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-20T12:05:38.230620+00:00",
+  "status": "PASS",
+  "environment": {
+    "os": "Windows",
+    "os_release": "11",
+    "python_version": "3.13.12",
+    "cpu_count": 16,
+    "ram_gb": 15.64,
+    "commit_sha": "e32c1b167e6038a87ad20fbd91bc0ac60aaf59b8",
+    "docker_version": "Docker version 29.5.3, build d1c06ef"
+  },
+  "architecture": {},
+  "performance": {},
+  "stress": {},
+  "chaos": {},
+  "failures": {},
+  "metrics": {
+    "thumbnail_pipeline": {
+      "Downloads Attempted": 12,
+      "Downloads Succeeded": 5,
+      "Rejected MIME": 5,
+      "Conversion Failures": 0,
+      "Duplicate Hits": 2,
+      "Hash Collisions": 0
+    }
+  },
+  "regression": {},
+  "gates": {
+    "gates_1_3": {
+      "status": "PASS"
+    },
+    "gate_7": {
+      "status": "PASS",
+      "mismatches": 0,
+      "total_verified": 0,
+      "hash_schema_version": "1",
+      "canonical_fields": [
+        "id",
+        "title",
+        "summary",
+        "thumbnail_local",
+        "thumbnail_url",
+        "published_status",
+        "content"
+      ]
+    },
+    "gate_8": {
+      "status": "PASS",
+      "original_count": 44,
+      "new_count": 44
+    },
+    "gate_9": {
+      "status": "PASS",
+      "capacity_reached": 6400,
+      "memory_growth_mb": 0.35,
+      "open_fds": 1,
+      "api_p95_ms": 120
+    },
+    "gate_10": {
+      "status": "SKIPPED"
+    },
+    "gate_12": {
+      "status": "SKIPPED"
+    },
+    "gate_13": {
+      "status": "PASS"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://arstechnica.com/tech-policy/2026/06/meta-alleges-nso-violated-spyware-injunction-with-new-whatsapp-attacks/",
+  "expected_domain": "arstechnica.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 1,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

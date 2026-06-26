@@ -1,0 +1,6 @@
+{
+    "title": "Quantum Computing Breakthrough: IBM Unveils 1000-Qubit Processor",
+    "content": "IBM has announced a major milestone in quantum computing with the release of Condor, a 1,121-qubit processor. This processor is part of IBM's long-term roadmap to achieve large-scale, fault-tolerant quantum computing. Condor represents a 50% increase in qubit density compared to previous generations and utilizes novel error-mitigation techniques. Researchers say this could accelerate the discovery of new materials and complex molecular simulations, though commercial fault-tolerant systems are still years away.",
+    "source": "TechWire",
+    "source_url": "https://techwire.example.com/quantum-ibm"
+}

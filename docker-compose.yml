@@ -1,0 +1,171 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: tech-news-db
+    restart: always
+    command: postgres -c max_connections=300
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secure_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-tech_news_today}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-tech_news_today}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tech-news-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    image: tech-news-backend
+    container_name: tech-news-backend
+    restart: always
+    volumes:
+      - ./backend:/app
+      - ./agents:/app/agents
+      - ./storage/uploads:/app/uploads
+      - ./database:/app/database
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_secure_pass@db:5432/tech_news_today
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENV=development
+      - DEBUG=true
+      - GOOGLE_CLIENT_ID=358464301429-93hlf8ntk55v2docn490tvqase3783cc.apps.googleusercontent.com
+      - GOOGLE_ADMIN_EMAIL=jeshu0069@gmail.com
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    image: tech-news-worker
+    container_name: tech-news-worker
+    restart: always
+    command: celery -A celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+      - ./agents:/app/agents
+      - ./storage/uploads:/app/uploads
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_secure_pass@db:5432/tech_news_today
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENV=development
+      - DEBUG=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    image: tech-news-beat
+    container_name: tech-news-beat
+    restart: always
+    command: celery -A celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
+      - ./agents:/app/agents
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_secure_pass@db:5432/tech_news_today
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENV=development
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    image: tech-news-frontend
+    container_name: tech-news-frontend
+    restart: always
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+      - /app/.turbo
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=/api/v1
+      - API_PROXY_TARGET=http://backend:8000
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=358464301429-93hlf8ntk55v2docn490tvqase3783cc.apps.googleusercontent.com
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: tech-news-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

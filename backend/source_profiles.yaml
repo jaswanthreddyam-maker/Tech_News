@@ -1,0 +1,92 @@
+# Source Profiles for HTML Extraction
+# Adding a new publisher requires ZERO code changes — just add a new entry here.
+# Selectors are tried in order (most specific first). First match with >300 chars of text wins.
+# 'exclude' selectors are removed from the DOM before content extraction.
+
+the_verge:
+  selectors:
+    - ".duet--article--article-body-component"
+    - ".duet--layout--entry-body"
+    - "[data-chorus-optimize-field='body']"
+    - ".c-entry-content"
+    - "article .duet--content-cards"
+  exclude:
+    - ".duet--commerce--commerce-aside"
+    - ".duet--aside--sidebar"
+    - ".duet--article--related-list"
+    - ".c-entry-sidebar"
+    - ".c-shortcode-pullquote"
+
+techcrunch:
+  selectors:
+    - ".entry-content"
+    - ".article-content"
+    - "[class*='article__content']"
+  exclude:
+    - ".entry-meta"
+    - ".widget-area"
+    - ".crunchbase-card"
+
+ars_technica:
+  selectors:
+    - ".post-content"
+    - "article .article-content"
+    - ".article-guts"
+  exclude:
+    - ".sidebar"
+    - ".ad-unit"
+    - ".related-stories"
+
+wired:
+  selectors:
+    - "[class*='ArticleBodyComponent']"
+    - "[class*='article__body']"
+    - ".article__chunks"
+    - ".body__inner-container"
+  exclude:
+    - "[class*='GenericCallout']"
+    - "[class*='RelatedVideo']"
+
+google_deepmind:
+  selectors:
+    - ".rich-text"
+    - "article .content"
+    - "main .prose"
+  exclude:
+    - ".social-share"
+    - ".author-bio"
+
+nvidia_blog:
+  selectors:
+    - ".entry-content"
+    - ".post-entry"
+    - ".blog-content"
+  exclude:
+    - ".related-posts"
+    - ".sidebar-widget"
+
+mit_tech_review:
+  selectors:
+    - ".article-body-content"
+    - "[class*='contentBody']"
+    - "article main"
+  exclude:
+    - ".paywall"
+    - ".newsletter-signup"
+
+# Generic fallback — used when no source-specific profile matches
+# Selectors are tried in priority order
+_default:
+  selectors:
+    - "[itemprop='articleBody']"
+    - ".article-body"
+    - ".article-content"
+    - ".post-content"
+    - ".entry-content"
+    - ".story-content"
+    - "#article-body"
+    - "#story-body"
+    - ".main-content"
+    - "article"
+    - "main"
+  exclude: []

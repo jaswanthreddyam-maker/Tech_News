@@ -1,0 +1,215 @@
+"use client";
+
+import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FeaturedArticle, HeroCarouselClientProps } from "./types";
+import { useHeroCarousel } from "./useHeroCarousel";
+import { HeroContent } from "./HeroContent";
+import { HeroImage } from "./HeroImage";
+import { HeroInsights } from "./HeroInsights";
+import { HeroIndicators } from "./HeroIndicators";
+import { HeroControls } from "./HeroControls";
+
+export function HeroCarouselClient({
+  items,
+  editorPicks,
+  latest,
+  aiInsights,
+  initialIndex = 0,
+  onSlideChange,
+  onPrimaryAction,
+  onInsightClick,
+}: HeroCarouselClientProps) {
+  const itemCount = items.length;
+  console.log("[HeroCarousel] Mounted with itemCount:", itemCount);
+
+  const {
+    activeIndex,
+    goToNext,
+    goToPrev,
+    goToIndex,
+    isPlaying,
+    setIsDragging,
+    setIsHovered,
+    setIsFocused,
+    viewRef,
+    handleKeyDown,
+  } = useHeroCarousel(itemCount, initialIndex);
+
+  // Transition locking: prevent rapid clicks from overlapping slide animations
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // Track dragging details to prevent accidental clicks during swipes
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragDistanceRef = useRef<number>(0);
+
+  useEffect(() => {
+    onSlideChange?.(activeIndex);
+  }, [activeIndex, onSlideChange]);
+
+  const handlePrev = () => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    goToPrev();
+    setTimeout(() => setIsTransitioning(false), 450);
+  };
+
+  const handleNext = () => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    goToNext();
+    setTimeout(() => setIsTransitioning(false), 450);
+  };
+
+  const handleDragStart = (event: any, info: any) => {
+    dragStartRef.current = { x: info.point.x, y: info.point.y };
+    dragDistanceRef.current = 0;
+    setIsDragging(true);
+  };
+
+  const handleDrag = (event: any, info: any) => {
+    const dx = info.point.x - dragStartRef.current.x;
+    const dy = info.point.y - dragStartRef.current.y;
+    dragDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleDragEnd = (event: any, info: any) => {
+    setIsDragging(false);
+
+    const windowWidth = typeof window !== "undefined" ? window.innerWidth : 1000;
+    const threshold = Math.min(80, windowWidth * 0.08);
+
+    const swipe = info.offset.x;
+    if (swipe < -threshold) {
+      handleNext();
+    } else if (swipe > threshold) {
+      handlePrev();
+    }
+  };
+
+  const handlePrimaryActionIntercept = (article: FeaturedArticle, event: React.MouseEvent) => {
+    // If the drag distance exceeds a small threshold (e.g. 5px), intercept it
+    if (dragDistanceRef.current > 5) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    onPrimaryAction?.(article);
+  };
+
+  // --- Path 1: 0 articles ---
+  if (itemCount === 0) {
+    console.log("[RUNTIME TRACE] HeroCarouselClient path: 0 articles");
+    return (
+      <div className="border border-border rounded-xl p-8 bg-card text-center text-muted-foreground select-text">
+        No articles available in the featured section at this time.
+      </div>
+    );
+  }
+
+  // --- Path 2: 1 article (Hide all controls and tabs) ---
+  if (itemCount === 1) {
+    console.log("[RUNTIME TRACE] HeroCarouselClient path: 1 article");
+    const article = items[0];
+    return (
+      <div className="border border-border rounded-xl p-6 lg:p-8 bg-card overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-6 flex flex-col justify-center">
+            <HeroContent article={article} onPrimaryAction={onPrimaryAction} />
+          </div>
+          <div className="lg:col-span-6 relative w-full h-[300px] lg:h-[450px]">
+            <HeroImage article={article} isPriority={true} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Path 3: 2+ articles (Normal Carousel) ---
+  console.log("[RUNTIME TRACE] HeroCarouselClient path: 2+ articles (Normal Carousel)");
+  const activeArticle = items[activeIndex];
+
+  const prevIndex = (activeIndex - 1 + itemCount) % itemCount;
+  const nextIndex = (activeIndex + 1) % itemCount;
+  const prevArticleImage = items[prevIndex]?.thumbnail;
+  const nextArticleImage = items[nextIndex]?.thumbnail;
+
+  return (
+    <div
+      data-testid="hero-carousel-marker"
+      ref={viewRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative border border-border rounded-xl p-6 lg:p-8 bg-card/45 focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none group/carousel select-none"
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Top Stories"
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative">
+        {/* Floating manual controls */}
+        <HeroControls onPrev={handlePrev} onNext={handleNext} disabled={isTransitioning} />
+
+        {/* Swipe & Drag wrapper (Left + Center columns) */}
+        <motion.div
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          onDragStart={handleDragStart}
+          onDrag={handleDrag}
+          onDragEnd={handleDragEnd}
+          className="lg:col-span-9 grid grid-cols-1 lg:grid-cols-9 gap-8 cursor-grab active:cursor-grabbing pointer-events-auto"
+        >
+          {/* Left Column (Content) */}
+          <div className="lg:col-span-4 flex flex-col justify-center select-text">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${activeArticle.id}-${activeIndex}`}
+                className="h-full flex flex-col justify-center"
+              >
+                <HeroContent
+                  article={activeArticle}
+                  onPrimaryAction={handlePrimaryActionIntercept}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Center Column (Hero Image) */}
+          <div className="lg:col-span-5 relative overflow-hidden pointer-events-none select-none">
+            <AnimatePresence mode="wait">
+              <HeroImage
+                key={`${activeArticle.id}-${activeIndex}`}
+                article={activeArticle}
+                prevArticleImage={prevArticleImage}
+                nextArticleImage={nextArticleImage}
+                isPriority={activeIndex === 0}
+              />
+            </AnimatePresence>
+          </div>
+        </motion.div>
+
+        {/* Right Column (Insights Sidebar) */}
+        <div className="lg:col-span-3">
+          <HeroInsights
+            editorPicks={editorPicks}
+            latest={latest}
+            aiInsights={aiInsights}
+            onInsightClick={onInsightClick}
+          />
+        </div>
+      </div>
+
+      {/* Progress tracker indicators */}
+      <HeroIndicators
+        itemCount={itemCount}
+        activeIndex={activeIndex}
+        isPlaying={isPlaying}
+        onIndicatorClick={goToIndex}
+    </div>
+  );
+}
+
+HeroCarouselClient.displayName = "HeroCarouselClient";

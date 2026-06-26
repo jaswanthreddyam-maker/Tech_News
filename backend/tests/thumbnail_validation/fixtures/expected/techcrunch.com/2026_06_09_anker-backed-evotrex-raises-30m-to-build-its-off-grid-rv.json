@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://techcrunch.com/2026/06/09/anker-backed-evotrex-raises-30m-to-build-its-off-grid-rv/",
+  "expected_domain": "techcrunch.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 3,
+  "expected_thumbnail_source": "article_body_hero",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

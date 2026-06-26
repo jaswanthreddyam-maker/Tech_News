@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://arstechnica.com/ai/2026/06/gemini-3-5-and-antigravity-come-to-google-notebooklm/",
+  "expected_domain": "arstechnica.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 1,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

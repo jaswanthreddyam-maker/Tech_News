@@ -1,0 +1,147 @@
+{
+  "status": "success",
+  "correlation_id": "594dc8f6-e7c5-4607-be2c-e0dfef5e1e14",
+  "timestamp": "2026-06-12T15:43:35.481074",
+  "data": {
+    "schema_version": 1,
+    "generated_at": "2026-06-12T15:43:35.481043+00:00",
+    "data": {
+      "health_score": {
+        "score": 55,
+        "grade": "F",
+        "calculated_at": "2026-06-12T14:19:33.317205+00:00"
+      },
+      "services": {
+        "postgres": {
+          "snapshot": {
+            "service": "postgres",
+            "status": "UNKNOWN",
+            "latency_ms": 860.39,
+            "last_checked": "2026-06-12T14:19:29.707392+00:00",
+            "last_success": "2026-06-12T14:19:29.707392+00:00",
+            "metrics": {
+              "database_size_bytes": 13745175,
+              "cache_hit_ratio": 1.0,
+              "longest_running_query_sec": 0.0
+            },
+            "error": "Cache stale (last checked 5045.8 seconds ago, expected <= 10.0s)"
+          },
+          "history": [
+            {
+              "timestamp": "2026-06-12T14:19:29.707392+00:00",
+              "status": "DEGRADED",
+              "latency_ms": 860.39
+            }
+          ]
+        },
+        "redis": {
+          "snapshot": {
+            "service": "redis",
+            "status": "UNKNOWN",
+            "latency_ms": 896.14,
+            "last_checked": "2026-06-12T14:19:29.708958+00:00",
+            "last_success": "2026-06-12T14:19:29.708958+00:00",
+            "metrics": {
+              "uptime_seconds": 37375,
+              "connected_clients": 69,
+              "used_memory_bytes": 2923472,
+              "key_count": 762,
+              "fragmentation_ratio": 3.31
+            },
+            "error": "Cache stale (last checked 5045.8 seconds ago, expected <= 10.0s)"
+          },
+          "history": [
+            {
+              "timestamp": "2026-06-12T14:19:29.708958+00:00",
+              "status": "DEGRADED",
+              "latency_ms": 896.14
+            }
+          ]
+        },
+        "worker": {
+          "snapshot": {
+            "service": "worker",
+            "status": "UNKNOWN",
+            "latency_ms": 3098.96,
+            "last_checked": "2026-06-12T14:19:29.709122+00:00",
+            "last_success": "2026-06-12T14:19:29.709122+00:00",
+            "metrics": {
+              "workers_online": 1,
+              "active_tasks": 0,
+              "workers": [
+                "celery@1928f87a4d21"
+              ]
+            },
+            "error": "Cache stale (last checked 5045.8 seconds ago, expected <= 10.0s)"
+          },
+          "history": [
+            {
+              "timestamp": "2026-06-12T14:19:29.709122+00:00",
+              "status": "ONLINE",
+              "latency_ms": 3098.96
+            }
+          ]
+        },
+        "beat": {
+          "snapshot": {
+            "service": "beat",
+            "status": "UNKNOWN",
+            "latency_ms": 223.7,
+            "last_checked": "2026-06-12T14:19:30.096927+00:00",
+            "last_success": null,
+            "metrics": {
+              "heartbeat_age_seconds": 244.7,
+              "last_heartbeat": "2026-06-12T14:15:25.633974+00:00"
+            },
+            "error": "Cache stale (last checked 5045.4 seconds ago, expected <= 10.0s)"
+          },
+          "history": [
+            {
+              "timestamp": "2026-06-12T14:19:30.096927+00:00",
+              "status": "OFFLINE",
+              "latency_ms": 223.7
+            }
+          ]
+        },
+        "backend": {
+          "snapshot": {
+            "service": "backend",
+            "status": "UNKNOWN",
+            "latency_ms": 588.53,
+            "last_checked": "2026-06-12T14:19:30.097427+00:00",
+            "last_success": "2026-06-12T14:19:30.097427+00:00",
+            "metrics": {
+              "status_code": 200
+            },
+            "error": "Cache stale (last checked 5045.4 seconds ago, expected <= 10.0s)"
+          },
+          "history": [
+            {
+              "timestamp": "2026-06-12T14:19:30.097427+00:00",
+              "status": "DEGRADED",
+              "latency_ms": 588.53
+            }
+          ]
+        },
+        "nginx": {
+          "snapshot": {
+            "service": "nginx",
+            "status": "UNKNOWN",
+            "latency_ms": 3053.22,
+            "last_checked": "2026-06-12T14:19:30.240415+00:00",
+            "last_success": null,
+            "metrics": {},
+            "error": "Cache stale (last checked 5045.2 seconds ago, expected <= 10.0s)"
+          },
+          "history": [
+            {
+              "timestamp": "2026-06-12T14:19:30.240415+00:00",
+              "status": "OFFLINE",
+              "latency_ms": 3053.22
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "expected_url": "https://www.theverge.com/ai-artificial-intelligence/946780/apples-ai-promises-are-finally-almost-sort-of-here",
+  "expected_domain": "theverge.com",
+  "expected_fallback": false,
+  "expected_candidate_count_min": 4,
+  "expected_thumbnail_source": "schema",
+  "expected_dimensions": {
+    "min_width": 200,
+    "min_height": 200
+  }
+}

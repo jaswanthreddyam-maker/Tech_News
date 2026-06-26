@@ -1,0 +1,35 @@
+{
+  "status": "success",
+  "correlation_id": "0d9f9373-ea4c-45b3-b48f-dfc53bca6af5",
+  "timestamp": "2026-06-12T15:43:35.441599",
+  "data": {
+    "schema_version": 1,
+    "generated_at": "2026-06-12T14:19:30.289523+00:00",
+    "data": {
+      "generated_at": "2026-06-12T14:19:30.289523+00:00",
+      "source_health": {
+        "total": 22,
+        "enabled": 22,
+        "healthy": 22,
+        "degraded": 0,
+        "failed": 0
+      },
+      "article_pipeline": {
+        "raw": 70,
+        "processed": 33,
+        "published": 33,
+        "draft": 0,
+        "rejected": 37
+      },
+      "ai_queue": {
+        "queued": 0,
+        "processing": 0,
+        "completed": 0,
+        "failed": 140,
+        "retry": 0
+      },
+      "emergency_cutoff_active": false,
+      "stale": true
+    }
+  }
+}

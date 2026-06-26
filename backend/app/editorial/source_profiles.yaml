@@ -1,0 +1,58 @@
+algorithm_version: "v1"
+policy_version: "2026-06-21-v1"
+
+# Source authority boosts (added directly to impact score)
+source_authority:
+  NVIDIA: 30
+  Google: 30
+  OpenAI: 30
+  Microsoft: 30
+  Anthropic: 30
+  Apple: 30
+  GitHub: 30
+  TechCrunch: 20
+  The Verge: 20
+  Ars Technica: 20
+  Hacker News: 10
+  Reddit: 10
+
+# Category boosts (added to impact score)
+topic_importance:
+  artificial_intelligence: 25
+  security: 25
+  semiconductors: 25
+  product_launches: 25
+  programming: 15
+  cloud: 15
+  startups: 15
+  robotics: 15
+  general: 5
+
+# Entity importance list (+5 per match, max +20)
+entity_importance_list:
+  - "NVIDIA"
+  - "Google"
+  - "OpenAI"
+  - "Microsoft"
+  - "AMD"
+  - "Intel"
+  - "Apple"
+  - "Anthropic"
+  - "Meta"
+  - "Amazon"
+
+# Breaking news keywords (+15 bonus)
+breaking_news_keywords:
+  - "breaking"
+  - "exclusive"
+  - "major release"
+  - "security incident"
+  - "critical breach"
+  - "zero-day"
+
+# Penalty keywords (negative weight added directly to score)
+reductions:
+  deal: -20
+  coupon: -25
+  sale: -20
+  discount: -20

@@ -1,0 +1,20 @@
+{
+  "status": "success",
+  "correlation_id": "cfc1a994-1707-4224-98d1-fb070cd9194f",
+  "timestamp": "2026-06-12T15:43:35.640653",
+  "data": {
+    "aggregated": {
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "total_tokens": 0,
+      "total_cost_usd": 0.0
+    },
+    "models_breakdown": [
+      {
+        "model": "text-embedding-3-small",
+        "cost": 0.0,
+        "jobs_count": 198
+      }
+    ]
+  }
+}

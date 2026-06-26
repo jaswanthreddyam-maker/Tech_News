@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "correlation_id": "46ca4f44-76ba-4201-915a-1edc9c0d7599",
+  "timestamp": "2026-06-12T15:43:35.507875",
+  "data": {
+    "schema_version": 1,
+    "generated_at": "2026-06-12T14:19:30.267001+00:00",
+    "data": {
+      "status": "ONLINE",
+      "latency_ms": 0.0,
+      "last_checked": "2026-06-12T14:19:30.267001+00:00",
+      "last_success": "2026-06-12T14:19:30.267001+00:00",
+      "error": null,
+      "metrics": {
+        "queue_depth": 0,
+        "processing_rate_jobs_min": 0,
+        "growth_rate_jobs_5s": 0
+      }
+    }
+  }
+}
