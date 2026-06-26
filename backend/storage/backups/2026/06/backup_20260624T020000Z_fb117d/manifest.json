@@ -1,0 +1,25 @@
+{
+  "app_version": "0.10.0-beta",
+  "backup_format": 1,
+  "backup_id": "backup_20260624T020000Z_fb117d",
+  "backup_tool_version": "1.0.0",
+  "checksum_sha256": "c40211fe0fc8603a0e0544dc75950e15b7a52e260f36f8d529a14b43e3b5233f",
+  "compression": "gzip",
+  "created_at": "2026-06-24T02:00:00.477855+00:00Z",
+  "encryption": "AES-256-GCM",
+  "key_id": "default",
+  "manifest_version": 1,
+  "metrics": {
+    "database": {
+      "rows": 1268,
+      "tables": 131
+    },
+    "storage": {
+      "bytes": 3814144,
+      "files": 168
+    }
+  },
+  "payload_size_bytes": 8168912,
+  "schema_version": "1.0",
+  "status": "completed"
+}
