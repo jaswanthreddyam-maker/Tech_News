@@ -173,6 +173,8 @@ const FrozenPage = React.forwardRef<HTMLDivElement, FrozenPageProps>(
     </DefaultTransition>
   );
 });
+FrozenPage.displayName = 'FrozenPage';
+
 
 // ---------------------------------------------------------------------------
 // Default fallback transition — simple crossfade
@@ -194,3 +196,4 @@ const DefaultTransition = React.forwardRef<HTMLDivElement, { pathname: string; c
     );
   }
 );
+DefaultTransition.displayName = 'DefaultTransition';

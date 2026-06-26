@@ -161,10 +161,11 @@ export default function NewsroomDashboard() {
             
             <div className="space-y-3">
               {topStories.map((story, idx) => (
-                <div 
+                <button
+                  type="button"
                   key={story.story_id} 
                   onClick={() => setActiveStoryId(story.story_id)}
-                  className="group/item flex items-center gap-4 p-4 rounded-lg bg-black/50 border border-[#1a1a1a] hover:border-emerald-500/30 cursor-pointer transition-all duration-300"
+                  className="group/item w-full text-left flex items-center gap-4 p-4 rounded-lg bg-black/50 border border-[#1a1a1a] hover:border-emerald-500/30 cursor-pointer transition-all duration-300"
                 >
                   <div className="font-mono text-2xl text-[#333] font-bold w-8 text-right group-hover/item:text-emerald-500/50 transition-colors">
                     {idx + 1}
@@ -180,7 +181,7 @@ export default function NewsroomDashboard() {
                   <button className="h-8 w-8 rounded bg-[#111] flex items-center justify-center text-[#555] group-hover/item:bg-emerald-500/10 group-hover/item:text-emerald-400 transition-all">
                     <ChevronRight size={16} />
                   </button>
-                </div>
+                </button>
               ))}
               {topStories.length === 0 && <div className="text-center p-8 font-mono text-sm text-[#444]">Loading telemetry projection...</div>}
             </div>

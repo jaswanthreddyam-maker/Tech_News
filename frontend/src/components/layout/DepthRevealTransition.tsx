@@ -154,3 +154,4 @@ export const DepthRevealTransition = React.forwardRef<HTMLDivElement, DepthRevea
     </m.div>
   );
 });
+DepthRevealTransition.displayName = 'DepthRevealTransition';

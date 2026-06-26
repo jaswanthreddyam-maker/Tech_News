@@ -251,7 +251,7 @@ export default function OperationsDashboard() {
 
   // Determine Platform Status
   let platformStatus: HealthStatus = "healthy";
-  let recoveryStatus: HealthStatus = recovery ? recovery.status : "error";
+  const recoveryStatus: HealthStatus = recovery ? recovery.status : "error";
 
   if (
     cqrsStatus === "unhealthy" || cqrsStatus === "error" ||

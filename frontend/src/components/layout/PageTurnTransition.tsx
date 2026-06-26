@@ -211,3 +211,4 @@ export const PageTurnTransition = React.forwardRef<HTMLDivElement, PageTurnTrans
     </m.div>
   );
 });
+PageTurnTransition.displayName = 'PageTurnTransition';

@@ -210,3 +210,4 @@ export const ArticlePeelTransition = React.forwardRef<HTMLDivElement, ArticlePee
     </m.div>
   );
 });
+ArticlePeelTransition.displayName = 'ArticlePeelTransition';
