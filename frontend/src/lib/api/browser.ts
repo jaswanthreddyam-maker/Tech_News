@@ -29,7 +29,7 @@ async function attemptTokenRefresh(): Promise<boolean> {
 
 export class BrowserTransport implements ApiTransport {
   async fetch(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-    const { params, headers, timeoutMs = 10000, _isRetryAfterRefresh, ...restOptions } = options as any;
+    const { params, headers, timeoutMs = 20000, _isRetryAfterRefresh, ...restOptions } = options as any;
     
     let url = `${API_BASE_URL}${endpoint}`;
     if (params) {

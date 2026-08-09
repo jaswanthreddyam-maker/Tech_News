@@ -6,7 +6,7 @@ const API_BASE_URL = getApiBaseUrl();
 
 export class ServerTransport implements ApiTransport {
   async fetch(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-    const { params, headers, timeoutMs = 10000, tags, revalidate, ...restOptions } = options;
+    const { params, headers, timeoutMs = 20000, tags, revalidate, ...restOptions } = options;
     
     let url = `${API_BASE_URL}${endpoint}`;
     if (params) {

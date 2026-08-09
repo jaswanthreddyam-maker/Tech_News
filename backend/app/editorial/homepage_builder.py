@@ -35,19 +35,17 @@ class HomepageBuilder:
         cutoff_hours = getattr(settings, "EDITORIAL_WINDOW_HOURS", 24)
         cutoff = now - timedelta(hours=cutoff_hours)
 
-        # 1. Fetch candidates published in the last 24h (deferring large columns for performance)
         from sqlalchemy.orm import defer
         from sqlalchemy import or_, and_, cast, String
-        from app.models.article import ProcessedArticle
+        
         stmt = (
             select(ArticleReadModel)
-            .join(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
             .where(
                 and_(
                     ArticleReadModel.is_test_data == False,
                     ArticleReadModel.published_at >= cutoff,
                     ArticleReadModel.publication_status == "PUBLISHED",
-                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
+                    or_(ArticleReadModel.expires_at == None, ArticleReadModel.expires_at > now)
                 )
             ).options(
                 defer(ArticleReadModel.content),
