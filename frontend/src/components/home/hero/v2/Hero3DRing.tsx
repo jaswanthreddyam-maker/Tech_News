@@ -248,11 +248,12 @@ export function Hero3DRing() {
       };
 
       const handleOverlayComplete = () => {
-        startArrival();
+        // Wait 1 second for the welcome screen to fade out before triggering the arrival
+        setTimeout(startArrival, 1000);
       };
 
       window.addEventListener("welcome-overlay-complete", handleOverlayComplete);
-      const fallbackTimer = setTimeout(startArrival, 4500);
+      const fallbackTimer = setTimeout(startArrival, 5500);
 
       return () => {
         window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
