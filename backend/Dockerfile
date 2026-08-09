@@ -37,10 +37,11 @@ COPY . /app
 ENV PYTHONPATH=/app \
     PYTHONUNBUFFERED=1 \
     APP_ENV=production \
-    PORT=8000
+    PORT=8080
 
 # Expose default HTTP port
-EXPOSE 8000
+EXPOSE 8080 8000
 
 # Default command for Railway FastAPI service (overridden by worker/beat service start commands)
-CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 2"]
+
