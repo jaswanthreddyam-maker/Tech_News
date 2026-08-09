@@ -44,9 +44,9 @@ const STAGES: { state: OverlayState; delay: number }[] = [
 const AUTO_REVEAL_AT = 3000;
 
 const BLUR_VARIANTS = {
-  enter: { opacity: 0, filter: "blur(16px)", scale: 0.97, y: 12 },
-  visible: { opacity: 1, filter: "blur(0px)", scale: 1, y: 0 },
-  exit: { opacity: 0, filter: "blur(16px)", scale: 0.97, y: 8 },
+  enter: { opacity: 0, scale: 0.97, y: 12 },
+  visible: { opacity: 1, scale: 1, y: 0 },
+  exit: { opacity: 0, scale: 0.97, y: 8 },
 };
 
 const FADE_VARIANTS = {
@@ -88,12 +88,16 @@ export default function WelcomeOverlayClient({
     return () => mql.removeEventListener("change", handler);
   }, []);
 
-  const doComplete = useCallback(() => {
-    if (completedRef.current) return;
-    completedRef.current = true;
+  const handleExitComplete = useCallback(() => {
     if (typeof document !== "undefined") {
       document.body.style.overflow = "";
     }
+    onComplete();
+  }, [onComplete]);
+
+  const doComplete = useCallback(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
     try {
       sessionStorage.setItem("welcome-played", "1");
     } catch {}
@@ -101,8 +105,7 @@ export default function WelcomeOverlayClient({
       window.dispatchEvent(new Event("welcome-overlay-complete"));
     }
     dispatch({ type: "FINISH" });
-    onComplete();
-  }, [onComplete]);
+  }, []);
 
   const handleSkip = useCallback(
     (e?: Event) => {
@@ -212,16 +215,16 @@ export default function WelcomeOverlayClient({
   const wordDuration = reducedMotion ? 0.25 : 0.35;
 
   return (
-    <AnimatePresence onExitComplete={onComplete}>
+    <AnimatePresence onExitComplete={handleExitComplete}>
       {isVisible && (
         <m.div
           ref={overlayRef}
           key="welcome-overlay"
-          initial={{ y: 0, opacity: 1 }}
-          exit={isSkipping ? { opacity: 0 } : { y: "-100%" }}
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           transition={{
-            duration: isSkipping ? 0.25 : 1.0,
-            ease: isSkipping ? "easeOut" : PEEL_EASE,
+            duration: isSkipping ? 0.25 : 0.5,
+            ease: "easeOut",
           }}
           onClick={() => activeStage === "stage3" && doComplete()}
           tabIndex={-1}
