@@ -41,7 +41,7 @@ const STAGES: { state: OverlayState; delay: number }[] = [
   { state: "stage3", delay: 1400 },
 ];
 
-const AUTO_REVEAL_AT = 3500;
+const AUTO_REVEAL_AT = 4200;
 
 const BLUR_VARIANTS = {
   enter: { opacity: 0, filter: "blur(16px)", scale: 0.97, y: 12 },
@@ -158,6 +158,8 @@ export default function WelcomeOverlayClient({
       if (e instanceof MouseEvent || e instanceof PointerEvent) {
         if (e.button !== 0) return;
       }
+      // On mobile tap or desktop click, only allow skipping after stage 3 ("Tech-News Today") is active
+      if (stateRef.current !== "stage3") return;
       handleSkip(e);
     };
 
