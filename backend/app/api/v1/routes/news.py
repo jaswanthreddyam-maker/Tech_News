@@ -14,6 +14,11 @@ router = APIRouter()
 
 from fastapi import Response, Query, Depends
 
+_in_memory_homepage_cache: dict[str, Any] = {
+    "cards": None,
+    "expires_at": 0.0
+}
+
 @router.get("", response_model=PaginatedResponse[ArticleCard])
 async def list_articles(
     response: Response,
@@ -27,6 +32,22 @@ async def list_articles(
     """
     import time
     t0 = time.time()
+    now_ts = time.time()
+
+    # Fast Path 0: Process-level in-memory cache (1ms response, completely immune to DB/Redis latency)
+    if not category and not cursor and _in_memory_homepage_cache["cards"] and now_ts < _in_memory_homepage_cache["expires_at"]:
+        cards_data = _in_memory_homepage_cache["cards"]
+        t_total = time.time() - t0
+        response.headers["Server-Timing"] = f"mem_hit;dur={t_total*1000:.1f}"
+        return PaginatedResponse(
+            correlation_id=correlation_id_ctx.get() or "system",
+            data=cards_data[:limit],
+            total=len(cards_data),
+            page=1,
+            page_size=limit,
+            has_next=False,
+        )
+
     correlation_id = correlation_id_ctx.get() or "system"
 
     from app.core.redis import get_redis_client
@@ -276,10 +297,12 @@ async def list_articles(
         articles_list.append(card)
 
     if not category and not cursor and articles_list:
+        raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
+        _in_memory_homepage_cache["cards"] = raw_cards
+        _in_memory_homepage_cache["expires_at"] = time.time() + 60.0
         try:
             redis = get_redis_client()
             if redis:
-                raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
                 await asyncio.wait_for(redis.set(cache_key_full, json.dumps(raw_cards, default=str), ex=300), timeout=REDIS_OP_TIMEOUT)
         except Exception as cache_err:
             logger.warning(f"Failed to cache full payload: {cache_err}")
