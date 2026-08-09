@@ -220,7 +220,9 @@ class HomepageBuilder:
             if latest_proj and latest_proj.stories_json:
                 existing_ids = [s["id"] for s in latest_proj.stories_json if "id" in s]
                 existing_checksum = hashlib.sha256(json.dumps(existing_ids).encode("utf-8")).hexdigest()
-                if existing_checksum == current_checksum:
+                # Check if thumbnails exist in stored stories
+                has_thumbs = any(s.get("thumbnail_url") for s in latest_proj.stories_json)
+                if existing_checksum == current_checksum and has_thumbs:
                     logger.info("HomepageBuilder: Identical homepage projection checksum detected. Skipping redundant persistence.")
                     return top_articles
 

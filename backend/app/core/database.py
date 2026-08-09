@@ -48,6 +48,10 @@ engine_kwargs = {
     "pool_pre_ping": True,
     "echo": False,
     "future": True,
+    "connect_args": {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 }
 
 if is_testing:

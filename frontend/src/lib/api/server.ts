@@ -1,7 +1,8 @@
 import { ApiTransport, RequestOptions } from "./transport";
 import { randomUUID } from "crypto";
+import { getApiBaseUrl } from "./getApiBaseUrl";
 
-const API_BASE_URL = process.env.INTERNAL_API_URL || (process.env.API_PROXY_TARGET ? `${process.env.API_PROXY_TARGET}${process.env.NEXT_PUBLIC_API_URL || '/api/v1'}` : "http://localhost:8000/api/v1");
+const API_BASE_URL = getApiBaseUrl();
 
 export class ServerTransport implements ApiTransport {
   async fetch(endpoint: string, options: RequestOptions = {}): Promise<Response> {
