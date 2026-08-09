@@ -21,13 +21,8 @@ export function HeroScene(props: HeroSceneProps) {
   });
   const opacity = useTransform(scrollYProgress, [0.5, 1], [1, 0]);
 
-  if (!props.items || props.items.length === 0) {
-    return (
-      <div className="border border-border rounded-2xl p-12 bg-card text-center text-muted-foreground min-h-[400px] flex items-center justify-center">
-        No featured stories available in the AI newsroom at this time.
-      </div>
-    );
-  }
+  // The early return has been removed to allow the 3D ring to mount immediately
+  // with skeleton items passed from HeroCarousel while data is fetching.
 
   return (
     <HeroSceneProvider {...props}>

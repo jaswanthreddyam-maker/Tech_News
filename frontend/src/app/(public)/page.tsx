@@ -70,22 +70,11 @@ const jsonLd = {
   ],
 };
 
-export default async function HomePage() {
-  // Fetch the Hero articles server side
-  let featuredArticlesRaw: any[] = [];
-  try {
-    const articlesRes = await getArticles({ limit: 12, sort_by: "trending" });
-    featuredArticlesRaw = Array.isArray(articlesRes) ? articlesRes : (articlesRes as any)?.data || [];
-  } catch (error) {
-    console.error("Failed to fetch featured articles on server:", error);
-  }
-
-  const featuredArticles = mapArticlesToFeatured(featuredArticlesRaw);
-  const items = featuredArticles;
-
-  const editorPicks = featuredArticles.slice(1);
-  const latest = featuredArticles.slice(1);
-  const aiInsights = featuredArticles.slice(1);
+export default function HomePage() {
+  const items: any[] = [];
+  const editorPicks: any[] = [];
+  const latest: any[] = [];
+  const aiInsights: any[] = [];
 
   return (
     <HomepageScene>

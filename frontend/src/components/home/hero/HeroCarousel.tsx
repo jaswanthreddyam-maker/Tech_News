@@ -29,17 +29,26 @@ export function HeroCarousel({
     : (trendingQuery.data as any)?.data || [];
 
   const clientFeatured = mapArticlesToFeatured(rawClientArticles);
+  
+  const isLoading = initialItems.length === 0 && trendingQuery.isLoading;
+  const skeletonItems = Array.from({ length: 12 }).map((_, i) => ({
+    id: `skeleton-${i}`,
+    title: "",
+    url: "#",
+    thumbnail: "",
+  } as FeaturedArticle));
 
-  const items = initialItems.length > 0 ? initialItems : clientFeatured;
-  const editorPicks = initialEditorPicks.length > 0 ? initialEditorPicks : clientFeatured.slice(1);
-  const latest = initialLatest.length > 0 ? initialLatest : clientFeatured.slice(1);
-  const aiInsights = initialAiInsights.length > 0 ? initialAiInsights : clientFeatured.slice(1);
+  const items = isLoading ? skeletonItems : (initialItems.length > 0 ? initialItems : clientFeatured);
+  const editorPicks = isLoading ? skeletonItems.slice(0, 4) : (initialEditorPicks.length > 0 ? initialEditorPicks : clientFeatured.slice(1, 5));
+  const latest = isLoading ? skeletonItems.slice(0, 4) : (initialLatest.length > 0 ? initialLatest : clientFeatured.slice(1, 5));
+  const aiInsights = isLoading ? skeletonItems.slice(0, 4) : (initialAiInsights.length > 0 ? initialAiInsights : clientFeatured.slice(1, 5));
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
+    // Avoid hydration mismatch on initial render, but don't block layout
     return <HeroCarouselSkeleton />;
   }
 
