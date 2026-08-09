@@ -279,8 +279,8 @@ async def list_articles(
         try:
             redis = get_redis_client()
             if redis:
-                raw_cards = [c.model_dump(mode="json") for c in articles_list]
-                await asyncio.wait_for(redis.set(cache_key_full, json.dumps(raw_cards), ex=300), timeout=REDIS_OP_TIMEOUT)
+                raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
+                await asyncio.wait_for(redis.set(cache_key_full, json.dumps(raw_cards, default=str), ex=300), timeout=REDIS_OP_TIMEOUT)
         except Exception as cache_err:
             logger.warning(f"Failed to cache full payload: {cache_err}")
 
