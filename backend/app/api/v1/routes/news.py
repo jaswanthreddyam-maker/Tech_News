@@ -248,6 +248,32 @@ async def list_articles(
         pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
     )
 
+@router.get("/purge-cache")
+@router.post("/purge-cache")
+async def purge_news_cache(db: AsyncSession = Depends(get_db)):
+    """
+    Clears stale Redis homepage cache and forces a fresh projection rebuild.
+    """
+    from app.core.redis import get_redis_client
+    from app.editorial.homepage_builder import HomepageBuilder
+    from app.models.projection import HomepageProjection
+    from sqlalchemy import delete
+
+    await db.execute(delete(HomepageProjection))
+    await db.commit()
+
+    try:
+        redis = get_redis_client()
+        if redis:
+            await redis.delete("editorial:v1:homepage_ranked_ids")
+            await redis.delete("homepage:v1:curated_projection")
+    except Exception:
+        pass
+
+    articles = await HomepageBuilder.build_homepage(db)
+    return {"status": "success", "message": f"Cache purged. Homepage rebuilt with {len(articles)} articles."}
+
+
 import html
 from datetime import datetime, timezone
 
