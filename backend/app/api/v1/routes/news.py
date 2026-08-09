@@ -38,13 +38,27 @@ async def list_articles(
     logger = logging.getLogger("tech_news.routes.news")
 
     cached = None
+    cache_key_full = "editorial:v1:homepage_cards_full_json"
     cache_key = "editorial:v1:homepage_ranked_ids"
     REDIS_OP_TIMEOUT = 1.0
 
     try:
         import asyncio
         redis = get_redis_client()
-        if redis:
+        if redis and not category and not cursor:
+            cached_full = await asyncio.wait_for(redis.get(cache_key_full), timeout=REDIS_OP_TIMEOUT)
+            if cached_full:
+                cards_data = json.loads(cached_full)
+                t_total = time.time() - t0
+                response.headers["Server-Timing"] = f"redis_hit;dur={(time.time()-t0)*1000:.1f}"
+                return PaginatedResponse(
+                    correlation_id=correlation_id,
+                    data=cards_data[:limit],
+                    total=len(cards_data),
+                    page=1,
+                    page_size=limit,
+                    has_next=False,
+                )
             cached = await asyncio.wait_for(redis.get(cache_key), timeout=REDIS_OP_TIMEOUT)
     except Exception as e:
         from app.core.redis import mark_redis_failed
@@ -254,12 +268,21 @@ async def list_articles(
     for art in articles:
         topics = topics_by_art.get(str(art.id), [])
         entities = entities_by_art.get(str(art.id), [])
-
-        articles_list.append(ArticleCard.from_model(
+        card = ArticleCard.from_model(
             art,
             topics=topics,
             entities=entities
-        ))
+        )
+        articles_list.append(card)
+
+    if not category and not cursor and articles_list:
+        try:
+            redis = get_redis_client()
+            if redis:
+                raw_cards = [c.model_dump(mode="json") for c in articles_list]
+                await asyncio.wait_for(redis.set(cache_key_full, json.dumps(raw_cards), ex=300), timeout=REDIS_OP_TIMEOUT)
+        except Exception as cache_err:
+            logger.warning(f"Failed to cache full payload: {cache_err}")
 
     t_total = time.time() - t0
     response.headers["Server-Timing"] = f"redis;dur={t_redis*1000:.1f}, total;dur={t_total*1000:.1f}"
