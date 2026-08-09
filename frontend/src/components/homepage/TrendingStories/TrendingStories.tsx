@@ -119,10 +119,10 @@ export function TrendingStories() {
 
     return {
       initial: {
-        rotateY: -45,
-        z: -40,
-        opacity: 0.95,
-        filter: "brightness(0.7)",
+        rotateY: -25,
+        z: -30,
+        opacity: 0,
+        filter: "brightness(0.6)",
       },
       animate: isInView
         ? {
@@ -133,9 +133,9 @@ export function TrendingStories() {
           }
         : undefined,
       transition: {
-        duration: 1.1,
-        delay: getCardDelay(idx, isFeatured) * 0.09, // 90ms stagger between cards
-        ease: [0.22, 1, 0.36, 1] as const, // cinematic cubic-bezier
+        duration: 2.2,
+        delay: getCardDelay(idx, isFeatured) * 0.14, // 140ms stagger — slower cascade
+        ease: [0.16, 1, 0.3, 1] as const, // slow-motion cubic-bezier — long deceleration tail
       },
     };
   };

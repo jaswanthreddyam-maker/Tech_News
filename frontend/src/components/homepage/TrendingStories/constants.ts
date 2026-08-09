@@ -8,8 +8,8 @@ export const TRENDING_LAYOUT = {
 
 export const CAMERA_CONFIG = {
   DEADZONE: 0.05,
-  MAX_TILT_DEG: 3.5, // Refined 3.5° ambient 3D section tilt
-  LERP_FACTOR: 0.06, // Ultra-smooth 60fps rAF lerp inertia
+  MAX_TILT_DEG: 2.5, // Subtle 2.5° ambient 3D section tilt — slow-motion cinematic feel
+  LERP_FACTOR: 0.035, // Slow inertia lerp — heavier damping for premium drift
 } as const;
 
 const HERO_BASE_DEPTH = 20;
