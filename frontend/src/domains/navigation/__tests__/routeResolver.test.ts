@@ -39,13 +39,17 @@ export function runRouteResolverTests(): { passed: number; total: number } {
   const r6 = resolveArticleRoute({ id: 6, slug: null, url: "ftp://server.com/file", title: "FTP Scheme" });
   assert(r6.kind === "invalid", "Block ftp: scheme");
 
-  // Test 7: Missing slug and URL is invalid
-  const r7 = resolveArticleRoute({ id: 7, slug: null, url: null, title: "Empty" });
-  assert(r7.kind === "invalid", "Missing slug and URL");
+  // Test 7: ID fallback resolution when slug is null
+  const r7 = resolveArticleRoute({ id: 7, slug: null, url: null, title: "ID Fallback" });
+  assert(r7.kind === "internal" && r7.href === "/articles/7", "ID fallback resolution");
 
-  // Test 8: Null article is invalid
-  const r8 = resolveArticleRoute(null);
-  assert(r8.kind === "invalid", "Null article");
+  // Test 8: Missing id, slug, and URL is invalid
+  const r8 = resolveArticleRoute({ id: undefined as any, slug: null, url: null, title: "Empty" });
+  assert(r8.kind === "invalid", "Missing id, slug and URL");
+
+  // Test 9: Null article is invalid
+  const r9 = resolveArticleRoute(null);
+  assert(r9.kind === "invalid", "Null article");
 
   return { passed, total };
 }

@@ -20,21 +20,31 @@ export function resolveArticleRoute(article: CanonicalArticle | null | undefined
 
   const rawSlug = article.slug;
   const rawUrl = article.url;
+  const rawId = article.id;
 
-  // 1. Check for valid internal slug
-  if (typeof rawSlug === "string") {
-    const trimmedSlug = rawSlug.trim();
+  const effectiveSlug =
+    typeof rawSlug === "string" && rawSlug.trim().length > 0
+      ? rawSlug.trim()
+      : rawId !== null &&
+        rawId !== undefined &&
+        String(rawId).trim().length > 0 &&
+        String(rawId).trim() !== "null" &&
+        String(rawId).trim() !== "undefined"
+      ? String(rawId).trim()
+      : "";
+
+  // 1. Check for valid internal slug or article ID fallback
+  if (effectiveSlug.length > 0) {
     if (
-      trimmedSlug.length > 0 &&
-      !trimmedSlug.startsWith("http://") &&
-      !trimmedSlug.startsWith("https://") &&
-      !trimmedSlug.startsWith("javascript:") &&
-      !trimmedSlug.startsWith("data:") &&
-      !trimmedSlug.startsWith("ftp:")
+      !effectiveSlug.startsWith("http://") &&
+      !effectiveSlug.startsWith("https://") &&
+      !effectiveSlug.startsWith("javascript:") &&
+      !effectiveSlug.startsWith("data:") &&
+      !effectiveSlug.startsWith("ftp:")
     ) {
       return {
         kind: "internal",
-        href: `/articles/${encodeURIComponent(trimmedSlug)}`,
+        href: `/articles/${encodeURIComponent(effectiveSlug)}`,
       };
     }
   }
