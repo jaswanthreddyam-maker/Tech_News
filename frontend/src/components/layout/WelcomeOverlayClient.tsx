@@ -37,11 +37,11 @@ function overlayReducer(state: OverlayState, action: OverlayAction): OverlayStat
 
 const STAGES: { state: OverlayState; delay: number }[] = [
   { state: "stage1", delay: 0 },
-  { state: "stage2", delay: 600 },
-  { state: "stage3", delay: 1400 },
+  { state: "stage2", delay: 400 },
+  { state: "stage3", delay: 900 },
 ];
 
-const AUTO_REVEAL_AT = 4200;
+const AUTO_REVEAL_AT = 3000;
 
 const BLUR_VARIANTS = {
   enter: { opacity: 0, filter: "blur(16px)", scale: 0.97, y: 12 },
