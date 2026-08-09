@@ -1,5 +1,7 @@
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
+
 const API_BASE_URL = typeof window !== "undefined"
-  ? (process.env.NEXT_PUBLIC_API_URL || "/api/v1")
+  ? getApiBaseUrl()
   : (process.env.INTERNAL_API_URL || "http://localhost:8000/api/v1");
 
 // In-memory access token storage (never stored in localStorage)

@@ -33,8 +33,10 @@ const defaultState: NotificationState = {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
+
 const API_BASE = typeof window !== "undefined"
-  ? (process.env.NEXT_PUBLIC_API_URL || "/api/v1")
+  ? getApiBaseUrl()
   : "";
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {

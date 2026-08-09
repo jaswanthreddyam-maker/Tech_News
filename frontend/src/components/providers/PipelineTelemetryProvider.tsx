@@ -7,6 +7,7 @@ import {
   ConnectionState, 
   TelemetryClientCallbacks 
 } from "../../services/telemetryClient";
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
 interface PipelineTelemetryContextType {
   snapshot: TelemetrySnapshotV3 | null;
@@ -25,21 +26,18 @@ export const PipelineTelemetryProvider = ({ children }: { children: React.ReactN
 
   // Initialize TelemetryClient with environment configurations
   const client = useMemo(() => {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
+    const apiBase = getApiBaseUrl();
     
     // Resolve REST and SSE URLs
-    let restUrl = apiBaseUrl ? `${apiBaseUrl}/api/v1/telemetry` : `${apiBase}/telemetry`;
-    let sseUrl = apiBaseUrl ? `${apiBaseUrl}/api/v1/telemetry/sse` : `${apiBase}/telemetry/sse`;
+    let restUrl = `${apiBase}/telemetry`;
+    let sseUrl = `${apiBase}/telemetry/sse`;
 
     if (typeof window !== "undefined") {
-      if (!apiBaseUrl) {
-        if (restUrl.startsWith("/")) {
-          restUrl = `${window.location.protocol}//${window.location.host}${restUrl}`;
-        }
-        if (sseUrl.startsWith("/")) {
-          sseUrl = `${window.location.protocol}//${window.location.host}${sseUrl}`;
-        }
+      if (restUrl.startsWith("/")) {
+        restUrl = `${window.location.protocol}//${window.location.host}${restUrl}`;
+      }
+      if (sseUrl.startsWith("/")) {
+        sseUrl = `${window.location.protocol}//${window.location.host}${sseUrl}`;
       }
     }
 

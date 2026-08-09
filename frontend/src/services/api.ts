@@ -1,6 +1,8 @@
 import { useAppStore } from "../store/useStore";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
+import { getApiBaseUrl } from "../lib/api/getApiBaseUrl";
+
+const API_BASE_URL = getApiBaseUrl();
 const DEFAULT_TIMEOUT_MS = 10000; // 10s fetch timeout policy
 
 interface RequestOptions extends RequestInit {

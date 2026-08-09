@@ -10,6 +10,7 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { useEffect, useState, useRef } from "react";
 import { Article } from "@/lib/api/types";
 import { ArticleLink } from "@/domains/article/ArticleLink";
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
 /** Apple / Arc Signature Easing Curve */
 const EASE_CUBIC = [0.16, 1, 0.3, 1] as const;
@@ -29,7 +30,7 @@ export function BreakingNews() {
 
   // Connect to SSE for real-time injections
   useEffect(() => {
-    const sseUrl = (process.env.NEXT_PUBLIC_API_URL || "/api/v1") + "/events/stream";
+    const sseUrl = getApiBaseUrl() + "/events/stream";
     const eventSource = new EventSource(sseUrl);
 
     eventSource.onmessage = (event) => {

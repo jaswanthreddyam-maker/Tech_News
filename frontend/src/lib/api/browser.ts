@@ -1,7 +1,9 @@
 import { ApiTransport, RequestOptions } from "./transport";
 import { sessionManager } from "@/lib/session/sessionManager";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
+import { getApiBaseUrl } from "./getApiBaseUrl";
+
+const API_BASE_URL = getApiBaseUrl();
 
 async function attemptTokenRefresh(): Promise<boolean> {
   const { useAppStore } = require("@/store/useStore");
