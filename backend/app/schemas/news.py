@@ -25,6 +25,7 @@ class ArticleBase(BaseModel):
     is_multi_topic: bool | None = None
     primary_topics: list[str] | None = None
     dominant_topic_percentage: float | None = None
+    alt_text: str | None = None
 
 class ArticleCard(ArticleBase):
     """Schema for home feed and related article lists."""
