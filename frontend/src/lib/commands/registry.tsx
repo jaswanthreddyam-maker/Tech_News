@@ -32,7 +32,7 @@ export function getCommands(): CommandDefinition[] {
 // Base commands that are always registered
 export function registerBaseCommands(dependencies: { 
   router: any, 
-  setTheme: (t: string) => void, 
+  setTheme?: (t: string) => void, 
   logout: () => void,
   isAuthenticated: boolean
 }) {
@@ -81,20 +81,7 @@ export function registerBaseCommands(dependencies: {
       action: () => dependencies.router.push("/dashboard"),
       hidden: () => !dependencies.isAuthenticated,
     },
-    {
-      id: "theme-light",
-      title: "Switch to Light Theme",
-      icon: <Sun className="w-4 h-4" />,
-      group: "Settings",
-      action: () => dependencies.setTheme("light"),
-    },
-    {
-      id: "theme-dark",
-      title: "Switch to Dark Theme",
-      icon: <Moon className="w-4 h-4" />,
-      group: "Settings",
-      action: () => dependencies.setTheme("dark"),
-    },
+
     {
       id: "settings",
       title: "Account Settings",

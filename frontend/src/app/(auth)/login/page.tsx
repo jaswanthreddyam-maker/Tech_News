@@ -8,7 +8,6 @@ import { useAppStore, User } from "@/store/useStore";
 import { canAccessAdmin } from "@/lib/auth/permissions";
 import { apiFetch, APIClientError } from "@/services/api";
 import { Mail, Lock, ShieldCheck } from "lucide-react";
-import { useTheme } from "next-themes";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
@@ -27,7 +26,7 @@ interface AuthResponse {
 export default function LoginPage() {
   const router = useRouter();
   const { user, loginUser } = useAppStore();
-  const { resolvedTheme } = useTheme();
+
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -125,7 +124,8 @@ export default function LoginPage() {
     );
   }
 
-  const googleTheme = (resolvedTheme === "dark" ? "filled_black" : "outline") as "filled_black" | "outline";
+  const googleTheme = "filled_black";
+
 
   return (
     <div className="min-h-screen w-full bg-background flex flex-col items-center justify-center px-4 relative overflow-hidden animate-entrance select-none">

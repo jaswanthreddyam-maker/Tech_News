@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
+
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { getCommands, registerBaseCommands } from "@/lib/commands/registry";
 import { useAppStore } from "@/store/useStore";
@@ -14,8 +14,8 @@ import { KeywordSearchResult } from "@/lib/api/search/types";
 
 export function CommandPalette({ onSelect }: { onSelect: () => void }) {
   const router = useRouter();
-  const { setTheme } = useTheme();
   const { user, logoutUser } = useAppStore();
+
   const isAuthenticated = !!user;
   const { track } = useAnalytics();
   const [search, setSearch] = React.useState("");
@@ -46,14 +46,14 @@ export function CommandPalette({ onSelect }: { onSelect: () => void }) {
     // Re-register base commands to inject current dependencies
     registerBaseCommands({
       router,
-      setTheme,
       isAuthenticated,
       logout: () => {
         sessionManager.logout();
         logoutUser();
       }
     });
-  }, [router, setTheme, isAuthenticated, logoutUser]);
+  }, [router, isAuthenticated, logoutUser]);
+
 
   const commands = getCommands();
   const groups = Array.from(new Set(commands.map(c => c.group)));

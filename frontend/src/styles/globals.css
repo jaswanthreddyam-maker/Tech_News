@@ -2,43 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Ultra-Premium light theme values: Muted off-white and charcoal */
-  --background: #f7f7f7;
-  --foreground: #111111;
-  --card: #ffffff;
-  --card-foreground: #111111;
-  --border: #e0e0e0;
-  --muted: #666666;
-  --accent: #000000;
-  
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Courier New', Courier, monospace;
-
-  /* ── Article semantic design tokens (light) ── */
-  --article-text: #1c1c1e;
-  --article-heading: #111111;
-  --article-muted: #555555;
-  --article-border: #d8d8d8;
-  --article-code-bg: #f0f0f0;
-  --article-code-text: #1d4ed8;
-  --article-quote: #2d2d2d;
-  --article-surface: #f5f5f5;
-  --article-surface-hover: #ebebeb;
-  --article-link: #1d4ed8;
-  --article-table-header-bg: #f0f2f4;
-  --article-table-border: #d0d5dd;
-  --article-selection-bg: #bfdbfe;
-  --article-selection-text: #1e3a5f;
-
-  /* ── Reader preference hooks (defaults) ── */
-  --reader-font-family: 'Georgia', 'Times New Roman', serif;
-  --reader-font-size: 1.125rem;
-  --reader-line-height: 1.8;
-  --reader-max-width: 72ch;
-  --reader-paragraph-spacing: 1.5rem;
-}
-
+:root,
 .dark {
   /* High-end minimalist dark theme values: Deep black, crisp whites and dark borders */
   --background: #080808;
@@ -48,6 +12,9 @@
   --border: #1a1a1a;
   --muted: #888888;
   --accent: #ffffff;
+  
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', Courier, monospace;
 
   /* ── Article semantic design tokens (dark) ── */
   --article-text: #d1d5db;
@@ -63,7 +30,7 @@
   --article-table-header-bg: #1f2937;
   --article-table-border: #374151;
   --article-selection-bg: #1e3a5f;
-  --article-selection-text: #bfdbfe;
+  --article-selection-text: #93c5fd;
 
   /* ── Reader preference hooks (defaults) ── */
   --reader-font-family: 'Georgia', 'Times New Roman', serif;
@@ -71,7 +38,11 @@
   --reader-line-height: 1.8;
   --reader-max-width: 72ch;
   --reader-paragraph-spacing: 1.5rem;
+
+  color-scheme: dark;
 }
+
+
 
 @layer base {
   html, body {
