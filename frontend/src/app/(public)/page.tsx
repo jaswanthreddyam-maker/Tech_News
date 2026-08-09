@@ -75,7 +75,7 @@ export default async function HomePage() {
   let featuredArticlesRaw: any[] = [];
   try {
     const articlesRes = await getArticles({ limit: 12, sort_by: "trending" });
-    featuredArticlesRaw = articlesRes?.data || [];
+    featuredArticlesRaw = Array.isArray(articlesRes) ? articlesRes : (articlesRes as any)?.data || [];
   } catch (error) {
     console.error("Failed to fetch featured articles on server:", error);
   }
