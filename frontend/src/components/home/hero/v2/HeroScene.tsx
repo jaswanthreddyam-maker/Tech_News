@@ -39,12 +39,12 @@ export function HeroScene(props: HeroSceneProps) {
         {/* Editorial Panel & 3D Carousel Ring */}
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 xl:gap-12 items-center overflow-visible">
           {/* Left Panel */}
-          <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-2 lg:order-1 lg:-translate-y-[40px]">
+          <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-1 lg:order-1 lg:-translate-y-[40px] pt-4 lg:pt-0">
             <HeroEditorialPanel />
           </div>
 
           {/* Right 3D Ring */}
-          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-1 lg:order-2 overflow-visible h-[420px] sm:h-[460px] lg:h-[480px] lg:-translate-y-[30px]">
+          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-2 lg:order-2 overflow-visible h-[420px] sm:h-[460px] lg:h-[480px] lg:-translate-y-[30px] mt-2 lg:mt-0">
             <div className="relative w-full h-full flex items-center justify-center overflow-visible">
               <Hero3DRing />
             </div>

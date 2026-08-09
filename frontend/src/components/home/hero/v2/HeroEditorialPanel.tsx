@@ -86,7 +86,7 @@ export function HeroEditorialPanel() {
           {/* Staggered Element 2: Architectural H1 Headline */}
           <m.h1
             variants={itemVariants}
-            className="text-2xl sm:text-3xl lg:text-[34px] xl:text-[38px] font-bold tracking-tight leading-[1.12] text-foreground font-sans text-balance"
+            className="text-2xl sm:text-3xl lg:text-[34px] xl:text-[38px] font-bold tracking-tight leading-[1.12] text-foreground font-sans text-balance w-[90%] max-w-[360px] md:w-full md:max-w-none"
             style={{
               textShadow: "0 2px 24px rgba(0, 0, 0, 0.4)",
             }}
