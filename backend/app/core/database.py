@@ -54,11 +54,12 @@ if is_testing:
     engine_kwargs["poolclass"] = NullPool
 else:
     engine_kwargs.update({
-        "pool_size": 10,
-        "max_overflow": 20,
+        "pool_size": int(os.getenv("DATABASE_POOL_SIZE", "2")),
+        "max_overflow": int(os.getenv("DATABASE_MAX_OVERFLOW", "3")),
         "pool_timeout": 15.0,
         "pool_recycle": 1800,
     })
+
 
 async_engine = create_async_engine(
     settings.DATABASE_URL,
