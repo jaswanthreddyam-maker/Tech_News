@@ -166,6 +166,7 @@ class ConversationRegistry:
             return
 
         meta_key = self._meta_key(conversation_id)
+        updates["conversation_id"] = conversation_id
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         mapping = self._serialize_metadata(updates)
@@ -184,4 +185,8 @@ class ConversationRegistry:
         meta = await self.get(conversation_id)
         if not meta:
             return False
-        return meta.owner_type == owner_type.value and meta.owner_id == owner_id
+        # Authenticated user conversations require user ID match
+        if meta.owner_type == OwnerType.USER.value or str(meta.owner_type) == "user":
+            return owner_type == OwnerType.USER and str(meta.owner_id) == str(owner_id)
+        # Anonymous conversations are unguessable UUIDs — accessible by anyone possessing the ID
+        return True

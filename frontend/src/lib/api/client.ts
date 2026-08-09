@@ -15,13 +15,13 @@ export class ApiClient {
   }
   async fetchRaw(endpoint: string, options: RequestOptions = {}): Promise<Response> {
     const isGet = !options.method || options.method.toUpperCase() === "GET";
-    const maxRetries = isGet ? 2 : 0;
+    const maxRetries = isGet ? 1 : 0;
     let attempt = 0;
     
     while (attempt <= maxRetries) {
       const startTime = performance.now();
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs || 10000);
+      const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs || 4000);
       
       const fetchOptions = {
         ...options,

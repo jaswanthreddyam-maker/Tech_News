@@ -15,10 +15,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { canAccessAdmin } from "@/lib/auth/permissions";
+import { SettingsDialog } from "@/components/layout/SettingsDialog";
 import { LogOut, Settings, Shield, User as UserIcon } from "lucide-react";
 
 export function UserMenu() {
   const { user, logoutUser } = useAppStore();
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   const handleLogout = async () => {
     try {
@@ -32,11 +34,30 @@ export function UserMenu() {
 
   if (!user) {
     return (
-      <Link href="/login">
-        <Button variant="ghost" size="sm" className="h-8 text-xs">
-          Sign In
-        </Button>
-      </Link>
+      <div className="flex items-center gap-2">
+        <SettingsDialog
+          trigger={
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-full border border-white/10 bg-white/[0.04] text-foreground hover:border-white/25 hover:bg-white/[0.08] transition-all"
+              aria-label="Settings & Theme"
+            >
+              <Settings className="h-4 w-4 text-foreground" />
+            </Button>
+          }
+        />
+        <Link href="/login">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="group relative h-9 px-4 rounded-full border border-white/20 bg-white/[0.05] hover:bg-white/[0.12] hover:border-white/40 hover:-translate-y-[1px] transition-all duration-300 text-xs font-semibold text-foreground shadow-sm flex items-center gap-1.5"
+          >
+            <span>Sign In</span>
+            <span className="text-primary transition-transform duration-300 group-hover:translate-x-1">→</span>
+          </Button>
+        </Link>
+      </div>
     );
   }
 
@@ -47,44 +68,46 @@ export function UserMenu() {
   const isAdmin = canAccessAdmin(user);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button id="user-menu-trigger" data-testid="user-menu-trigger" variant="ghost" size="icon" className="h-8 w-8 rounded-full" aria-label="User menu">
-          <Avatar className="h-7 w-7">
-            <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs text-muted-foreground leading-none">{user.email}</p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {isAdmin && (
-          <DropdownMenuItem asChild>
-            <Link href="/admin" className="gap-2 cursor-pointer">
-              <Shield className="h-4 w-4" />
-              Admin Dashboard
-            </Link>
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="gap-2 cursor-pointer">
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button id="user-menu-trigger" data-testid="user-menu-trigger" variant="ghost" size="icon" className="h-9 w-9 rounded-full border border-white/10 bg-white/[0.04] hover:border-white/25 transition-all" aria-label="User menu">
+            <Avatar className="h-7 w-7">
+              <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48 bg-background/90 backdrop-blur-xl border border-white/15 text-foreground shadow-2xl rounded-xl">
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{user.name}</p>
+              <p className="text-xs text-muted-foreground leading-none">{user.email}</p>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {isAdmin && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin" className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
+                <Shield className="h-4 w-4" />
+                Admin Dashboard
+              </Link>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
             <Settings className="h-4 w-4" />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            Settings & Theme
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer rounded-lg hover:bg-destructive/10">
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
   );
 }

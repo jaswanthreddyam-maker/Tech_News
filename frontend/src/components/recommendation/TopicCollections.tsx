@@ -5,6 +5,7 @@ import { AsyncBoundary, SectionTitle } from "@/components/common";
 import { EmptyState, EmptyIllustration } from "@/components/common/EmptyState";
 import { Tag } from "lucide-react";
 import Link from "next/link";
+import { ArticleLink } from "@/domains/article/ArticleLink";
 import { formatDistanceToNow } from "date-fns";
 
 export function TopicCollections() {
@@ -85,14 +86,14 @@ function TopicList() {
             <ul className="space-y-4 flex-grow">
               {articlesList.slice(0, 3).map((article, i) => (
                 <li key={article.id} className="group">
-                  <Link href={`/articles/${article.slug}`} className="flex gap-4">
+                  <ArticleLink article={article as any} section="TopicCollections" className="flex gap-4">
                     <span className="text-muted-foreground font-mono font-bold text-sm mt-1 opacity-50 group-hover:opacity-100 transition-opacity">0{i+1}</span>
                     <div>
                       <h4 className="font-medium text-sm group-hover:text-primary transition-colors line-clamp-2 leading-tight">
                         {article.title}
                       </h4>
                     </div>
-                  </Link>
+                  </ArticleLink>
                 </li>
               ))}
             </ul>

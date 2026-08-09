@@ -3,52 +3,48 @@
 import React, {
   createContext,
   useState,
-  useRef,
   useContext,
   useCallback,
-  useEffect,
   ReactNode,
 } from "react";
-import { usePathname } from "next/navigation";
-import { AnimatePresence, m } from "framer-motion";
-import { PageTurnTransition } from "@/components/layout/PageTurnTransition";
-import { ArticlePeelTransition } from "@/components/layout/ArticlePeelTransition";
-import { DepthRevealTransition } from "@/components/layout/DepthRevealTransition";
 
 // ---------------------------------------------------------------------------
-// Route ordering – direction-aware navigation
+// Article transition context — card rect captured at click time
 // ---------------------------------------------------------------------------
-const ROUTE_ORDER: Record<string, number> = {
-  "/": 0,
-  "/topics": 1,
-  // Future routes slot in naturally:
-  // "/bookmarks": 2,
-  // "/research": 3,
-};
 
-function getRouteIndex(pathname: string): number {
-  // Exact match first
-  if (ROUTE_ORDER[pathname] !== undefined) return ROUTE_ORDER[pathname];
-  // Article pages sit at the highest index
-  if (pathname.startsWith("/articles/")) return 100;
-  // Unknown routes default to 50 (middle)
-  return 50;
+interface ArticleTransitionData {
+  cardRect: DOMRect | null;
+  cardImageSrc: string | null;
+  cardTitle: string | null;
+}
+
+interface ArticleTransitionContextValue extends ArticleTransitionData {
+  setTransitionData: (data: Partial<ArticleTransitionData>) => void;
+  clearTransitionData: () => void;
+}
+
+const ArticleTransitionContext = createContext<ArticleTransitionContextValue>({
+  cardRect: null,
+  cardImageSrc: null,
+  cardTitle: null,
+  setTransitionData: () => {},
+  clearTransitionData: () => {},
+});
+
+/**
+ * useArticleTransition
+ *
+ * Hook for article cards to signal their position before navigating.
+ * Usage:
+ *   const { setTransitionData } = useArticleTransition();
+ *   onClick={(e) => setTransitionData({ cardRect: e.currentTarget.getBoundingClientRect(), ... })}
+ */
+export function useArticleTransition() {
+  return useContext(ArticleTransitionContext);
 }
 
 // ---------------------------------------------------------------------------
-// Transition types
-// ---------------------------------------------------------------------------
-export type TransitionType =
-  | "page-turn-forward"
-  | "page-turn-backward"
-  | "article-open"
-  | "article-close"
-  | "depth-reveal"
-  | "depth-close"
-  | "default";
-
-// ---------------------------------------------------------------------------
-// Card elevation context — lets article cards signal their position
+// CardElevation context — kept for backward compat
 // ---------------------------------------------------------------------------
 interface CardElevationState {
   cardRect: DOMRect | null;
@@ -65,20 +61,33 @@ export function useCardElevation() {
 }
 
 // ---------------------------------------------------------------------------
-// RouteTransitionProvider
+// Route ordering
 // ---------------------------------------------------------------------------
-interface RouteTransitionProviderProps {
-  children: ReactNode;
+const ROUTE_ORDER: Record<string, number> = {
+  "/": 0,
+  "/topics": 1,
+};
+
+function getRouteIndex(pathname: string): number {
+  if (ROUTE_ORDER[pathname] !== undefined) return ROUTE_ORDER[pathname];
+  if (pathname.startsWith("/articles/")) return 100;
+  return 50;
 }
 
-export function RouteTransitionProvider({ children }: RouteTransitionProviderProps) {
-  return <>{children}</>;
-}
+// ---------------------------------------------------------------------------
+// Transition types
+// ---------------------------------------------------------------------------
+export type TransitionType =
+  | "article-open"
+  | "article-close"
+  | "page-turn-forward"
+  | "page-turn-backward"
+  | "default";
 
-// ---------------------------------------------------------------------------
-// Transition type determination — uses route ordering
-// ---------------------------------------------------------------------------
-function determineTransitionType(prevPath: string | null, currentPath: string): TransitionType {
+export function determineTransitionType(
+  prevPath: string | null,
+  currentPath: string
+): TransitionType {
   if (!prevPath) return "default";
 
   const prevIndex = getRouteIndex(prevPath);
@@ -89,15 +98,9 @@ function determineTransitionType(prevPath: string | null, currentPath: string): 
   const isTopics = (p: string) => p === "/topics";
   const isNavRoute = (p: string) => isHome(p) || isTopics(p);
 
-  // Home ↔ Article: paper peel
-  if (isHome(prevPath) && isArticle(currentPath)) return "article-open";
-  if (isArticle(prevPath) && isHome(currentPath)) return "article-close";
+  if (isNavRoute(prevPath) && isArticle(currentPath)) return "article-open";
+  if (isArticle(prevPath) && isNavRoute(currentPath)) return "article-close";
 
-  // Topics ↔ Article: depth reveal
-  if (isTopics(prevPath) && isArticle(currentPath)) return "depth-reveal";
-  if (isArticle(prevPath) && isTopics(currentPath)) return "depth-close";
-
-  // Navigation between main routes: page turn
   if (isNavRoute(prevPath) && isNavRoute(currentPath)) {
     return currentIndex > prevIndex ? "page-turn-forward" : "page-turn-backward";
   }
@@ -106,94 +109,39 @@ function determineTransitionType(prevPath: string | null, currentPath: string): 
 }
 
 // ---------------------------------------------------------------------------
-// FrozenPage — caches children across route transitions
+// RouteTransitionProvider
 // ---------------------------------------------------------------------------
-interface FrozenPageProps {
-  pathname: string;
-  transitionType: TransitionType;
-  cardRect: DOMRect | null;
-  onExitComplete?: () => void;
+interface RouteTransitionProviderProps {
   children: ReactNode;
 }
 
-const FrozenPage = React.forwardRef<HTMLDivElement, FrozenPageProps>(
-  ({ pathname, transitionType, cardRect, children }, ref) => {
-  const savedChildren = useRef(children);
-  const savedPathname = useRef(pathname);
+export function RouteTransitionProvider({ children }: RouteTransitionProviderProps) {
+  const [transitionData, setTransitionDataState] = useState<ArticleTransitionData>({
+    cardRect: null,
+    cardImageSrc: null,
+    cardTitle: null,
+  });
 
-  // Only update cached children when rendering for the matching pathname
-  if (pathname === savedPathname.current) {
-    savedChildren.current = children;
-  }
+  // Also expose legacy cardRect via CardElevationContext
+  const [cardRect, setCardRect] = useState<DOMRect | null>(null);
 
-  // Page turn transitions (Home ↔ Topics and future nav routes)
-  if (transitionType === "page-turn-forward" || transitionType === "page-turn-backward") {
-    return (
-      <PageTurnTransition
-        ref={ref}
-        pathname={savedPathname.current}
-        direction={transitionType === "page-turn-forward" ? "forward" : "backward"}
-      >
-        {savedChildren.current}
-      </PageTurnTransition>
-    );
-  }
+  const setTransitionData = useCallback((data: Partial<ArticleTransitionData>) => {
+    setTransitionDataState((prev) => ({ ...prev, ...data }));
+    if (data.cardRect !== undefined) setCardRect(data.cardRect);
+  }, []);
 
-  // Article peel transitions (Home ↔ Article)
-  if (transitionType === "article-open" || transitionType === "article-close") {
-    return (
-      <ArticlePeelTransition
-        ref={ref}
-        pathname={savedPathname.current}
-        direction={transitionType === "article-open" ? "open" : "close"}
-        cardRect={cardRect}
-      >
-        {savedChildren.current}
-      </ArticlePeelTransition>
-    );
-  }
+  const clearTransitionData = useCallback(() => {
+    setTransitionDataState({ cardRect: null, cardImageSrc: null, cardTitle: null });
+    setCardRect(null);
+  }, []);
 
-  // Depth reveal transitions (Topics ↔ Article)
-  if (transitionType === "depth-reveal" || transitionType === "depth-close") {
-    return (
-      <DepthRevealTransition
-        ref={ref}
-        pathname={savedPathname.current}
-        direction={transitionType === "depth-reveal" ? "open" : "close"}
-      >
-        {savedChildren.current}
-      </DepthRevealTransition>
-    );
-  }
-
-  // Default transition
   return (
-    <DefaultTransition ref={ref} pathname={savedPathname.current}>
-      {savedChildren.current}
-    </DefaultTransition>
-  );
-});
-FrozenPage.displayName = 'FrozenPage';
-
-
-// ---------------------------------------------------------------------------
-// Default fallback transition — simple crossfade
-// ---------------------------------------------------------------------------
-const DefaultTransition = React.forwardRef<HTMLDivElement, { pathname: string; children: ReactNode }>(
-  ({ pathname, children }, ref) => {
-    return (
-      <m.div
-        ref={ref}
-        key={pathname}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15, ease: "easeInOut" }}
-        className="w-full min-h-screen flex flex-col"
-      >
+    <ArticleTransitionContext.Provider
+      value={{ ...transitionData, setTransitionData, clearTransitionData }}
+    >
+      <CardElevationContext.Provider value={{ cardRect, setCardRect }}>
         {children}
-      </m.div>
-    );
-  }
-);
-DefaultTransition.displayName = 'DefaultTransition';
+      </CardElevationContext.Provider>
+    </ArticleTransitionContext.Provider>
+  );
+}

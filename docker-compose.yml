@@ -136,13 +136,13 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-      - /app/.turbo
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=/api/v1
       - API_PROXY_TARGET=http://backend:8000
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=358464301429-93hlf8ntk55v2docn490tvqase3783cc.apps.googleusercontent.com
+      - WATCHPACK_POLLING=true
     depends_on:
       backend:
         condition: service_healthy

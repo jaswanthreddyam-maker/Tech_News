@@ -11,10 +11,28 @@ logger = logging.getLogger("tech_news.redis")
 redis_client: aioredis.Redis | None = None
 
 
-def get_redis_client() -> aioredis.Redis:
-    global redis_client
+import time
+
+_redis_last_failed = 0.0
+
+def mark_redis_failed():
+    global _redis_last_failed
+    _redis_last_failed = time.time()
+
+def get_redis_client() -> aioredis.Redis | None:
+    global redis_client, _redis_last_failed
+    if time.time() - _redis_last_failed < 30.0:
+        return None
     if redis_client is None:
-        redis_client = aioredis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+        redis_client = aioredis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+            socket_connect_timeout=1.0,
+            socket_timeout=1.0,
+            retry_on_timeout=False,
+        )
+
     return redis_client
 
 

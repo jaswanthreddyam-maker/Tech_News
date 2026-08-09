@@ -13,6 +13,8 @@
   line-height: var(--reader-line-height, 1.8);
   color: var(--article-text);
   max-width: var(--reader-max-width, 72ch);
+  /* Smooth reading mode switch — font/line changes animate over 250ms */
+  transition: font-size 250ms ease, line-height 250ms ease;
 }
 
 /* ── Headings ── */
@@ -215,10 +217,30 @@
   opacity: 1;
 }
 
+/* ── Block-level Scroll Reveal Animations ── */
+.block-reveal-pending {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 350ms cubic-bezier(0.22, 1, 0.36, 1), transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.block-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   .prose-theme a,
   .prose-theme-heading-link {
     transition: none;
+  }
+
+  .block-reveal-pending {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
   }
 }

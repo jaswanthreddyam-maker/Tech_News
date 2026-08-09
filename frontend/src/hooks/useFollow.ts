@@ -17,8 +17,11 @@ export function useFollowEntity(entityId: string) {
     try {
       const entities = await apiFetch<any[]>('/me/following/entities');
       setIsFollowing(entities.some(e => e.id === entityId));
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      // Ignore 401 auth errors as sessionManager/useStore handles logout silently
+      if (e?.status !== 401 && e?.statusCode !== 401) {
+        console.error('Failed to check entity follow status:', e);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -34,8 +37,10 @@ export function useFollowEntity(entityId: string) {
       setIsLoading(true);
       const res = await apiFetch<any>(`/me/following/entities/${entityId}`, { method: 'POST' });
       setIsFollowing(res.active);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      if (e?.status !== 401 && e?.statusCode !== 401) {
+        console.error('Failed to toggle entity follow:', e);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -57,8 +62,11 @@ export function useFollowTopic(topicName: string) {
     try {
       const topics = await apiFetch<any[]>('/me/following/topics');
       setIsFollowing(topics.some(t => t.name === topicName));
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      // Ignore 401 auth errors as sessionManager/useStore handles logout silently
+      if (e?.status !== 401 && e?.statusCode !== 401) {
+        console.error('Failed to check topic follow status:', e);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -74,8 +82,10 @@ export function useFollowTopic(topicName: string) {
       setIsLoading(true);
       const res = await apiFetch<any>(`/me/following/topics/${encodeURIComponent(topicName)}`, { method: 'POST' });
       setIsFollowing(res.active);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      if (e?.status !== 401 && e?.statusCode !== 401) {
+        console.error('Failed to toggle topic follow:', e);
+      }
     } finally {
       setIsLoading(false);
     }

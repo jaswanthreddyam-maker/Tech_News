@@ -14,9 +14,6 @@ import { saveSearchHistory } from "@/lib/api/search/history";
 import { notFound } from "next/navigation";
 
 export default function SearchPage() {
-  if (true as boolean) {
-    notFound();
-  }
   return (
     <div className="max-w-screen-2xl mx-auto px-4 md:px-6 py-8 md:py-12">
       <Suspense fallback={<div>Loading search...</div>}>

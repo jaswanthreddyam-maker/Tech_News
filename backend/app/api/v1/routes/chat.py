@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,6 +62,7 @@ class ConversationListResponse(BaseModel):
 @router.post("/conversations", response_model=CreateConversationResponse)
 async def create_conversation(
     body: CreateConversationRequest,
+    response: Response,
     owner_info: tuple[OwnerType, str] = Depends(resolve_owner),
 ):
     """Explicitly creates a new conversation and returns its ID."""
@@ -78,12 +79,10 @@ async def create_conversation(
         workspace_id=body.workspace_id,
     )
 
-    response = CreateConversationResponse(conversation_id=conversation_id, metadata=meta)
+    if owner_type == OwnerType.ANONYMOUS:
+        response.set_cookie(key="client_id", value=owner_id, httponly=True, samesite="lax")
 
-    # If anonymous, set a client_id cookie so the user can retrieve history
-    http_response = response  # FastAPI will serialize this
-    # Note: cookie setting is handled in middleware or manually below if needed.
-    return response
+    return CreateConversationResponse(conversation_id=conversation_id, metadata=meta)
 
 
 @router.get("/conversations", response_model=ConversationListResponse)

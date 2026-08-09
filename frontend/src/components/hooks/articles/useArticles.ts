@@ -67,3 +67,17 @@ export function useLatestInfinite() {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
+
+import { getCategoryDesks } from "@/lib/api/articles";
+
+export function useCategoryDesks() {
+  return useQuery({
+    queryKey: ["articles", "desks"],
+    queryFn: () => getCategoryDesks(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+}
+

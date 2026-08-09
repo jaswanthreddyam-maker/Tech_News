@@ -5,6 +5,7 @@ export async function getArticles(params: {
   category?: string;
   limit?: number;
   cursor?: string;
+  sort_by?: string;
 }): Promise<PaginatedResponse<Article>> {
   return apiFetch<PaginatedResponse<Article>>("/news", { params: params as Record<string, string> });
 }
@@ -14,15 +15,15 @@ export async function getArticleById(id: number): Promise<StandardResponse<Artic
 }
 
 export async function getTrendingArticles(): Promise<PaginatedResponse<Article>> {
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "7", sort_by: "trending" } });
+  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "10", sort_by: "trending" } });
 }
 
 export async function getBreakingNews(): Promise<PaginatedResponse<Article>> {
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "5", sort_by: "freshness" } });
+  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "10", sort_by: "freshness" } });
 }
 
 export async function getPersonalizedFeed(anonymousId?: string | null): Promise<StandardResponse<any[]>> {
-  const params: Record<string, string> = { limit: "7" };
+  const params: Record<string, string> = { limit: "10" };
   if (anonymousId) {
     params.anonymous_id = anonymousId;
   }
@@ -40,4 +41,9 @@ export async function getTrends(): Promise<string[]> {
   }
   return [];
 }
+
+export async function getCategoryDesks(): Promise<any[]> {
+  return apiFetch<any[]>("/news/desks");
+}
+
 

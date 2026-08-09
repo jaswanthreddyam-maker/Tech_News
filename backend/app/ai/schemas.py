@@ -32,6 +32,15 @@ class SentimentLabel(str, Enum):
     NEGATIVE = "negative"
 
 
+class CategoryEnum(str, Enum):
+    ARTIFICIAL_INTELLIGENCE = "artificial-intelligence"
+    SECURITY = "security"
+    SOFTWARE_DEVELOPMENT = "software-development"
+    STARTUPS = "startups"
+    ROBOTICS = "robotics"
+    SPACE_SCIENCE = "space-science"
+
+
 class ArticleAIInput(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     content: str = Field(..., min_length=1)
@@ -109,6 +118,9 @@ class AIEnrichmentOutput(BaseModel):
     keywords: list[str] = Field(default_factory=list, max_length=20)
     tags: list[str] = Field(default_factory=list, max_length=12)
     sentiment: SentimentLabel = SentimentLabel.NEUTRAL
+    primary_category: CategoryEnum = Field(..., description="The primary semantic category of the article")
+    category_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score for the category classification")
+
 
     @field_validator("keywords")
     @classmethod

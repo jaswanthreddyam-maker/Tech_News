@@ -20,9 +20,10 @@ async def enrich_raw_article(db: AsyncSession, raw_id: int) -> AIServiceResult |
     Returns None if AI enrichment is disabled via FeatureFlag or AI_PROVIDER config.
     Returns AIServiceResult (COMPLETED or FALLBACK) if enrichment was attempted.
     """
-    # 1. Check if AI enrichment is explicitly disabled in config
-    if settings.AI_PROVIDER == "disabled":
-        logger.info(f"AI Pipeline: Skipping enrichment for RawArticle {raw_id} (AI_PROVIDER=disabled)")
+    # 1. Check if AI enrichment is explicitly disabled in config or missing API keys
+    has_api_keys = bool(getattr(settings, "OPENAI_API_KEY", None) or getattr(settings, "GEMINI_API_KEY", None))
+    if getattr(settings, "AI_PROVIDER", None) == "disabled" or not has_api_keys:
+        logger.info(f"AI Pipeline: Skipping enrichment for RawArticle {raw_id} (AI_PROVIDER disabled or no API key)")
         return None
 
     # 2. Check FeatureFlag("ai_enrichment_enabled") at runtime

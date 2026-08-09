@@ -55,6 +55,24 @@ async def _async_process_event_outbox_task():
                 elif event.event_type == "NewsletterSubscriptionCreated":
                     from app.newsletter.handlers import handle_newsletter_subscription_created
                     await handle_newsletter_subscription_created(db, event.payload, event.id)
+                elif event.event_type == "ProjectionRefreshRequested":
+                    from app.editorial.homepage_builder import HomepageBuilder
+                    from app.core.redis import get_redis_client
+                    payload = event.payload
+                    ptype = payload.get("projection_type", "ALL")
+                    
+                    if ptype in ("ALL", "HOMEPAGE"):
+                        await HomepageBuilder.build_and_persist_homepage_projection(db)
+                        redis = get_redis_client()
+                        if redis:
+                            try:
+                                await redis.delete("homepage_projection")
+                                await redis.delete("api:feed:home")
+                            except Exception:
+                                pass
+                    
+                    if ptype in ("ALL", "CATEGORY_DESKS"):
+                        await HomepageBuilder.build_and_persist_category_desks(db)
 
                 if event.event_type in [
                     "StoryCreated",
@@ -73,6 +91,7 @@ async def _async_process_event_outbox_task():
                 event.status = "DELIVERED"
             except Exception as e:
                 logger.error(f"Failed to process EventOutbox ID: {event.id}: {e}")
+                await db.rollback()
                 event.retry_count += 1
                 if event.retry_count >= 3:
                     event.status = "DEAD_LETTER"

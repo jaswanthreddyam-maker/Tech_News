@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Mail, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { Reveal } from "@/components/animations/Reveal";
+import { m } from "framer-motion";
 
 export function Newsletter() {
   const [email, setEmail] = useState("");
@@ -38,8 +38,18 @@ export function Newsletter() {
 
   return (
     <section className="my-16 w-full flex justify-center relative max-w-lg mx-auto">
-      <Reveal className="w-full">
-        <div 
+      <div className="w-full">
+        <m.div 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={{
+            hidden: { clipPath: "circle(30px at center)" },
+            visible: { 
+              clipPath: "circle(150% at center)", 
+              transition: { duration: 2.0, ease: [0.22, 1, 0.36, 1] } 
+            }
+          }}
           className="relative w-full rounded-[28px] border border-[#E9D8C7] overflow-hidden"
           style={{
             background: "linear-gradient(180deg, #FFF7EF 0%, #FDF1E5 100%)",
@@ -55,7 +65,13 @@ export function Newsletter() {
             }}
           />
           
-          <div className="relative z-10 w-full flex flex-col items-center pt-10 px-8 pb-10">
+          <m.div
+            variants={{
+              hidden: { opacity: 0 },
+              visible: { opacity: 1, transition: { delay: 1.2, duration: 0.8, ease: "easeOut" } }
+            }}
+            className="relative z-10 w-full flex flex-col items-center pt-10 px-8 pb-10"
+          >
             <div className="w-14 h-14 rounded-full bg-[#7A5C3E]/10 flex items-center justify-center mb-4 shrink-0">
               {status === 'success' ? (
                 <CheckCircle className="w-6 h-6 text-[#7A5C3E]" />
@@ -118,9 +134,9 @@ export function Newsletter() {
                 <span>{errorMessage}</span>
               </div>
             )}
-          </div>
-        </div>
-      </Reveal>
+          </m.div>
+        </m.div>
+      </div>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 from datetime import timedelta
+from typing import Any
 
 from app.core.redis import get_redis_client
 
@@ -18,9 +19,9 @@ class ResponseCache:
         self.redis = get_redis_client()
         self.ttl = timedelta(hours=24)
 
-    def _build_key(self, query: str, retrieved_ids: list[int], prompt_hash: str, model: str, mode: str) -> str:
-        # Sort IDs to ensure cache hit regardless of slight ordering differences if deemed identical
-        sorted_ids = sorted(retrieved_ids)
+    def _build_key(self, query: str, retrieved_ids: list[Any], prompt_hash: str, model: str, mode: str) -> str:
+        # Sort IDs to ensure cache hit regardless of slight ordering differences
+        sorted_ids = sorted(str(i) for i in retrieved_ids)
         key_content = f"{query}:{sorted_ids}:{prompt_hash}:{model}:{mode}"
         key_hash = hashlib.sha256(key_content.encode("utf-8")).hexdigest()
         return f"ai_cache:{key_hash}"

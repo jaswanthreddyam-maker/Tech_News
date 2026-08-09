@@ -1,0 +1,21 @@
+diversity:
+  publisher:
+    max_per_publisher: 3        # Hard cap per publisher in Top N
+    min_publishers_target: 3    # Advisory: aim for at least this many distinct publishers
+    enforcement: "post_ranking" # Applied after score-based sort
+    
+  category:
+    max_per_category: 4         # Hard cap per category in Top N
+    enforcement: "post_publisher" # Applied after publisher diversity
+    
+  topic_dedup:
+    similarity_threshold: 0.65  # Title similarity above this → deduplicate
+    keep_policy: "highest_score" # Which duplicate to keep
+    
+  homepage:
+    total_slots: 10
+    backfill_policy: "score_order" # Fill remaining slots by score regardless of publisher
+    
+  degradation:
+    single_publisher_allowed: true
+    single_publisher_log_level: "WARNING"

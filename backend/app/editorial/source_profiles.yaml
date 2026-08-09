@@ -16,6 +16,20 @@ source_authority:
   Hacker News: 10
   Reddit: 10
 
+# Trusted publishers allowed to fallback to RSS summaries if HTML crawling fails
+allow_rss_fallback:
+  - "OpenAI Blog"
+  - "Ars Technica"
+
+# Retry policy for degraded HTML refresh attempts
+html_refresh:
+  retry_schedule_hours:
+    - 1
+    - 6
+    - 24
+    - 168
+  max_attempts: 4
+
 # Category boosts (added to impact score)
 topic_importance:
   artificial_intelligence: 25

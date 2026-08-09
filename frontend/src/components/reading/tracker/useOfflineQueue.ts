@@ -63,20 +63,30 @@ export function useOfflineQueue() {
 
       if (events.length === 0) return;
 
-      // Send to backend
-      const response = await fetch('/api/v1/behavioral/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          events,
-          anonymous_id: anonymousId
-        }),
-      });
-
-      if (response.ok) {
-        // Clear queue
+      if (process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true") {
         const clearTx = db.transaction(STORE_NAME, 'readwrite');
         await clearTx.objectStore(STORE_NAME).clear();
+        return;
+      }
+
+      try {
+        // Send to backend
+        const response = await fetch('/api/v1/behavioral/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            events,
+            anonymous_id: anonymousId
+          }),
+        });
+
+        if (response.ok) {
+          // Clear queue
+          const clearTx = db.transaction(STORE_NAME, 'readwrite');
+          await clearTx.objectStore(STORE_NAME).clear();
+        }
+      } catch (err) {
+        console.warn("[Tracker] Failed to flush events to backend:", err);
       }
     } catch (err) {
       console.error('Failed to flush events:', err);

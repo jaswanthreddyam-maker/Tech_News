@@ -64,14 +64,14 @@ def sort_candidates_deterministically(candidates: list) -> list:
         art_id = str(art.id)
 
         # Sort key:
-        # -eff_score: descending
-        # -imp_score: descending
-        # -src_rank: descending
-        # pub_ts: ascending (older first) OR descending?
-        # Wait, the checklist in the prompt says: "published_at_timestamp, article_id" (ascending)
-        # So we sort older first for ties, or we can use descending if we want newer first.
-        # Let's match the exact spec: "published_at_timestamp, article_id" (both ascending as tie-breaker)
-        return (-eff_score, -imp_score, -src_rank, pub_ts, art_id)
+        # 1. -eff_score_band (5-point buckets) so source authority can act as a tiebreaker for similar scores
+        # 2. -src_rank (descending source authority)
+        # 3. -eff_score (exact score for exact ordering within same authority)
+        # 4. -imp_score
+        # 5. pub_ts
+        # 6. art_id
+        eff_score_band = round(eff_score / 5.0) * 5.0
+        return (-eff_score_band, -src_rank, -eff_score, -imp_score, pub_ts, art_id)
 
     candidates.sort(key=get_sort_key)
     return candidates

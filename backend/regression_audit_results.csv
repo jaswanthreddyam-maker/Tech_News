@@ -1,0 +1,44 @@
+ID,Source,Title,Current Category,Proposed Category,Changed,Best Specialized,Score,Margin,Gate Decision,Title Words,Content Words,Negative Words,Source Score
+100,TechCrunch,"Chinese AI model Kimi escaped its cybersecurity testing environment, researchers say | TechCrunch",artificial-intelligence,cybersecurity,True,cybersecurity,8,6,Passed all gates,cybersecurity,"cybersecurity,breach,cyber",,0
+114,TechCrunch,"Security researchers scanned the Polish web and found courts, hospitals, and airports at risk of hacks | TechCrunch",cybersecurity,cybersecurity,False,cybersecurity,5,3,Passed all gates,,"cybersecurity,exploit,hacked,cyber",,0
+101,TechCrunch,Today's the last day to get up to $400 off your TechCrunch Disrupt 2026 ticket | TechCrunch,artificial-intelligence,technology,True,startups-and-business,3,2,Failed Confidence (<4),,startup,,2
+115,TechCrunch,"After Rippling blew millions on AI in months, it built an employee ROI tool | TechCrunch",artificial-intelligence,technology,True,science,2,0,"Failed Confidence (<4), Margin (<2)",,spacex,,0
+117,TechCrunch,"Wacom's MovinkPad 11 is a fun, midpriced entry point for digital artists | TechCrunch",artificial-intelligence,technology,True,hardware,3,1,"Failed Confidence (<4), Margin (<2)",wacom,"battery,tablet,wacom",software,0
+109,TechCrunch,"Cloudflare launches Kitesurf, a browser built for AI agents | TechCrunch",artificial-intelligence,artificial-intelligence,False,artificial-intelligence,7,5,Passed all gates,ai agents,ai agents,,0
+121,TechCrunch,OpenAI says it slowed Astra model development over security concerns | TechCrunch,artificial-intelligence,cybersecurity,True,cybersecurity,5,4,Passed all gates,,cybersecurity,,0
+112,TechCrunch,Computer maker Framework notifies 'all customers' of a data breach | TechCrunch,cybersecurity,cybersecurity,False,cybersecurity,8,6,Passed all gates,breach,"cybersecurity,zero-day,breach,hacked",,0
+107,Google DeepMind,"3.6 Flash, 3.5 Flash-Lite, and 3.5 Flash Cyber",artificial-intelligence,cybersecurity,True,cybersecurity,8,5,Passed all gates,cyber,"cybersecurity,cyber",,0
+98,Google DeepMind,Introducing Gemini 3.5 Flash Cyber — Google DeepMind,cybersecurity,cybersecurity,False,cybersecurity,8,5,Passed all gates,cyber,"vulnerability,cybersecurity,exploit,cyber",,0
+110,Google DeepMind,Gemini Robotics 2 brings whole body intelligence to robots — Google DeepMind,robotics,technology,True,artificial-intelligence,10,0,Failed Margin (<2),gemini,gemini,,2
+120,Google DeepMind,AI model achieves breakthrough in forecasting cyclones — Google DeepMind,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,5,3,Passed all gates,ai model,,,2
+124,Google DeepMind,AI in Indian Education: Atal Innovation Mission and Google launch ATL Saathi — Google DeepMind,artificial-intelligence,technology,True,artificial-intelligence,2,0,"Failed Confidence (<4), Margin (<2), Evidence (0)",,,,2
+105,Google DeepMind,Google commits $40M to the Genesis Mission | Google Cloud Blog,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,7,2,Passed all gates,,"ai agents,ai model,gemini",,2
+106,Google DeepMind,Gemini Robotics ER 2,robotics,technology,True,artificial-intelligence,10,0,Failed Margin (<2),gemini,"ai agents,gemini",,2
+122,The Verge,Is this $450 laptop from an unknown brand too good to be true? | The Verge,artificial-intelligence,hardware,True,hardware,10,7,Passed all gates,laptop,"processor,hardware,battery,macbook,laptop,chip,gpu,cpu",,2
+123,The Verge,Ted Lasso is still my favorite feel-good show | The Verge,artificial-intelligence,technology,True,science,2,2,Failed Confidence (<4),,space,,0
+118,The Verge,Watching Roku’s AI channel is like eating from a trough | The Verge,artificial-intelligence,startups-and-business,True,startups-and-business,4,2,Passed all gates,,"revenue,startup",,0
+119,The Verge,OpenAI puts the brakes on a new model because it’s supposedly too powerful | The Verge,artificial-intelligence,cybersecurity,True,cybersecurity,5,3,Passed all gates,,"cybersecurity,zero-day,breach,hacked,cyber",,0
+84,OpenAI Blog,Apple is getting this wrong,artificial-intelligence,technology,True,artificial-intelligence,2,2,"Failed Confidence (<4), Evidence (0)",,,,2
+82,OpenAI Blog,Circles powers telco personalization with OpenAI technology,artificial-intelligence,technology,True,artificial-intelligence,2,2,"Failed Confidence (<4), Evidence (0)",,,,2
+85,OpenAI Blog,New ways to learn and teach with ChatGPT Work and Codex,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,5,5,Passed all gates,chatgpt,,,2
+83,OpenAI Blog,How we built a realtime system for responsive voice AI in six months,artificial-intelligence,technology,True,artificial-intelligence,2,2,"Failed Confidence (<4), Evidence (0)",,,,2
+86,OpenAI Blog,Third-party cyber evaluations involving OpenAI models,artificial-intelligence,technology,True,cybersecurity,3,1,"Failed Confidence (<4), Margin (<2)",cyber,,,0
+87,OpenAI Blog,Improving GPT‑5.6 Sol in ChatGPT—and expanding access to GPT-5.6 Luna for free users,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,11,11,Passed all gates,"chatgpt,gpt",,,2
+88,OpenAI Blog,Working with the American Psychological Association on youth mental health and AI,artificial-intelligence,technology,True,artificial-intelligence,2,2,"Failed Confidence (<4), Evidence (0)",,,,2
+89,OpenAI Blog,From asking to doing: How the world is putting ChatGPT to work,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,5,5,Passed all gates,chatgpt,,,2
+91,OpenAI Blog,Responding to the next frontier of critical cyber capabilities,artificial-intelligence,technology,True,cybersecurity,3,1,"Failed Confidence (<4), Margin (<2)",cyber,,,0
+103,NVIDIA AI Blog,"NVIDIA Alpamayo 2 Super, the Frontier Open Model for Robotaxis and Autonomous Vehicles, Now Available for Commercial Use | NVIDIA Blog",artificial-intelligence,technology,True,robotics,3,1,"Failed Confidence (<4), Margin (<2)",autonomous,,,0
+113,NVIDIA AI Blog,Into the Omniverse: How Open World Models Push the Frontier of Physical AI | NVIDIA Blog,artificial-intelligence,technology,True,artificial-intelligence,2,0,"Failed Confidence (<4), Margin (<2), Evidence (0)",,,,2
+102,NVIDIA AI Blog,NVIDIA Joins NSF State and Regional AI Hubs Program to Expand AI Research and Education Across the US,artificial-intelligence,technology,True,artificial-intelligence,2,0,"Failed Confidence (<4), Margin (<2), Evidence (0)",,,,2
+104,NVIDIA AI Blog,AI Leaders Propose SAFE Guidelines for Cybersecurity Transparency | NVIDIA Blog,artificial-intelligence,technology,True,cybersecurity,3,1,"Failed Confidence (<4), Margin (<2)",cybersecurity,,,0
+116,NVIDIA AI Blog,Firebird Launches CIS Region’s Largest AI Factory in Armenia | NVIDIA Blog,artificial-intelligence,technology,True,artificial-intelligence,2,0,"Failed Confidence (<4), Margin (<2), Evidence (0)",,,,2
+108,NVIDIA AI Blog,Build AI Anywhere With NVIDIA Jetson | NVIDIA Blog,artificial-intelligence,technology,True,artificial-intelligence,2,0,"Failed Confidence (<4), Margin (<2), Evidence (0)",,,,2
+111,NVIDIA AI Blog,"NVIDIA and Partners Build in America, for America | NVIDIA Blog",artificial-intelligence,technology,True,science,2,1,"Failed Confidence (<4), Margin (<2)",,"climate,space",,0
+99,NVIDIA AI Blog,"As AI Increases Demands on Memory, Storage Steps Up | NVIDIA Blog",artificial-intelligence,technology,True,artificial-intelligence,2,0,"Failed Confidence (<4), Margin (<2), Evidence (0)",,,,2
+92,Google Blog,Google AI announcements from July 2026,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,7,2,Passed all gates,,"machine learning,ai agents,training,gemini",,2
+93,Google Blog,The next chapter of our AI momentum,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,7,6,Passed all gates,,gemini,,2
+94,Google Blog,Inside Kaggle’s AI Agents Intensive Course with Google,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,10,7,Passed all gates,ai agents,ai agents,,2
+96,Google Blog,How 5 builders are using Gemini Omni,artificial-intelligence,artificial-intelligence,False,artificial-intelligence,10,9,Passed all gates,gemini,"ai model,gemini",,2
+90,Ars Technica,Report: White House drafting executive order linking vaccines and autism,artificial-intelligence,policy,True,policy,6,6,Passed all gates,"executive order,white house",,,0
+95,Ars Technica,The first self-driving vehicle on Mars has proven to be a smashing success,artificial-intelligence,technology,True,robotics,3,3,Failed Confidence (<4),self-driving,,,0
+97,Ars Technica,DeepMind’s hurricane breakthrough has surprised weather scientists,artificial-intelligence,technology,True,artificial-intelligence,0,0,"Failed Confidence (<4), Margin (<2), Evidence (0)",,,,0

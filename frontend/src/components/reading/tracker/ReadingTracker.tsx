@@ -7,6 +7,8 @@ import { useTimeTracker } from './useTimeTracker';
 import { useScrollTracker } from './useScrollTracker';
 import { useOfflineQueue, BehavioralEventPayload } from './useOfflineQueue';
 
+import { getAnonymousId } from '@/lib/api/anonymousId';
+
 function generateUUID() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -16,16 +18,6 @@ function generateUUID() {
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
-}
-
-function getAnonymousId() {
-  if (typeof window === 'undefined') return null;
-  let anonId = localStorage.getItem('tnt_anon_id');
-  if (!anonId) {
-    anonId = generateUUID();
-    localStorage.setItem('tnt_anon_id', anonId);
-  }
-  return anonId;
 }
 
 interface ReadingTrackerProps {
@@ -47,16 +39,19 @@ export function ReadingTracker({ articleId, contentVersion }: ReadingTrackerProp
   const isCompleted = useRef(false);
 
   const reportHistory = useCallback(() => {
-    import('@/lib/api/client').then(({ apiFetch }) => {
-      apiFetch('/me/history', {
-        method: 'POST',
-        body: JSON.stringify({
-          article_id: articleId,
-          progress: latestScroll.current,
-          completed: isCompleted.current,
-          reading_time_seconds: accumulatedSeconds
-        })
-      }).catch(() => {});
+    import('@/lib/session/sessionManager').then(({ sessionManager }) => {
+      if (!sessionManager.getAccessToken()) return;
+      import('@/lib/api/client').then(({ apiFetch }) => {
+        apiFetch('/me/history', {
+          method: 'POST',
+          body: JSON.stringify({
+            article_id: articleId,
+            progress: latestScroll.current,
+            completed: isCompleted.current,
+            reading_time_seconds: accumulatedSeconds
+          })
+        }).catch(() => {});
+      });
     });
   }, [articleId, accumulatedSeconds]);
 

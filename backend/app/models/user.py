@@ -127,8 +127,8 @@ class SavedArticle(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    article_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False, index=True
+    article_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("articles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
@@ -147,8 +147,8 @@ class UserReadingHistory(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    article_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False, index=True
+    article_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("articles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     read_progress: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0) # 0.0 to 1.0
     completed: Mapped[bool] = mapped_column(Boolean, default=False)

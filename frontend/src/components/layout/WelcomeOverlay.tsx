@@ -1,32 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import WelcomeOverlayClient from "./WelcomeOverlayClient";
 
-export function WelcomeOverlay({ children }: { children: React.ReactNode }) {
-  const [isMounted, setIsMounted] = useState(false);
+interface WelcomeOverlayProps {
+  children: React.ReactNode;
+}
+
+export function WelcomeOverlay({ children }: WelcomeOverlayProps) {
+  // null = loading, false = show overlay, true = already played
   const [hasPlayed, setHasPlayed] = useState<boolean | null>(null);
+  const completedRef = useRef(false);
 
   useEffect(() => {
-    setIsMounted(true);
-    const played = sessionStorage.getItem("welcome-played") === "1";
-    setHasPlayed(played);
+    try {
+      setHasPlayed(sessionStorage.getItem("welcome-played") === "1");
+    } catch {
+      setHasPlayed(false);
+    }
   }, []);
 
-  // During SSR (isMounted=false) or before client-side sessionStorage check is complete (hasPlayed=null),
-  // we default to showing the overlay to guarantee that the dashboard is covered on first paint.
-  const showOverlay = !isMounted || hasPlayed === null || hasPlayed === false;
+  const handleComplete = useCallback(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    try {
+      sessionStorage.setItem("welcome-played", "1");
+    } catch {}
+    if (typeof document !== "undefined") {
+      document.body.style.overflow = "";
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("welcome-overlay-complete"));
+    }
+    setHasPlayed(true);
+  }, []);
 
   return (
     <>
-      {showOverlay && (
+      {hasPlayed !== true && (
         <WelcomeOverlayClient
-          isMounted={isMounted}
+          isMounted={hasPlayed !== null}
           hasPlayed={hasPlayed}
-          onComplete={() => {
-            sessionStorage.setItem("welcome-played", "1");
-            setHasPlayed(true);
-          }}
+          onComplete={handleComplete}
         />
       )}
       {children}

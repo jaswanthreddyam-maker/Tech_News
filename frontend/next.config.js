@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
-const apiProxyTarget = process.env.API_PROXY_TARGET || 'http://localhost:8000';
+const apiProxyTarget = process.env.API_PROXY_TARGET || 'http://127.0.0.1:8000';
 
 const nextConfig = {
-  transpilePackages: ['framer-motion'],
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'date-fns'],
+  },
   images: {
     remotePatterns: [
       {
@@ -27,4 +29,8 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+module.exports = withBundleAnalyzer(nextConfig);

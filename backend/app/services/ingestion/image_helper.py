@@ -1,8 +1,10 @@
 import io
+import ipaddress
 import json
 import logging
 import os
 import re
+import socket
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -13,15 +15,59 @@ from PIL import Image
 logger = logging.getLogger("tech_news.image_helper")
 
 
+def is_safe_url(url: str) -> bool:
+    """
+    DNS resolution & IP validation to protect against SSRF.
+    Blocks loopback, link-local (169.254.169.254), RFC 1918 private subnets, and IPv6 local ranges.
+    """
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Resolve hostname to IP addresses
+        addr_info = socket.getaddrinfo(hostname, None)
+        for res in addr_info:
+            ip_str = res[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_multicast
+                or ip.is_reserved
+                or ip.is_unspecified
+            ):
+                logger.warning(f"Image Helper: SSRF blocked IP {ip_str} for host {hostname}")
+                return False
+        return True
+    except Exception as e:
+        logger.warning(f"Image Helper: DNS resolution / URL validation failed for {url}: {e}")
+        return False
+
+
 PRE_SCORING_WEIGHTS = {
     "og:image": 80,
     "twitter:image": 70,
     "schema": 60,
     "rss_enclosure": 55,
-    "article_body_hero": 50,
+    "article_body_hero": 65,
     "article_body_largest": 40,
     "default": 20,
 }
+
+SOCIAL_CARD_FILENAME_REGEX = re.compile(
+    r"(?:social|share|og|twitter|meta)[\-_]?(?:card|image|pic|banner|16x9|16_9|seo)",
+    re.IGNORECASE,
+)
+HEADLINE_CARD_REGEX = re.compile(
+    r"(?:seo|headline|promo|title|art_card|16x9|16_9)",
+    re.IGNORECASE,
+)
 
 DOM_POSITION_BONUSES = {
     0: 10,
@@ -359,37 +405,11 @@ def extract_all_candidate_urls(html_content: str, article_url: str) -> list[dict
     for idx, url in enumerate(body_urls):
         candidates.append({"url": url, "source": "article_body_largest", "dom_index": idx})
 
-    # Score candidates based on user-defined priority
-    def score_candidate(candidate):
-        url = candidate["url"]
-        source = candidate["source"]
-        score = 0
-
-        # Base Score from centralized weights
-        score += PRE_SCORING_WEIGHTS.get(source, PRE_SCORING_WEIGHTS["default"])
-
-        # DOM position pre-scoring bonuses (as tiebreaker)
-        dom_idx = candidate.get("dom_index", 0)
-        if source in ("article_body_hero", "article_body_largest"):
-            score += DOM_POSITION_BONUSES.get(dom_idx, 0)
-
-        # Source Reliability Modifier
-        domain_lower = domain.lower()
-        if any(trusted in domain_lower for trusted in ["techcrunch.com", "theverge.com", "wired.com"]):
-            score += 15
-        elif "nvidia.com" in domain_lower:
-            score += 20
-
-        # Heavy penalty for likely garbage images
-        if is_blacklisted_url(url):
-            score -= 100
-
-        return score
-
+    # Score candidates using relevance gate and multi-signal modifiers
     for c in candidates:
-        c["score"] = score_candidate(c)
+        c["score"] = score_candidate(c, domain=domain)
 
-    # Sort by score descending
+    # Sort by composite score descending
     candidates.sort(key=lambda x: x["score"], reverse=True)
 
     # De-duplicate while preserving order (highest score wins)
@@ -401,6 +421,108 @@ def extract_all_candidate_urls(html_content: str, article_url: str) -> list[dict
             unique_candidates.append(c)
 
     return unique_candidates
+
+HARD_REJECT_PATTERNS = re.compile(
+    r"(?:favicon|pixel|1x1|spinner|loader|advertisement|ad\-banner|headshot|profile\-pic|author\-avatar|header\-logo|footer\-logo|nav\-icon|related\-post|sidebar\-thumb|recommendation\-item|tracker|tracking)",
+    re.IGNORECASE,
+)
+
+SOFT_NEGATIVE_PATTERNS = re.compile(
+    r"(?:logo|banner|cover|seo|social|share|headline|16x9|16_9|art_card)",
+    re.IGNORECASE,
+)
+
+
+def evaluate_relevance_gate(candidate: dict, article_title: str = "", domain: str = "") -> dict:
+    """
+    Evaluates candidate content relevance.
+    Distinguishes HARD REJECTIONS (strong structural evidence) from SOFT PENALTIES (score reductions).
+    Returns relevance diagnostics.
+    """
+    url = candidate.get("url", "")
+    source = candidate.get("source", "")
+    url_lower = url.lower()
+
+    relevance_signals = []
+    negative_signals = []
+    rejection_reason = None
+    decision = "PASS"
+    relevance_score = 0
+
+    # 1. HARD REJECT CHECK
+    if is_blacklisted_url(url):
+        decision = "REJECT"
+        rejection_reason = "Hard rejected: Blacklisted domain/url pattern"
+    elif HARD_REJECT_PATTERNS.search(url_lower):
+        decision = "REJECT"
+        rejection_reason = f"Hard rejected: Matched structural garbage pattern ({HARD_REJECT_PATTERNS.search(url_lower).group(0)})"
+    
+    if decision == "REJECT":
+        return {
+            "decision": "REJECT",
+            "relevance_score": -100,
+            "relevance_signals": relevance_signals,
+            "negative_signals": negative_signals,
+            "rejection_reason": rejection_reason,
+        }
+
+    # 2. POSITIVE EDITORIAL SIGNALS
+    if source in ("article_body_hero", "article_body_largest"):
+        relevance_signals.append("in_article_main_body")
+        relevance_score += 15
+        
+        dom_idx = candidate.get("dom_index", 0)
+        if dom_idx == 0:
+            relevance_signals.append("first_hero_dom_position")
+            relevance_score += 10
+
+    if source in ("og:image", "twitter:image", "schema"):
+        relevance_signals.append("official_meta_sharing_candidate")
+        relevance_score += 10
+
+    # 3. SOFT NEGATIVE SIGNALS (Score Reduction, NOT Hard Rejection)
+    match_soft = SOFT_NEGATIVE_PATTERNS.search(url_lower)
+    if match_soft:
+        neg_term = match_soft.group(0)
+        negative_signals.append(f"soft_signal_{neg_term}")
+        relevance_score -= 15
+
+    return {
+        "decision": "PASS",
+        "relevance_score": relevance_score,
+        "relevance_signals": relevance_signals,
+        "negative_signals": negative_signals,
+        "rejection_reason": None,
+    }
+
+
+def score_candidate(candidate: dict, article_title: str = "", domain: str = "") -> int:
+    source = candidate["source"]
+    
+    # 1. Base Source Score
+    score = PRE_SCORING_WEIGHTS.get(source, PRE_SCORING_WEIGHTS["default"])
+
+    # 2. Relevance Gate & Diagnostics
+    rel_diag = evaluate_relevance_gate(candidate, article_title, domain)
+    candidate["decision"] = rel_diag["decision"]
+    candidate["relevance_score"] = rel_diag["relevance_score"]
+    candidate["relevance_signals"] = rel_diag["relevance_signals"]
+    candidate["negative_signals"] = rel_diag["negative_signals"]
+    candidate["rejection_reason"] = rel_diag["rejection_reason"]
+
+    if candidate["decision"] == "REJECT":
+        return -999
+
+    score += rel_diag["relevance_score"]
+
+    # 3. Source Reliability Modifier
+    domain_lower = domain.lower()
+    if any(trusted in domain_lower for trusted in ["techcrunch.com", "theverge.com", "wired.com"]):
+        score += 15
+    elif "nvidia.com" in domain_lower:
+        score += 20
+
+    return score
 
 
 def calculate_quality_score(candidate: dict, dims: dict, img_format: str) -> int:
@@ -547,6 +669,10 @@ async def download_and_validate_in_memory(
     If valid, rejection_reason is None.
     """
     try:
+        if not is_safe_url(url):
+            logger.warning(f"Image Helper: SSRF check failed for URL: {url}")
+            return None, None, "ssrf_blocked", None
+
         if not bypass_blacklist and is_blacklisted_url(url):
             logger.warning(f"Image Helper: URL blacklisted: {url}")
             return None, None, "keyword_penalty", None
@@ -554,6 +680,12 @@ async def download_and_validate_in_memory(
         logger.info(f"Image Helper: Downloading image in-memory: {url}")
         async with httpx.AsyncClient(timeout=10.0, headers=BROWSER_HEADERS, follow_redirects=True) as client:
             resp = await client.get(url)
+
+            # Verify redirect target URL if redirected
+            if str(resp.url) != url and not is_safe_url(str(resp.url)):
+                logger.warning(f"Image Helper: SSRF redirect target blocked: {resp.url}")
+                return None, None, "ssrf_blocked_redirect", None
+
             if resp.status_code != 200:
                 logger.warning(f"Image Helper: Download failed for {url}. Status: {resp.status_code}")
                 if resp.status_code == 403:

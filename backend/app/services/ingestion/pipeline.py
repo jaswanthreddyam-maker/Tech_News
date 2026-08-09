@@ -19,6 +19,8 @@ from app.services.ingestion.filter import (
     compute_title_similarity,
     evaluate_adaptive_quality,
 )
+from app.editorial.policy import PolicyLoader
+from app.services.ingestion.persistence_service import PersistenceService
 from app.services.ingestion.processor import (
     calculate_reading_time,
     clean_and_sanitize_html,
@@ -27,6 +29,10 @@ from app.services.ingestion.processor import (
     generate_slug,
     map_category_id,
 )
+from app.services.ingestion.deduplication_service import DeduplicationService
+from app.services.ingestion.extraction_service import ExtractionService
+from app.services.ingestion.persistence_service import PersistenceService
+from app.services.ingestion.rss_service import RSSService
 from app.services.ingestion.utils import compress_content, get_hash, normalize_url, resolve_redirects
 
 logger = logging.getLogger("tech_news.pipeline")
@@ -61,19 +67,29 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
         "duplicates_skipped": 0,
         "filtered_skipped": 0,
         "failed_crawls": 0,
+        "degraded_fallback_count": 0,
+        "html_refresh_attempts": 0,
+        "html_refresh_success": 0,
+        "html_refresh_permanent_failure": 0,
     }
 
     if not sources:
         logger.info("Pipeline: Zero active ingestion sources enabled in database.")
         return metrics
 
-    rss_agent = RSSIngestionAgent()
-    html_agent = HTMLAgent()
+    rss_service = RSSService()
+    extraction_service = ExtractionService()
+    persistence_service = PersistenceService(db)
+    dedup_service = DeduplicationService(db)
+    
+    policy = PolicyLoader.get_policy()
+    allowed_rss_fallback_sources = set(policy.get("allow_rss_fallback", []))
 
     # Concurrency semaphore to prevent overloading downstream hosts
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_CRAWLS)
 
     async def process_single_source(source: Source) -> None:
+        persistence_service = PersistenceService(db)
         # Check source-specific rate policy
         current_time = datetime.now(timezone.utc)
         if source.last_crawl_at:
@@ -104,8 +120,8 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
 
             t0 = time.time()
             try:
-                # 1. Fetch items dynamically using RSS Agent
-                crawled_items = await rss_agent.crawl_feed(source.url)
+                # 1. Fetch items dynamically using RSSService
+                crawled_items = await rss_service.fetch_feed_items_async(source.url)
                 await publish_event(
                     f"RSS-{source.name.upper().replace(' ', '')[:12]}",
                     f"Fetched {len(crawled_items)} entries from {source.name}.",
@@ -127,7 +143,6 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                 source.last_failure_type = None
 
                 # Reset crawl interval to base config if it had been backed off
-                # (For instance, if base was 900s, let's keep it at base or default to 900)
                 source.crawl_interval = max(300, min(source.crawl_interval, 3600))
 
                 # Recalculate historical reliability score
@@ -159,47 +174,15 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                     normalized_url = normalize_url(resolved_url)
                     url_hash = get_hash(normalized_url)
                     title_hash = get_hash(raw_title)
+                    existing_article = None
 
-                    # B. Hard Deduplication check: check unique composite constraint (url_hash, title_hash) (Cheapest check)
-                    dup_stmt = select(RawArticle).where(
-                        (RawArticle.url_hash == url_hash) & (RawArticle.title_hash == title_hash)
-                    )
-                    dup_res = await db.execute(dup_stmt)
-                    existing_article = dup_res.scalars().first()
+                    # B. Unified Deduplication Check via DeduplicationService
+                    is_dup, reason, matched_id = await dedup_service.check_duplicate(raw_title, raw_url, current_time)
 
-                    if existing_article:
-                        if existing_article.status in ("failed", "discovered"):
-                            logger.info(f"Pipeline: Re-triggering failed/queued article crawl for: '{raw_title}'")
-                        else:
-                            logger.info(f"Pipeline: Skipping duplicate URL + Title pair for article: '{raw_title}'")
-                            metrics["duplicates_skipped"] += 1
-                            await publish_event("DEDUPE-ENGINE", f"Rejected duplicate: '{raw_title[:50]}'", "info")
-                            continue
-
-                    # C. Soft Deduplication: Multi-Signal Title Overlap (Past 24h)
-                    # Compare only against unique unique articles to prevent comparison chain bloat
-                    yesterday = current_time - timedelta(days=1)
-                    soft_stmt = select(RawArticle).where(
-                        (RawArticle.scraped_at >= yesterday) & (RawArticle.status != "deduplicated")
-                    )
-                    soft_res = await db.execute(soft_stmt)
-                    recent_articles = soft_res.scalars().all()
-
-                    is_soft_duplicate = False
-                    for recent in recent_articles:
-                        similarity = compute_title_similarity(raw_title, recent.title)
-                        if similarity >= 0.75:
-                            logger.info(
-                                f"Pipeline: Skipping soft duplicate title similarity ({similarity:.2f}) for: '{raw_title}' (Matches recent ID: {recent.id})"
-                            )
-                            metrics["duplicates_skipped"] += 1
-                            await publish_event("DEDUPE-ENGINE", f"Soft duplicate rejected: '{raw_title[:40]}'", "info")
-                            is_soft_duplicate = True
-                            break
-
-                    if is_soft_duplicate:
-                        # Save duplicate record to database as 'deduplicated' state for audit trails
-                        new_article = RawArticle(
+                    if is_dup:
+                        metrics["duplicates_skipped"] += 1
+                        await publish_event("DEDUPE-ENGINE", f"Rejected duplicate ({reason}): '{raw_title[:40]}'", "info")
+                        await persistence_service.save_raw_article(
                             source_id=source.id,
                             title=raw_title,
                             url=normalized_url,
@@ -207,27 +190,38 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                             title_hash=title_hash,
                             compressed_html=None,
                             clean_text=rss_summary,
-                            article_metadata=json.dumps({"reason": "Soft duplicate title similarity check"}),
-                            parser_version="1.0.0",
+                            metadata_dict={"reason": reason, "matched_article_id": matched_id},
                             status="deduplicated",
+                            pipeline_version="1.0.0",
+                            parser_version="1.0.0",
                         )
-                        db.add(new_article)
                         continue
+                    elif reason == "retry_failed":
+                        logger.info(f"Pipeline: Re-triggering failed/queued article crawl for: '{raw_title}' (ID: {matched_id})")
+                        from sqlalchemy import select
+                        res = await db.execute(select(RawArticle).where(RawArticle.id == matched_id))
+                        existing_article = res.scalars().first()
 
                     # 3. HTML Extraction Strategy (Boilerplate-free extraction & scoring)
-                    # Pass source-specific parser_profile config to html_agent
-                    logger.info(f"Pipeline: Invoking HTMLAgent extraction pipeline for: {normalized_url}")
+                    logger.info(f"Pipeline: Invoking ExtractionService for: {normalized_url}")
                     html_t0 = time.time()
-                    extracted = await html_agent.extract_article(normalized_url, parser_config=parser_profile)
+                    has_content, extracted = await extraction_service.extract_content(
+                        normalized_url, parser_config=parser_profile, source_name=source.name
+                    )
                     html_duration = round((time.time() - html_t0) * 1000.0, 2)
 
+                    raw_html = (
+                        extracted.get("raw_html")
+                        or item.get("raw_html")
+                        or ""
+                    )
+
                     rss_fallback_used = False
-                    if extracted and len(extracted["clean_text"]) > 150:
+                    if has_content:
                         clean_body = extracted["clean_text"]
-                        content_score = extracted["content_score"]
-                        density_score = extracted["density_score"]
-                        word_count = extracted["word_count"]
-                        raw_html = extracted.get("raw_html") or item.get("raw_html") or clean_body
+                        content_score = extracted.get("content_score", 50.0)
+                        density_score = extracted.get("density_score", 0.5)
+                        word_count = extracted.get("word_count", len(clean_body.split()))
                         title_source = extracted.get("title") or raw_title
                     else:
                         # Fallback to RSS summary if HTML crawl fails or is too sparse
@@ -235,15 +229,19 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                         content_score = 30.0
                         density_score = 0.50
                         word_count = len(rss_summary.split())
-                        raw_html = item.get("raw_html") or rss_summary
                         title_source = raw_title
                         rss_fallback_used = True
                         logger.warning("Pipeline: HTML extraction failed/insufficient. Falling back to RSS summary.")
 
+                    if not raw_html:
+                        raw_html = rss_summary
+
                     # 4. Adaptive Content Quality Pipeline & Extraction Confidence Scoring
                     meta_dict = {
                         "source_category": source.category,
+                        "source_name": source.name,
                         "rss_fallback": rss_fallback_used,
+                        "allow_rss_fallback": source.name in allowed_rss_fallback_sources,
                         "author": item.get("author"),
                         "publish_date": item.get("publish_date"),
                         "seo_keywords": "",
@@ -257,9 +255,12 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                     confidence_rating = quality_res.get("confidence", 0.0)
 
                     # Re-run relevance filter to verify tech topic keywords
-                    is_relevant = check_pre_ai_ingestion_eligibility(
-                        title=title_source, content=clean_body, source_credibility=source.credibility_score
-                    )
+                    if quality_res.get("is_degraded", False):
+                        is_relevant = True
+                    else:
+                        is_relevant = check_pre_ai_ingestion_eligibility(
+                            title=title_source, content=clean_body, source_credibility=source.credibility_score
+                        )
 
                     is_eligible = is_eligible_quality and is_relevant
 
@@ -274,6 +275,42 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
 
                     # 5. Raw HTML Storage Strategy & Compression (zlib Level 9)
                     compressed_payload = compress_content(raw_html)
+
+                    existing_meta = {}
+                    if existing_article and existing_article.article_metadata:
+                        try:
+                            existing_meta = json.loads(existing_article.article_metadata)
+                        except Exception:
+                            pass
+
+                    is_degraded = quality_res.get("is_degraded", False)
+                    needs_html_refresh = is_degraded
+                    html_retry_count = 0
+                    next_retry_after = None
+                    
+                    html_refresh_policy = policy.get("html_refresh", {})
+                    retry_schedule = html_refresh_policy.get("retry_schedule_hours", [1, 6, 24, 168])
+                    max_attempts = html_refresh_policy.get("max_attempts", 4)
+
+                    if existing_article and is_degraded:
+                        metrics["html_refresh_attempts"] += 1
+                        html_retry_count = existing_meta.get("html_retry_count", 0) + 1
+                        
+                        if html_retry_count <= max_attempts:
+                            backoff_hours = retry_schedule[min(html_retry_count - 1, len(retry_schedule) - 1)]
+                            next_retry_after = (current_time + timedelta(hours=backoff_hours)).isoformat()
+                        else:
+                            # Give up after max attempts
+                            metrics["html_refresh_permanent_failure"] += 1
+                            needs_html_refresh = False
+                            
+                    elif existing_article and not is_degraded:
+                        # Successfully extracted HTML, clear retry fields
+                        metrics["html_refresh_success"] += 1
+                        needs_html_refresh = False
+                        
+                    if not existing_article and is_degraded:
+                        metrics["degraded_fallback_count"] += 1
 
                     # Metadata Separation (JSON serialized block)
                     meta_payload = {
@@ -291,22 +328,40 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                             "unique_ratio": quality_res.get("unique_ratio", 0.0),
                             "markup_ratio": quality_res.get("markup_ratio", 0.0),
                             "reason": quality_res.get("reason", ""),
+                            "is_degraded": is_degraded,
                         },
+                        "content_source": "RSS_FALLBACK" if is_degraded else ("RSS" if rss_fallback_used else "HTML"),
+                        "quality_state": "DEGRADED" if is_degraded else "NORMAL",
+                        "needs_html_refresh": needs_html_refresh,
                     }
+                    
+                    if is_degraded or (existing_article and "html_retry_count" in existing_meta):
+                        meta_payload["html_retry_count"] = html_retry_count
+                        if next_retry_after:
+                            meta_payload["next_retry_after"] = next_retry_after
+                        meta_payload["last_html_attempt"] = current_time.isoformat()
 
                     if existing_article:
-                        # Update/Revision flow: update existing article fields and reset status
-                        existing_article.title = title_source
-                        existing_article.compressed_html = compressed_payload
-                        existing_article.clean_text = clean_body
-                        existing_article.article_metadata = json.dumps(meta_payload)
-                        existing_article.parser_version = "1.0.0"
-                        existing_article.status = status_state
-                        existing_article.scraped_at = current_time
-                        logger.info(f"Pipeline: Updated/revised existing article record for: '{title_source}'")
+                        content_changed = get_hash(existing_article.clean_text) != get_hash(clean_body)
+                        
+                        if content_changed:
+                            # Update/Revision flow: update existing article fields and reset status
+                            existing_article.title = title_source
+                            existing_article.compressed_html = compressed_payload
+                            existing_article.clean_text = clean_body
+                            existing_article.article_metadata = json.dumps(meta_payload)
+                            existing_article.parser_version = "1.0.0"
+                            existing_article.status = status_state
+                            existing_article.scraped_at = current_time
+                            logger.info(f"Pipeline: Updated/revised existing article record for: '{title_source}'")
+                        else:
+                            # Content hash didn't change, just update metadata (e.g. retry counts)
+                            existing_article.article_metadata = json.dumps(meta_payload)
+                            existing_article.scraped_at = current_time
+                            logger.info(f"Pipeline: Content hash unchanged for existing article '{title_source}', skipping re-enrichment.")
                     else:
-                        # Insert new raw article
-                        new_article = RawArticle(
+                        # Insert new raw article via PersistenceService
+                        new_article = await persistence_service.save_raw_article(
                             source_id=source.id,
                             title=title_source,
                             url=normalized_url,
@@ -314,11 +369,11 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                             title_hash=title_hash,
                             compressed_html=compressed_payload,
                             clean_text=clean_body,
-                            article_metadata=json.dumps(meta_payload),
-                            parser_version="1.0.0",
+                            metadata_dict=meta_payload,
                             status=status_state,
+                            pipeline_version="1.0.0",
+                            parser_version="1.0.0",
                         )
-                        db.add(new_article)
 
                     if is_eligible:
                         metrics["articles_saved"] += 1
@@ -417,11 +472,14 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
             metrics["failed_crawls"] += 1
             await db.rollback()
 
-    # Dispose of Agent pools cleanly
-    await rss_agent.shutdown()
-    await html_agent.shutdown()
 
     logger.info(f"Pipeline: Hardened Ingestion complete. Metrics: {metrics}")
+
+    # Guardrail #2: State-change-aware batch cache invalidation ONLY if new articles were saved/published
+    if metrics["articles_saved"] > 0:
+        from app.services.cache_service import CacheService
+        await CacheService.invalidate_homepage_cache(reason=f"ingestion_batch_saved_{metrics['articles_saved']}_articles")
+
     await publish_event(
         "PIPELINE",
         f"Ingestion complete. Saved={metrics['articles_saved']}, Dupes={metrics['duplicates_skipped']}, Failed={metrics['failed_crawls']}",
@@ -472,21 +530,26 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
     if not plain_text:
         plain_text = raw_art.clean_text or ""
 
+    if not plain_text or len(plain_text.strip()) < 10:
+        raw_art.status = "dead_letter"
+        raw_art.dead_letter_reason = "Unparseable or empty text content"
+        raw_art.dead_letter_at = datetime.now(timezone.utc)
+        await db.commit()
+        logger.warning(f"Processor: RawArticle ID {raw_id} marked as dead_letter due to empty text content.")
+        return {"status": "dead_letter", "reason": "Empty text content"}
+
     # 5. Reading time
     reading_time = calculate_reading_time(plain_text)
 
     # 6. Slugification
     slug = generate_slug(raw_art.title)
 
-    # 7. Category mapping
-    category_id = map_category_id(raw_art.title, plain_text)
-
     # 8. SEO Metadata
     seo_meta = generate_seo_metadata(raw_art.title, plain_text)
 
     # 9. Source attribution details
     source_name = source_obj.name if source_obj else "System Ingest"
-    source_url = source_obj.url if source_obj else raw_art.url
+    source_url = raw_art.url or (source_obj.url if source_obj else "")
 
     # 4. AI Pipeline Integration (Phase 4B)
     from app.ai.ai_pipeline import enrich_raw_article
@@ -528,7 +591,7 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         if already_enriched:
             logger.info(f"Processor: Article {raw_id} already enriched with current config. Skipping AI.")
             summary = proc_art.summary
-            tags_string = proc_art.tags
+            tags_string = ",".join(proc_art.primary_topics) if getattr(proc_art, 'primary_topics', None) else ""
             seo_meta["seo_keywords"] = proc_art.seo_keywords
             sentiment = proc_art.sentiment
             confidence = proc_art.ai_confidence
@@ -542,7 +605,10 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
                 tags_string = ",".join(ai_result.output.tags)
                 seo_meta["seo_keywords"] = ",".join(ai_result.output.keywords)
                 sentiment = ai_result.output.sentiment.value if ai_result.output.sentiment else None
-                confidence = 99.0
+                confidence = getattr(ai_result.output, "category_confidence", 99.0)
+                ai_category = getattr(ai_result.output, "primary_category", None)
+                if ai_category:
+                    ai_category = ai_category.value
             else:
                 # Heuristic Fallback
                 sentences = re.split(r"(?<=[.!?])\s+", plain_text)
@@ -551,6 +617,7 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
                     summary = summary[:277] + "..."
                 if not summary:
                     summary = "No summary compiled yet."
+                ai_category = None
 
                 from app.services.ingestion.processor import extract_controlled_tags
 
@@ -582,15 +649,31 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         tags_string = extract_controlled_tags(raw_art.title, plain_text)
         sentiment = None
         confidence = 95.0
+        ai_category = None
+
+    # Fetch Category mapping
+    from app.models.article import Category
+    cat_res = await db.execute(select(Category.slug, Category.id, Category.name))
+    cat_map = {row[0]: row[1] for row in cat_res.all()}
+
+    # Resolve Category using AI or Fallback
+    category_id = None
+    if already_enriched and proc_art:
+        category_id = proc_art.category_id
+    elif ai_category and confidence >= 0.8:
+        category_id = cat_map.get(ai_category)
+
+    if not category_id:
+        from app.services.ingestion.processor import map_category_id
+        source_name = source_obj.name if source_obj else ""
+        category_id = map_category_id(raw_art.title, plain_text, cat_map, source_name)
 
     # 12. Write or Update in processed_articles
-    existing_stmt = select(ProcessedArticle).where(ProcessedArticle.slug == slug)
+    existing_stmt = select(ProcessedArticle).where(ProcessedArticle.raw_article_id == raw_id)
     existing_res = await db.execute(existing_stmt)
     proc_art = existing_res.scalars().first()
 
     # Resolve exact category name for the real-time event metadata payload
-    from app.models.article import Category
-
     try:
         cat_stmt = select(Category).where(Category.id == category_id)
         cat_res = await db.execute(cat_stmt)
@@ -604,6 +687,7 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         calculate_final_score,
         calculate_freshness_score,
         calculate_impact_score,
+        calculate_quality_score,
     )
 
     source_cred = source_obj.credibility_score if source_obj else 80
@@ -619,8 +703,8 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         proc_art.source = source_name
         proc_art.source_name = source_name
         proc_art.source_url = source_url
-        proc_art.clean_html = clean_html_content
-        proc_art.tags = tags_string
+
+        proc_art.primary_topics = [t.strip() for t in tags_string.split(",")] if tags_string else []
         proc_art.sentiment = sentiment
         proc_art.ai_confidence = confidence
         proc_art.reading_time = reading_time
@@ -632,7 +716,8 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         impact = calculate_impact_score(raw_art.title, category_name, plain_text)
         freshness = calculate_freshness_score(proc_art.published_at)
         engagement = calculate_engagement_score(raw_art.article_metadata, source_cred)
-        final = calculate_final_score(impact, freshness, engagement)
+        quality = calculate_quality_score(plain_text, raw_art.article_metadata)
+        final = calculate_final_score(impact, freshness, engagement, quality)
 
         proc_art.freshness_score = freshness
         proc_art.engagement_score = engagement
@@ -645,7 +730,8 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         impact = calculate_impact_score(raw_art.title, category_name, plain_text)
         freshness = calculate_freshness_score(pub_at)
         engagement = calculate_engagement_score(raw_art.article_metadata, source_cred)
-        final = calculate_final_score(impact, freshness, engagement)
+        quality = calculate_quality_score(plain_text, raw_art.article_metadata)
+        final = calculate_final_score(impact, freshness, engagement, quality)
 
         proc_art = ProcessedArticle(
             raw_article_id=raw_art.id,
@@ -654,12 +740,10 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
             title=raw_art.title,
             slug=slug,
             summary=summary,
-            content=plain_text,
+            content=clean_html_content,
             source=source_name,
             source_name=source_name,
             source_url=source_url,
-            clean_html=clean_html_content,
-            tags=tags_string,
             sentiment=sentiment,
             ai_confidence=confidence,
             reading_time=reading_time,
@@ -673,8 +757,8 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
             engagement_score=engagement,
             final_score=final,
         )
-        db.add(proc_art)
-        await db.flush()  # Ensure proc_art.id is populated for telemetry
+        persistence_service = PersistenceService(db)
+        await persistence_service.save_processed_article(proc_art)
         logger.info(f"Processor: Inserted new processed article record with slug: {slug}")
 
     # 13. Persist Telemetry (if AI was attempted and not skipped via idempotency)
@@ -696,19 +780,20 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         # Flush session to assign ID to new proc_art before Celery tasks
         await db.flush()
 
-    from app.tasks.article_intelligence import run_article_intelligence_pipeline
-    from celery_app import download_thumbnail_task
+    try:
+        from app.tasks.article_intelligence import run_article_intelligence_pipeline
+        from celery_app import download_thumbnail_task
 
-    # Single orchestration task: Summary → Entities → Topics → Embedding → Cache bust
-    proc_art.embedding_status = "queued"
-    run_article_intelligence_pipeline.delay(proc_art.id)
-    logger.info(f"Processor: Enqueued Article Intelligence Pipeline for ProcessedArticle ID {proc_art.id}")
+        proc_art.embedding_status = "queued"
+        run_article_intelligence_pipeline.delay(proc_art.id)
+        logger.info(f"Processor: Enqueued Article Intelligence Pipeline for ProcessedArticle ID {proc_art.id}")
 
-    if not getattr(proc_art, "thumbnail_url", None):
-        # Thumbnail download is kept separate — it's I/O work, not AI
-        from app.core.config import settings
-        download_thumbnail_task.delay(proc_art.id, candidates[:settings.MAX_THUMBNAIL_CANDIDATES] if candidates else [])
-        logger.info(f"Processor: Enqueued background thumbnail download for ProcessedArticle ID {proc_art.id}")
+        if not getattr(proc_art, "thumbnail_url", None):
+            from app.core.config import settings
+            download_thumbnail_task.delay(proc_art.id, candidates[:settings.MAX_THUMBNAIL_CANDIDATES] if candidates else [])
+            logger.info(f"Processor: Enqueued background thumbnail download for ProcessedArticle ID {proc_art.id}")
+    except Exception as celery_err:
+        logger.warning(f"Processor: Celery task enqueueing skipped (Redis/Broker offline): {celery_err}")
 
     # Mark raw article as processed
     raw_art.status = "processed"
@@ -740,7 +825,7 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         engagement_score=float(proc_art.engagement_score) if proc_art.engagement_score else 0.0,
         final_score=float(proc_art.final_score) if proc_art.final_score else 0.0,
         reading_time=proc_art.reading_time if proc_art.reading_time else 0,
-        tags=proc_art.tags,
+        tags=",".join(proc_art.primary_topics) if getattr(proc_art, 'primary_topics', None) else "",
         category=category_name,
         published_status=proc_art.published_status
     )
@@ -750,6 +835,49 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         payload=payload_model.model_dump(mode="json")
     )
     db.add(outbox_event)
+
+    # Invariant: Score must exist before projection to read model
+    assert proc_art.final_score is not None and float(proc_art.final_score) > 0.0, \
+        f"Cannot project article {proc_art.id} to ReadModel without a valid final_score"
+
+    # Directly project to ArticleReadModel for instantaneous query availability
+    from app.models.article import ArticleReadModel
+    read_stmt = select(ArticleReadModel).where(ArticleReadModel.id == str(proc_art.id))
+    read_res = await db.execute(read_stmt)
+    existing_read = read_res.scalars().first()
+
+    tags_list = proc_art.primary_topics or []
+
+    if existing_read:
+        existing_read.title = proc_art.title
+        existing_read.summary = proc_art.summary
+        existing_read.content = proc_art.content
+        existing_read.source = proc_art.source_name
+        existing_read.published_at = proc_art.published_at
+        existing_read.category = category_name
+        existing_read.freshness_score = float(proc_art.freshness_score) if proc_art.freshness_score else 0.0
+        existing_read.final_score = float(proc_art.final_score) if proc_art.final_score else 0.0
+    else:
+        new_read = ArticleReadModel(
+            id=str(proc_art.id),
+            url=proc_art.slug,
+            title=proc_art.title,
+            summary=proc_art.summary,
+            content=proc_art.content,
+            source=proc_art.source_name,
+            hash=content_hash,
+            editorial_status="DRAFT",
+            publication_status="PUBLISHED",
+            published_status=proc_art.published_status,
+            published_at=proc_art.published_at,
+            reading_time=proc_art.reading_time or 1,
+            tags=tags_list,
+            category=category_name,
+            freshness_score=float(proc_art.freshness_score) if proc_art.freshness_score else 0.0,
+            engagement_score=float(proc_art.engagement_score) if proc_art.engagement_score else 0.0,
+            final_score=float(proc_art.final_score) if proc_art.final_score else 0.0,
+        )
+        db.add(new_read)
 
     await db.commit()
 
@@ -796,8 +924,10 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
     if not source.enabled:
         return {"status": "error", "message": f"Source '{source.name}' is currently disabled."}
 
-    rss_agent = RSSIngestionAgent()
-    html_agent = HTMLAgent()
+    rss_service = RSSService()
+    extraction_service = ExtractionService()
+    persistence_service = PersistenceService(db)
+    dedup_service = DeduplicationService(db)
 
     metrics = {
         "articles_discovered": 0,
@@ -811,8 +941,8 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
         current_time = datetime.now(timezone.utc)
         source.total_crawls += 1
 
-        # 1. Fetch items dynamically using RSS Agent
-        crawled_items = await rss_agent.crawl_feed(source.url)
+        # 1. Fetch items dynamically using RSSService
+        crawled_items = await rss_service.fetch_feed_items_async(source.url)
         await publish_event("RSS-FORCE", f"Force crawled {len(crawled_items)} entries from {source.name}.", "success")
 
         if not crawled_items:
@@ -826,6 +956,14 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
         source.successful_crawls += 1
         source.reliability_score = round((source.successful_crawls / source.total_crawls) * 100.0, 2)
 
+        # Parse source-specific parsing profile if defined
+        parser_profile = {}
+        if source.parser_config:
+            try:
+                parser_profile = json.loads(source.parser_config)
+            except Exception as pe:
+                logger.warning(f"Pipeline: Failed to parse parser_config JSON for '{source.name}': {pe}")
+
         # 2. Process crawled items
         for item in crawled_items:
             metrics["articles_discovered"] += 1
@@ -838,36 +976,12 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
             url_hash = get_hash(normalized_url)
             title_hash = get_hash(raw_title)
 
-            # Check unique composite constraint
-            dup_stmt = select(RawArticle).where(
-                (RawArticle.url_hash == url_hash) & (RawArticle.title_hash == title_hash)
-            )
-            dup_res = await db.execute(dup_stmt)
-            existing_article = dup_res.scalars().first()
+            # Deduplication via DeduplicationService
+            is_dup, reason, matched_id = await dedup_service.check_duplicate(raw_title, raw_url, current_time)
 
-            if existing_article:
-                if existing_article.status not in ("failed", "discovered"):
-                    metrics["duplicates_skipped"] += 1
-                    continue
-
-            # Check title similarity past 24h
-            yesterday = current_time - timedelta(days=1)
-            soft_stmt = select(RawArticle).where(
-                (RawArticle.scraped_at >= yesterday) & (RawArticle.status != "deduplicated")
-            )
-            soft_res = await db.execute(soft_stmt)
-            recent_articles = soft_res.scalars().all()
-
-            is_soft_duplicate = False
-            for recent in recent_articles:
-                similarity = compute_title_similarity(raw_title, recent.title)
-                if similarity >= 0.75:
-                    metrics["duplicates_skipped"] += 1
-                    is_soft_duplicate = True
-                    break
-
-            if is_soft_duplicate:
-                new_article = RawArticle(
+            if is_dup:
+                metrics["duplicates_skipped"] += 1
+                await persistence_service.save_raw_article(
                     source_id=source.id,
                     title=raw_title,
                     url=normalized_url,
@@ -875,110 +989,79 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
                     title_hash=title_hash,
                     compressed_html=None,
                     clean_text=rss_summary,
-                    article_metadata=json.dumps({"reason": "Soft duplicate similarity check"}),
+                    metadata_dict={"reason": reason, "matched_article_id": matched_id},
                     status="deduplicated",
-                    scraped_at=current_time,
                 )
-                db.add(new_article)
                 continue
 
-            # Fetch HTML & Content Extraction
-            import time
+            # Content extraction via ExtractionService
             html_t0 = time.time()
-            extracted = await html_agent.extract_article(resolved_url)
-            html_duration = int((time.time() - html_t0) * 1000)
-
-            if not extracted:
-                new_article = RawArticle(
-                    source_id=source.id,
-                    title=raw_title,
-                    url=normalized_url,
-                    url_hash=url_hash,
-                    title_hash=title_hash,
-                    compressed_html=None,
-                    clean_text=rss_summary,
-                    article_metadata=json.dumps({"error": "Failed to retrieve content"}),
-                    status="failed",
-                    scraped_at=current_time,
-                )
-                db.add(new_article)
-                continue
-
-            clean_body = extracted.get("clean_text") or rss_summary
-            raw_html = extracted.get("raw_html") or rss_summary
-
-            # Perform Quality Filtering on the full crawled text
-            passes_filter = check_pre_ai_ingestion_eligibility(
-                title=raw_title, content=clean_body, source_credibility=source.credibility_score
+            has_content, extracted = await extraction_service.extract_content(
+                normalized_url, parser_config=parser_profile, source_name=source.name
             )
-            reason = "" if passes_filter else "Failed relevance check"
-            if not passes_filter:
-                new_article = RawArticle(
-                    source_id=source.id,
-                    title=raw_title,
-                    url=normalized_url,
-                    url_hash=url_hash,
-                    title_hash=title_hash,
-                    compressed_html=None,
-                    clean_text=clean_body,
-                    article_metadata=json.dumps({"reason": f"Quality filter: {reason}"}),
-                    status="filtered",
-                    scraped_at=current_time,
-                )
-                db.add(new_article)
-                metrics["filtered_skipped"] += 1
-                continue
+            html_duration = round((time.time() - html_t0) * 1000.0, 2)
 
-            # Perform Adaptive Quality evaluation on the full crawled text
-            q_metrics = evaluate_adaptive_quality(title=raw_title, content=clean_body, raw_html=raw_html, meta_dict={})
+            raw_html = (
+                extracted.get("raw_html")
+                or item.get("raw_html")
+                or ""
+            )
 
-            if not q_metrics["eligible"]:
-                new_article = RawArticle(
-                    source_id=source.id,
-                    title=raw_title,
-                    url=normalized_url,
-                    url_hash=url_hash,
-                    title_hash=title_hash,
-                    compressed_html=None,
-                    clean_text=clean_body,
-                    article_metadata=json.dumps({"reason": q_metrics.get("reason", "Failed quality checks")}),
-                    status="filtered",
-                    scraped_at=current_time,
-                )
-                db.add(new_article)
-                metrics["filtered_skipped"] += 1
-                continue
+            if has_content:
+                clean_body = extracted["clean_text"]
+                title_source = extracted.get("title") or raw_title
+            else:
+                clean_body = rss_summary
+                title_source = raw_title
 
-            # Compute confidence score
-            word_count = len(clean_body.split()) if clean_body else 0
-            parsing_w = 0.3 if word_count >= 150 else 0.15
-            density_w = 0.3 if q_metrics.get("unique_ratio", 0) >= 0.45 else 0.15
-            trunc_w = 0.3
-            meta_w = 0.1 if len(raw_title) >= 15 else 0.05
-            confidence = round((parsing_w + density_w + trunc_w + meta_w) * 100.0, 2)
+            if not raw_html:
+                raw_html = rss_summary
 
-            compressed_data = compress_content(raw_html)
+            # Quality and relevance filtering
+            meta_dict = {
+                "source_category": source.category,
+                "rss_fallback": not has_content,
+                "author": item.get("author"),
+                "publish_date": item.get("publish_date"),
+            }
+            quality_res = evaluate_adaptive_quality(
+                title=title_source, content=clean_body, raw_html=raw_html, meta_dict=meta_dict
+            )
+            is_relevant = check_pre_ai_ingestion_eligibility(
+                title=title_source, content=clean_body, source_credibility=source.credibility_score
+            )
+
+            is_eligible = quality_res["eligible"] and is_relevant
+            status_state = "fetched" if is_eligible else "filtered"
+
+            compressed_payload = compress_content(raw_html)
             meta_payload = {
-                "word_count": word_count,
+                "content_type": "text/html",
                 "response_time_ms": html_duration,
-                "extraction_confidence": confidence,
-                "quality_metrics": q_metrics,
+                "quality_metrics": {
+                    "paragraph_count": quality_res.get("paragraph_count", 0),
+                    "unique_ratio": quality_res.get("unique_ratio", 0.0),
+                    "markup_ratio": quality_res.get("markup_ratio", 0.0),
+                    "reason": quality_res.get("reason", ""),
+                },
             }
 
-            new_article = RawArticle(
+            await persistence_service.save_raw_article(
                 source_id=source.id,
-                title=raw_title,
+                title=title_source,
                 url=normalized_url,
                 url_hash=url_hash,
                 title_hash=title_hash,
-                compressed_html=compressed_data,
+                compressed_html=compressed_payload,
                 clean_text=clean_body,
-                article_metadata=json.dumps(meta_payload),
-                status="fetched",
-                scraped_at=current_time,
+                metadata_dict=meta_payload,
+                status=status_state,
             )
-            db.add(new_article)
-            metrics["articles_saved"] += 1
+
+            if is_eligible:
+                metrics["articles_saved"] += 1
+            else:
+                metrics["filtered_skipped"] += 1
 
         await db.commit()
         await publish_event(
@@ -990,9 +1073,5 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
         await db.rollback()
         metrics["status"] = "error"
         metrics["message"] = str(e)
-
-    finally:
-        await rss_agent.shutdown()
-        await html_agent.shutdown()
 
     return metrics

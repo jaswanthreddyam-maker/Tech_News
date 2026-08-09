@@ -131,12 +131,19 @@ export function useConversation(
   }, [checkCapability]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const didLoadHistory = useRef(false);
+  const loadedConversationIdRef = useRef<string | null>(null);
 
-  // Load existing conversation history if conversationId is provided
+  // Load existing conversation history when a valid conversationId is provided
   useEffect(() => {
-    if (!conversationId || didLoadHistory.current) return;
-    didLoadHistory.current = true;
+    if (!conversationId) {
+      setMessages([]);
+      setTitle('New Conversation');
+      loadedConversationIdRef.current = null;
+      return;
+    }
+
+    if (loadedConversationIdRef.current === conversationId) return;
+    loadedConversationIdRef.current = conversationId;
 
     (async () => {
       try {
@@ -160,24 +167,32 @@ export function useConversation(
           );
           setMessages(loaded);
         }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-
+      } catch {
+        // Silently ignore stale or empty conversation fetch errors
       }
     })();
-  }, [conversationId]);
-
-  // Reset when conversationId changes
-  useEffect(() => {
-    didLoadHistory.current = false;
-    setMessages([]);
-    setTitle('New Conversation');
   }, [conversationId]);
 
   const sendMessage = useCallback(
     async (content: string, contextA?: ComparisonContext, contextB?: ComparisonContext) => {
       await checkCapability();
-      if (!content.trim() || !conversationId) return;
+      if (!content.trim()) return;
+
+      let activeConvId = conversationId;
+      if (!activeConvId) {
+        try {
+          const created = await apiFetch<{ conversation_id: string }>('/chat/conversations', {
+            method: 'POST',
+            body: JSON.stringify({ mode, article_id: articleId }),
+          });
+          if (created?.conversation_id) {
+            activeConvId = created.conversation_id;
+          }
+        } catch {
+          // If creation fails, proceed to attempt
+        }
+      }
+      if (!activeConvId) return;
 
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -199,11 +214,11 @@ export function useConversation(
       abortControllerRef.current = new AbortController();
 
       try {
-        const response = await apiClient.fetchRaw('/chat/stream', {
+        let response = await apiClient.fetchRaw('/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            conversation_id: conversationId,
+            conversation_id: activeConvId,
             message: content,
             mode,
             article_id: articleId,
@@ -212,7 +227,41 @@ export function useConversation(
             context_b: contextB,
           }),
           signal: abortControllerRef.current.signal,
-        });
+        }).catch((err) => err);
+
+        // If 404 (conversation expired or missing in Redis), recreate and retry once
+        const is404 = response && (response.status === 404 || (response instanceof Error && (response as any).status === 404));
+        if (is404) {
+          try {
+            const recreated = await apiFetch<{ conversation_id: string }>('/chat/conversations', {
+              method: 'POST',
+              body: JSON.stringify({ mode, article_id: articleId }),
+            });
+            if (recreated?.conversation_id) {
+              activeConvId = recreated.conversation_id;
+              response = await apiClient.fetchRaw('/chat/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  conversation_id: activeConvId,
+                  message: content,
+                  mode,
+                  article_id: articleId,
+                  workspace_id: workspaceId,
+                  context_a: contextA,
+                  context_b: contextB,
+                }),
+                signal: abortControllerRef.current.signal,
+              });
+            }
+          } catch {
+            // Proceed to error handling if recreate/retry fails
+          }
+        }
+
+        if (response instanceof Error) {
+          throw response;
+        }
 
         if (!response.ok || !response.body) {
           throw new Error('Network response was not ok');

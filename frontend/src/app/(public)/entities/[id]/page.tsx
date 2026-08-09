@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { apiFetch } from "@/lib/api/client";
 import { Container } from "@/components/layout/Container";
 import Link from "next/link";
+import { ArticleLink } from "@/domains/article/ArticleLink";
 import { Building2, User, Activity, Clock, Box, Link2 } from "lucide-react";
 import { FollowEntityButton } from "@/components/ui/FollowButton";
 
@@ -64,11 +65,11 @@ export default async function EntityPage({ params }: { params: Promise<{ id: str
             <div className="space-y-6">
               {entityProfile.latest_news?.map((article: any) => (
                 <div key={article.id} className="group">
-                  <Link href={`/articles/${article.id}`}>
+                  <ArticleLink article={article as any} section="EntityPage" className="block">
                     <h3 className="text-lg font-semibold group-hover:text-blue-400 transition-colors mb-2">
                       {article.title}
                     </h3>
-                  </Link>
+                  </ArticleLink>
                   <p className="text-sm text-neutral-400 line-clamp-2 mb-2">{article.summary}</p>
                   <div className="text-xs text-neutral-500 flex items-center gap-2">
                     <span>{article.source}</span>

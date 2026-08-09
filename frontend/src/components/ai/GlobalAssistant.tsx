@@ -34,9 +34,11 @@ export function GlobalAssistant() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const assistantScrollRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (endOfMessagesRef.current) {
-      endOfMessagesRef.current.scrollIntoView({ behavior: "smooth" });
+    if (assistantScrollRef.current) {
+      assistantScrollRef.current.scrollTop = assistantScrollRef.current.scrollHeight;
     }
   }, [streamingContent, toolTraces]);
 
@@ -143,7 +145,7 @@ export function GlobalAssistant() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 bg-background">
+        <div ref={assistantScrollRef} className="flex-1 overflow-y-auto p-6 bg-background">
           <div className="max-w-2xl mx-auto">
             {toolTraces.length > 0 && (
               <div className="mb-6 bg-card border border-border rounded-lg p-4 shadow-sm font-mono text-xs text-muted-foreground">

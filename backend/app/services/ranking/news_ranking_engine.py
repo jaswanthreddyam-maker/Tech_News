@@ -1,8 +1,11 @@
 import json
 import logging
+import os
+import yaml
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +21,43 @@ logger = logging.getLogger("tech_news.ranking")
 COMPANY_WEIGHTS = settings.RANKING_COMPANY_WEIGHTS
 TECH_KEYWORDS = settings.RANKING_TECH_KEYWORDS
 REDUCTIONS = settings.RANKING_REDUCTIONS
+
+
+def get_lifecycle_policy() -> dict:
+    default_policy = {
+        "minimum_ttl_hours": 6,
+        "maximum_ttl_hours": 24,
+        "editorial_weight": 0.8,
+        "freshness_weight": 0.2
+    }
+    try:
+        policy_path = Path(settings.BASE_DIR) / "app" / "editorial" / "lifecycle_policy.yaml"
+        if policy_path.exists():
+            with open(policy_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+                if config and "article_lifecycle" in config:
+                    default_policy.update(config["article_lifecycle"])
+    except Exception as e:
+        logger.warning(f"Failed to load lifecycle_policy.yaml: {e}")
+    return default_policy
+
+
+def calculate_article_ttl(editorial_score: float, freshness_score: float) -> timedelta:
+    policy = get_lifecycle_policy()
+    min_ttl = float(policy.get("minimum_ttl_hours", 6))
+    max_ttl = float(policy.get("maximum_ttl_hours", 24))
+    ed_weight = float(policy.get("editorial_weight", 0.8))
+    fr_weight = float(policy.get("freshness_weight", 0.2))
+    
+    ttl_score = (editorial_score * ed_weight) + (freshness_score * fr_weight)
+    
+    # Scale TTL based on score (0 to 100)
+    calculated_ttl = (ttl_score / 100.0) * max_ttl
+    
+    # Clamp between min and max
+    final_ttl_hours = max(min_ttl, min(max_ttl, calculated_ttl))
+    
+    return timedelta(hours=final_ttl_hours)
 
 
 def calculate_impact_score(title: str, category: str, content: str) -> float:
@@ -114,40 +154,172 @@ def calculate_engagement_score(metadata_str: str | None, source_credibility: int
     return max(0.0, min(100.0, score))
 
 
-def calculate_final_score(impact: float, freshness: float, engagement: float) -> float:
+def calculate_quality_score(content: str, metadata_str: str | None) -> float:
+    """
+    Calculates a quality score (0 - 100) based on content depth (word/paragraph count)
+    and extraction confidence. Penalizes short RSS summaries.
+    """
+    score = 0.0
+    
+    word_count = len(content.split()) if content else 0
+    if word_count < 50:
+        score += 20.0  # RSS summary
+    elif word_count < 200:
+        score += 40.0
+    elif word_count < 500:
+        score += 70.0
+    else:
+        score += 90.0
+
+    if metadata_str:
+        try:
+            meta = json.loads(metadata_str)
+            confidence = float(meta.get("extraction_confidence", 0.0) or 0.0)
+            # Add up to 10 bonus points for high confidence extraction
+            score += min(10.0, confidence / 10.0)
+        except Exception:
+            pass
+
+    return max(0.0, min(100.0, score))
+
+
+def calculate_final_score(impact: float, freshness: float, engagement: float, quality: float = 0.0) -> float:
     """
     Calculates the final composite score.
-    Formula: impact * 0.60 + freshness * 0.25 + engagement * 0.15
+    Formula: impact * 0.45 + freshness * 0.30 + engagement * 0.15 + quality * 0.10
     """
-    return impact * 0.60 + freshness * 0.25 + engagement * 0.15
+    return impact * 0.45 + freshness * 0.30 + engagement * 0.15 + quality * 0.10
 
 
-async def expire_old_articles(db: AsyncSession) -> int:
+async def expire_and_purge_articles(db: AsyncSession) -> dict:
     """
-    Scans the database and marks any active articles exceeding their 24h hard expiry as archived.
-    Returns the count of articles archived.
+    Exhaustively batches and purges expired articles based on ProcessedArticle.expires_at.
     """
     now = datetime.now(timezone.utc)
+    from app.models.article import ArticleReadModel, RawArticle
+    from app.editorial.homepage_builder import HomepageBuilder
+    from app.core.redis import get_redis_client
 
-    # Select articles that have expired but are not yet marked as archived
-    stmt = select(ProcessedArticle).where(
-        and_(
-            ProcessedArticle.is_archived == False,
-            or_(ProcessedArticle.expires_at <= now, ProcessedArticle.published_at <= now - timedelta(hours=24)),
+    metrics = {
+        "purged_articles_total": 0,
+        "purged_thumbnails_total": 0,
+        "purge_duration_ms": 0,
+        "expired_articles_remaining": 0,
+    }
+    
+    start_time = datetime.now()
+    homepage_affected = False
+
+    while True:
+        # 1. Fetch chunk of expired articles (only needed columns)
+        stmt = select(
+            ProcessedArticle.id,
+            ProcessedArticle.thumbnail_local,
+            ProcessedArticle.raw_article_id,
+            ProcessedArticle.source_name,
+            ProcessedArticle.final_score,
+            ProcessedArticle.expires_at
+        ).where(
+            ProcessedArticle.expires_at <= now
+        ).limit(500)
+        
+        res = await db.execute(stmt)
+        expired_articles = res.all()
+        
+        if not expired_articles:
+            break
+            
+        expired_ids = [art.id for art in expired_articles]
+        
+        # 2. Check if any are in homepage projection
+        from app.models.projection import HomepageProjection
+        try:
+            proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
+            proj_res = await db.execute(proj_stmt)
+            proj = proj_res.scalars().first()
+        except Exception:
+            await db.rollback()
+            proj = None
+            # If the projection table doesn't exist or errors, safely assume we should rebuild if articles were deleted
+            homepage_affected = True
+        
+        if proj and proj.stories_json:
+            # check if feed is in stories_json (some versions use dict others use list directly)
+            if isinstance(proj.stories_json, dict) and "feed" in proj.stories_json:
+                feed_ids = [item.get("id") for item in proj.stories_json["feed"]]
+            elif isinstance(proj.stories_json, list):
+                feed_ids = [item.get("id") for item in proj.stories_json]
+            else:
+                feed_ids = []
+            
+            if any(str(eid) in feed_ids for eid in expired_ids):
+                homepage_affected = True
+                
+        # 3. Collect thumbnails
+        thumbnails_to_delete = []
+        for art in expired_articles:
+            if art.thumbnail_local:
+                thumbnails_to_delete.append(art.thumbnail_local)
+                
+            # Log audit asynchronously or simply here
+            await log_audit(
+                db, 
+                action="ArticleExpired",
+                resource=f"ProcessedArticle:{art.id}",
+                user_id=None,
+                metadata={
+                    "publisher": art.source_name,
+                    "score": float(art.final_score) if art.final_score else 0.0,
+                    "expired_at": art.expires_at.isoformat() if art.expires_at else None,
+                    "reason": "TTL_EXPIRED"
+                }
+            )
+
+        # 4. Batch Delete in Transaction (Dependencies first)
+        try:
+            # Delete from ArticleReadModel
+            await db.execute(delete(ArticleReadModel).where(ArticleReadModel.id.in_([str(i) for i in expired_ids])))
+            
+            # Delete from ProcessedArticle
+            await db.execute(delete(ProcessedArticle).where(ProcessedArticle.id.in_(expired_ids)))
+            
+            # Delete from RawArticle
+            raw_ids = [art.raw_article_id for art in expired_articles if art.raw_article_id]
+            if raw_ids:
+                await db.execute(delete(RawArticle).where(RawArticle.id.in_(raw_ids)))
+                
+            await db.commit()
+            metrics["purged_articles_total"] += len(expired_ids)
+            
+            # 5. Delete thumbnails safely after successful commit
+            for thumb_path in thumbnails_to_delete:
+                if os.path.exists(thumb_path):
+                    try:
+                        os.unlink(thumb_path)
+                        metrics["purged_thumbnails_total"] += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to delete thumbnail {thumb_path}: {e}")
+                        
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to purge batch of expired articles: {e}")
+            break
+
+    # Rebuild homepage conditionally via EventOutbox
+    if homepage_affected:
+        from app.core.events.models import EventOutbox
+        event = EventOutbox(
+            event_type="ProjectionRefreshRequested",
+            payload={
+                "projection_type": "ALL",
+                "requested_at": datetime.now(timezone.utc).isoformat(),
+                "reason": "Purged expired articles from homepage feed"
+            }
         )
-    )
-    res = await db.execute(stmt)
-    expired = res.scalars().all()
-
-    for art in expired:
-        art.is_archived = True
-        art.published_status = "archived"
-        logger.info(f"News Ranking: Hard-expired article ID {art.id} ('{art.title}') - moved to archive.")
-
-    if expired:
-        await db.commit()
-
-    return len(expired)
+        db.add(event)
+        
+    metrics["purge_duration_ms"] = int((datetime.now() - start_time).total_seconds() * 1000)
+    return metrics
 
 
 async def rank_articles(db: AsyncSession) -> dict:
@@ -160,7 +332,8 @@ async def rank_articles(db: AsyncSession) -> dict:
     now = datetime.now(timezone.utc)
 
     # 1. Expire old articles
-    expired_count = await expire_old_articles(db)
+    purge_metrics = await expire_and_purge_articles(db)
+    expired_count = purge_metrics.get("purged_articles_total", 0)
 
     # 2. Fetch all active articles (not archived and not expired)
     cutoff_24h = now - timedelta(hours=24)
@@ -201,11 +374,15 @@ async def rank_articles(db: AsyncSession) -> dict:
         impact = calculate_impact_score(art.title, category_name, art.content)
         freshness = calculate_freshness_score(art.published_at)
         engagement = calculate_engagement_score(raw_meta, source_cred)
-        final = calculate_final_score(impact, freshness, engagement)
+        quality = calculate_quality_score(art.content, raw_meta)
+        final = calculate_final_score(impact, freshness, engagement, quality)
 
-        # Update expires_at if it's not set
-        if not art.expires_at:
-            art.expires_at = art.published_at + timedelta(hours=24)
+        # Calculate dynamic TTL based on blended scores
+        ttl_delta = calculate_article_ttl(editorial_score=final, freshness_score=freshness)
+        
+        # Ingested_at baseline (fallback to created_at)
+        ingested_at = art.raw_article.scraped_at if art.raw_article else (art.created_at or now)
+        art.expires_at = ingested_at + ttl_delta
 
         art.freshness_score = freshness
         art.engagement_score = engagement

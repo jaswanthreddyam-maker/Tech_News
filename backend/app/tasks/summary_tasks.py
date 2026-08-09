@@ -27,12 +27,24 @@ def generate_structured_summary_task(article_id: int):
                 from sqlalchemy import update
 
                 takeaways_list = [t.model_dump() for t in summary.key_takeaways] if summary.key_takeaways else []
+                doc_type = getattr(summary, "document_type", "Breaking News")
+                is_multi = getattr(summary, "is_multi_topic", False)
+                topics_list = getattr(summary, "primary_topics", [])
+                dom_pct = getattr(summary, "dominant_topic_percentage", 100.0)
+                exec_summary = getattr(summary, "executive_summary", "")
 
                 # 1. Update ProcessedArticle
                 stmt_proc = (
                     update(ProcessedArticle)
                     .where(ProcessedArticle.id == article_id)
-                    .values(key_takeaways=takeaways_list)
+                    .values(
+                        key_takeaways=takeaways_list,
+                        document_type=doc_type,
+                        is_multi_topic=is_multi,
+                        primary_topics=topics_list,
+                        dominant_topic_percentage=dom_pct,
+                        summary=exec_summary if exec_summary else ProcessedArticle.summary
+                    )
                 )
                 await session.execute(stmt_proc)
 
@@ -40,7 +52,14 @@ def generate_structured_summary_task(article_id: int):
                 stmt_read = (
                     update(ArticleReadModel)
                     .where(ArticleReadModel.id == str(article_id))
-                    .values(key_takeaways=takeaways_list)
+                    .values(
+                        key_takeaways=takeaways_list,
+                        document_type=doc_type,
+                        is_multi_topic=is_multi,
+                        primary_topics=topics_list,
+                        dominant_topic_percentage=dom_pct,
+                        summary=exec_summary if exec_summary else ArticleReadModel.summary
+                    )
                 )
                 await session.execute(stmt_read)
                 await session.commit()

@@ -36,16 +36,12 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
     """
     correlation_id = correlation_id_ctx.get() or "system"
 
-    # 1. Fetch ArticleReadModel
-    stmt = select(ArticleReadModel).where(ArticleReadModel.id == id).where(ArticleReadModel.is_test_data == False)
-    # Also support fallback for slug/url matching if id isn't found
-    stmt_slug = select(ArticleReadModel).where(ArticleReadModel.url.ilike(f"%{id}%")).where(ArticleReadModel.is_test_data == False)
-
+    # 1. Fetch ArticleReadModel by exact slug, ID, or url
+    stmt = select(ArticleReadModel).where(
+        (ArticleReadModel.slug == id) | (ArticleReadModel.id == id) | (ArticleReadModel.url == id)
+    )
     result = await db.execute(stmt)
     art = result.scalars().first()
-    if not art:
-        result = await db.execute(stmt_slug)
-        art = result.scalars().first()
 
     if not art:
         raise HTTPException(status_code=404, detail="Article not found")
@@ -69,7 +65,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         id=art.id,
         title=art.title,
         url=art.url,
-        slug=art.url,
+        slug=art.slug or art.id,
         summary=art.summary,
         source=art.source,
         reading_time=art.reading_time,
@@ -194,7 +190,13 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
 
     redis = get_redis_client()
     cache_key = "editorial:v1:homepage_ranked_ids"
-    cached = await redis.get(cache_key)
+    cached = None
+    try:
+        import asyncio
+        if redis:
+            cached = await asyncio.wait_for(redis.get(cache_key), timeout=0.05)
+    except Exception:
+        pass
 
     ranked_ids = []
     if cached:
@@ -209,14 +211,19 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         global_articles = await HomepageBuilder.build_homepage(db, category_filter=None)
         ranked_ids = [a.id for a in global_articles]
 
-        algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
-        cache_payload = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "algorithm_version": algo_ver,
-            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-            "article_ids": ranked_ids
-        }
-        await redis.set(cache_key, json.dumps(cache_payload), ex=3600)
+        try:
+            import asyncio
+            algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
+            cache_payload = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "algorithm_version": algo_ver,
+                "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+                "article_ids": ranked_ids
+            }
+            if redis:
+                await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=0.05)
+        except Exception:
+            pass
 
     position = -1
     navigation = None

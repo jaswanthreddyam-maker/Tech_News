@@ -1,182 +1,254 @@
 "use client";
 
-import { usePersonalizedFeed } from "@/components/hooks/articles/useArticles";
-import { Skeleton } from "@/design-system/components/Skeleton";
-import { useLoadingState } from "@/design-system/hooks/useLoadingState";
-import Link from "next/link";
-import { Clock, TrendingUp, Sparkles, Eye, Newspaper } from "lucide-react";
-import { EmptyState, EmptyIllustration } from "@/components/common/EmptyState";
-import { useEffect, useState } from "react";
-import { ArticleThumbnail } from "@/components/common/ArticleThumbnail";
+import { useTrending } from "@/components/hooks/articles/useArticles";
 import { useOfflineQueue } from "@/components/reading/tracker/useOfflineQueue";
-import { Reveal, StaggerContainer, StaggerItem } from "@/components/animations";
+import { Sparkles, TrendingUp } from "lucide-react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { m, useReducedMotion } from "framer-motion";
+import { FeedArticle, FeedResponseItem } from "./types";
+import { FeaturedStory } from "./FeaturedStory";
+import { StoryTile } from "./StoryTile";
+import { StorySkeleton } from "./StorySkeleton";
+import { TRENDING_LAYOUT } from "./constants";
+import { usePhysicalRig } from "./usePhysicalRig";
+import { validateCanonicalArticles } from "@/domains/article/validator";
+import {
+  normalizeArticle,
+  partitionFeed,
+} from "./helpers";
 
+import { useQueryClient } from "@tanstack/react-query";
+
+/**
+ * TrendingStories — Clean Architectural Orchestrator (v3.2 Direct 3D Matrix Motion)
+ */
 export function TrendingStories() {
-  const [anonId, setAnonId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const gridRef = usePhysicalRig<HTMLDivElement>();
   const { enqueue } = useOfflineQueue();
   
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setAnonId(localStorage.getItem('tnt_anon_id'));
-    }
-  }, []);
+  const trendingQuery = useTrending();
+  
+  const data = trendingQuery.data;
+  const isLoading = trendingQuery.isLoading;
+  const error = trendingQuery.isError;
 
-  const { data, isLoading, error } = usePersonalizedFeed(anonId);
-  const loadingLevel = useLoadingState(isLoading);
+  // Animation Refs & Hooks
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isInView, setIsInView] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (isLoading || isInView) return;
+
+    const section = sectionRef.current;
+    if (!section) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+
+        setIsInView(true);
+        observer.disconnect();
+      },
+      { threshold: 0.15 } // Ensure 15% visibility triggers the cascade
+    );
+    
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [isLoading, isInView]);
+
+  // Listen to SSE events for thumbnail updates
+  useEffect(() => {
+    const sseUrl = "/api/v1/events/stream";
+    const es = new EventSource(sseUrl);
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        // If the event indicates a thumbnail was updated, invalidate trending cache
+        if (data && data.msg && data.msg.includes("thumbnail updated")) {
+          queryClient.invalidateQueries({ queryKey: ["articles", "trending"] });
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    };
+
+    es.onerror = () => {
+      // Allow EventSource's native reconnect behavior instead of hard closing.
+      // E.g., don't do es.close();
+    };
+
+    return () => es.close();
+  }, [queryClient]);
+
+  // Removed transformTemplate: Framer Motion no longer touches transform property directly.
+
+  const getCardDelay = (idx: number, isFeatured: boolean) => {
+    if (isFeatured) return 0;
+    // Custom stagger sequence for compact cards
+    if (idx === 1) return 1;
+    if (idx === 0) return 2;
+    if (idx === 3) return 3;
+    if (idx === 2) return 4;
+    if (idx === 5) return 5;
+    if (idx === 4) return 6;
+    return idx + 1;
+  };
+
+  const getAnimationProps = (idx: number, isFeatured: boolean): any => {
+    if (shouldReduceMotion) return {};
+    
+    return {
+      initial: {
+        "--reveal-ry": "-150deg",
+        "--reveal-z": "-40px",
+        opacity: 0.95,
+        filter: "brightness(0.7)",
+      },
+      animate: isInView ? {
+        "--reveal-ry": "0deg",
+        "--reveal-z": "0px",
+        opacity: 1,
+        filter: "brightness(1)",
+      } : undefined,
+      transition: {
+        duration: 1.1,
+        delay: getCardDelay(idx, isFeatured) * 0.09, // 90ms delay between cascades
+        ease: [0.22, 1, 0.36, 1] as const, // cinematic cubic-bezier
+      },
+    };
+  };
+
+
+  // Memoized Feed Transformer & Partitioning
+  const { featured, compact, isPersonalized, titleText } = useMemo(() => {
+    const rawResults: FeedResponseItem[] = Array.isArray(data)
+      ? data
+      : (data as any)?.data || [];
+
+    if (!rawResults || rawResults.length === 0) {
+      return {
+        featured: null,
+        compact: [],
+        isPersonalized: false,
+        titleText: "Trending Now",
+      };
+    }
+
+    const title = "Trending Now";
+    const articles: FeedArticle[] = rawResults.map(normalizeArticle);
+
+    if (process.env.NODE_ENV === "development") {
+      validateCanonicalArticles(articles as any);
+    }
+
+    const { featured: feat, compact: comp } = partitionFeed(articles);
+
+    return {
+      featured: feat,
+      compact: comp,
+      isPersonalized: false,
+      titleText: title,
+    };
+  }, [data]);
 
   if (isLoading) {
-    return (
-      <section className="py-8 border-t border-border mt-8">
-        <div className="flex items-center gap-3 mb-8">
-          <Skeleton level={loadingLevel} className="w-9 h-9 rounded-lg" />
-          <Skeleton level={loadingLevel} className="h-8 w-48" />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Featured Card Skeleton */}
-          <div className="lg:col-span-5 border border-border bg-card">
-            <Skeleton level={loadingLevel} className="aspect-video w-full rounded-none" />
-            <div className="p-6">
-              <Skeleton level={loadingLevel} className="h-3 w-20 mb-4" />
-              <Skeleton level={loadingLevel} className="h-8 w-full mb-2" />
-              <Skeleton level={loadingLevel} className="h-8 w-3/4 mb-4" />
-              <Skeleton level={loadingLevel} className="h-4 w-full mb-2" />
-              <Skeleton level={loadingLevel} className="h-4 w-full mb-2" />
-              <Skeleton level={loadingLevel} className="h-4 w-2/3 mb-4" />
-              <Skeleton level={loadingLevel} className="h-8 w-32 mt-6" />
-            </div>
-          </div>
-          {/* Compact Cards Skeleton */}
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="flex flex-col p-4 border border-border bg-card h-full">
-                <Skeleton level={loadingLevel} className="h-3 w-20 mb-3" />
-                <Skeleton level={loadingLevel} className="h-5 w-full mb-2" />
-                <Skeleton level={loadingLevel} className="h-5 w-3/4 mb-4" />
-                <div className="mt-auto pt-2 space-y-2">
-                  <Skeleton level={loadingLevel} className="h-3 w-24" />
-                  <Skeleton level={loadingLevel} className="h-5 w-full rounded" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-    );
+    return <StorySkeleton />;
   }
-  if (error) return (
-    <div className="py-8 border-t border-border mt-8 flex justify-center text-red-500">
-      Error loading stories.
-    </div>
-  );
-  if (!data || !data.data || data.data.length === 0) return (
-    <div className="py-8 border-t border-border mt-8">
-      <EmptyState>
-        <EmptyIllustration
-          icon={Newspaper}
-          title="No stories available"
-          description="Check back in a few minutes."
-        />
-      </EmptyState>
-    </div>
-  );
 
-  const results = data.data;
-  const isPersonalized = results[0].strategy === "behavioral_feed";
+  if (error) {
+    return null;
+  }
+
+  if (!featured && compact.length === 0) return null;
+
   const TitleIcon = isPersonalized ? Sparkles : TrendingUp;
-  const titleText = isPersonalized ? "Recommended for You" : "Trending Now";
 
-  // Map backend structure back to expected article fields
-  const articles = results.map((r: any) => ({
-    ...r.article,
-    reason: r.reason
-  }));
-
-  const featured = articles[0];
-  const compact = articles.slice(1, 7);
-  
-  const handleImpressionClick = (articleId: number, position: number) => {
-    const sessionId = localStorage.getItem('tnt_session_id') || crypto.randomUUID();
+  const trackRecommendationClick = (articleId: number, position: number) => {
+    const sessionId =
+      localStorage.getItem("tnt_session_id") || crypto.randomUUID();
     enqueue({
-        event_id: crypto.randomUUID(),
-        session_id: sessionId,
-        article_id: articleId,
-        event_type: "recommendation_click",
-        event_version: "v1",
-        occurred_at: new Date().toISOString(),
-        metadata_payload: { position, strategy: results[position].strategy },
-        source: "RECOMMENDATION_FEED"
+      event_id: crypto.randomUUID(),
+      session_id: sessionId,
+      article_id: articleId,
+      event_type: "recommendation_click",
+      event_version: "v1",
+      occurred_at: new Date().toISOString(),
+      metadata_payload: {
+        position,
+        strategy: isPersonalized ? "behavioral_feed" : "trending",
+      },
+      source: "RECOMMENDATION_FEED",
     });
   };
 
   return (
-    <section className="py-8 border-t border-border mt-8">
-      <Reveal>
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <TitleIcon className="w-5 h-5 text-primary" />
-          </div>
-          <h2 className="text-2xl font-sans font-bold tracking-tight">{titleText}</h2>
+    <section ref={sectionRef} className="TrendingWall py-8 my-6 w-full">
+      {/* Editorial Section Header */}
+      <div className="flex items-center gap-3 mb-9">
+        <div className="p-2 bg-primary/10 rounded-xl">
+          <TitleIcon className="w-4 h-4 text-primary" />
         </div>
-      </Reveal>
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            {titleText}
+          </h2>
+          <p className="text-xs font-mono text-muted-foreground/80 tracking-wide mt-0.5">
+            Stories gaining momentum across AI, software, hardware and startups.
+          </p>
+        </div>
+      </div>
 
-      <StaggerContainer className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Featured Card */}
-        <StaggerItem className="lg:col-span-5 relative group">
-          <Link href={`/articles/${featured.slug}`} onClick={() => handleImpressionClick(featured.id, 0)} className="block h-full border border-border bg-card overflow-hidden hover:border-primary/50 transition-colors">
-            <ArticleThumbnail
-              article={featured}
-              className="aspect-video w-full"
-              imgClassName="object-cover transition-transform duration-700 group-hover:scale-105"
-              sizes="(max-width: 1024px) 100vw, 40vw"
-            />
-            <div className="p-6">
-              <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-wider text-primary mb-3">
-                <span>{featured.source_name || featured.source}</span>
-              </div>
-              <h3 className="text-2xl font-serif font-bold text-foreground mb-3 leading-snug group-hover:text-primary transition-colors">
-                {featured.title}
-              </h3>
-              <p className="text-muted-foreground text-sm line-clamp-3 mb-4">
-                {featured.summary}
-              </p>
-              {featured.reason && (
-                <div className="flex items-center gap-2 mt-auto p-2 bg-muted/50 rounded text-xs text-muted-foreground">
-                  <Eye className="w-3.5 h-3.5 text-primary/70" />
-                  <span>{featured.reason.message}</span>
-                </div>
-              )}
-            </div>
-          </Link>
-        </StaggerItem>
+      {/* Perspective Container (1000px camera perspective) */}
+      <div
+        className="PerspectiveRig w-full mx-auto"
+        style={{
+          maxWidth: `${TRENDING_LAYOUT.MAX_WIDTH}px`,
+          perspective: "1800px",
+        }}
+      >
+        {/* Exhibition Grid Layout (Directly rotated by gridRef in 3D) */}
+        <div
+          ref={gridRef}
+          className="ExhibitionGrid grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mx-auto items-stretch"
+          style={{
+            transformStyle: "preserve-3d",
+          }}
+        >
+          {/* Featured Story (5 cols desktop) */}
+          {featured && (
+            <m.div 
+              className="ExhibitionItem lg:col-span-5 flex [transform:translateZ(var(--reveal-z,0px))_rotateY(var(--reveal-ry,0deg))]" 
+              style={{ transformStyle: "preserve-3d" }}
+              {...getAnimationProps(0, true)}
+            >
+              <FeaturedStory
+                article={featured}
+                onClick={() => trackRecommendationClick(featured.id, 0)}
+              />
+            </m.div>
+          )}
 
-        {/* Compact Cards */}
-        <StaggerContainer className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {compact.map((article: any, idx: number) => (
-            <StaggerItem key={article.id}>
-              <Link href={`/articles/${article.slug}`} onClick={() => handleImpressionClick(article.id, idx + 1)} className="group flex flex-col p-4 border border-border bg-card hover:border-primary/50 transition-colors h-full">
-                <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
-                  <span className="text-primary">{article.source_name || article.source}</span>
-                </div>
-                <h4 className="font-serif font-bold text-base leading-snug group-hover:text-primary transition-colors mb-2">
-                  {article.title}
-                </h4>
-                <div className="mt-auto flex flex-col gap-2 pt-2">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span suppressHydrationWarning>{article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { timeZone: 'UTC' }) : ''}</span>
-                  </div>
-                  {article.reason && (
-                    <div className="text-[10px] bg-muted/50 p-1.5 rounded line-clamp-1 text-muted-foreground flex items-center gap-1.5">
-                      <Eye className="w-3 h-3 text-primary/70" />
-                      {article.reason.message}
-                    </div>
-                  )}
-                </div>
-              </Link>
-            </StaggerItem>
-          ))}
-        </StaggerContainer>
-      </StaggerContainer>
+          {/* Story Tiles Grid (7 cols desktop, 2x3 grid) */}
+          <div className="ExhibitionItem lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6 auto-rows-fr" style={{ transformStyle: "preserve-3d" }}>
+            {compact.map((article: FeedArticle, idx: number) => (
+              <m.div
+                key={article.slug || (article.id ? `id-${article.id}` : `tile-${idx}`)}
+                className="w-full h-full flex [transform:translateZ(var(--reveal-z,0px))_rotateY(var(--reveal-ry,0deg))]"
+                style={{ transformStyle: "preserve-3d" }}
+                {...getAnimationProps(idx, false)}
+              >
+                <StoryTile
+                  article={article}
+                  onClick={() => trackRecommendationClick(article.id, idx + 1)}
+                />
+              </m.div>
+            ))}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }

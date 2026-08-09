@@ -72,3 +72,10 @@ class AIThumbnailRejected(BaseModel):
     confidence: float
     reason: str
     rejected_at: datetime
+
+
+class ProjectionRefreshRequested(BaseModel):
+    projection_type: str = Field(default="ALL", description="Type of projection to refresh, e.g. HOMEPAGE, CATEGORY_DESKS, TRENDING")
+    requested_at: datetime = Field(default_factory=datetime.utcnow)
+    reason: str | None = None
+

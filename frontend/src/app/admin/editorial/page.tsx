@@ -85,8 +85,9 @@ export default function NewsroomDashboard() {
     const eventSource = new EventSource("/api/v1/admin/editorial/events");
     eventSource.onmessage = (event) => {
       console.log("Real-time Editorial Event:", event.data);
-      // In a full implementation, we'd dispatch this to Redux or trigger a localized re-fetch
-      // e.g. if event.type === 'AssignmentReviewCreated', fetch review-queue again
+    };
+    eventSource.onerror = () => {
+      eventSource.close();
     };
     return () => eventSource.close();
   }, []);

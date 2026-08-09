@@ -22,8 +22,8 @@ class BehavioralEvent(Base):
     )
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     anonymous_id: Mapped[str] = mapped_column(String(36), nullable=True, index=True)
-    article_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("processed_articles.id", ondelete="CASCADE"), nullable=True, index=True
+    article_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("processed_articles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     session_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
@@ -57,8 +57,8 @@ class ReadingSession(Base):
     session_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     anonymous_id: Mapped[str] = mapped_column(String(36), nullable=True, index=True)
-    article_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("processed_articles.id", ondelete="CASCADE"), nullable=False, index=True
+    article_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("processed_articles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     content_version: Mapped[str] = mapped_column(String(50), nullable=True)
 

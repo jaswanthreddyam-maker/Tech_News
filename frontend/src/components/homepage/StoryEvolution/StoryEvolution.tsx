@@ -8,63 +8,73 @@ import { Skeleton } from "@/design-system/components/Skeleton";
 import { useLoadingState } from "@/design-system/hooks/useLoadingState";
 
 /* eslint-disable react/jsx-no-comment-textnodes, @typescript-eslint/no-unused-vars */
-export function StoryEvolution() {
-  const mockTimeline = [
-    { id: 1, time: "09:14", label: "First Report", source: "Bloomberg", current: false },
-    { id: 2, time: "10:01", label: "Reuters Update", source: "Reuters", current: false },
-    { id: 3, time: "10:07", label: "Current Summary", source: "AI Synthesized", current: true },
-  ];
+export interface TimelineItem {
+  id: string | number;
+  time: string;
+  label: string;
+  source: string;
+  current?: boolean;
+}
 
-  const [isLoading, setIsLoading] = useState(true);
+interface StoryEvolutionProps {
+  items?: TimelineItem[];
+}
+
+export function StoryEvolution({ items }: StoryEvolutionProps) {
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>(items || []);
+  const [loading, setLoading] = useState(!items);
+
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    if (items) {
+      setTimelineItems(items);
+      setLoading(false);
+      return;
+    }
 
-  const loadingLevel = useLoadingState(isLoading);
+    async function fetchStories() {
+      try {
+        const { apiClient } = await import("@/lib/api/client");
+        const res = await apiClient.fetchJson<any[]>("/stories?limit=5");
+        if (Array.isArray(res) && res.length > 0) {
+          const mapped: TimelineItem[] = res.map((story: any, idx: number) => ({
+            id: story.id,
+            time: story.created_at ? new Date(story.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Live",
+            label: story.title,
+            source: story.created_by || "AI Synthesized",
+            current: idx === 0,
+          }));
+          setTimelineItems(mapped);
+        }
+      } catch (err) {
+        // Silently handle if no active stories exist
+      } finally {
+        setLoading(false);
+      }
+    }
 
-  if (isLoading) {
-    return (
-      <div className="py-8 border-t border-border mt-8">
-        <h2 className="text-2xl font-sans font-bold tracking-tight mb-6 text-[#111827]">Story Evolution</h2>
-        <div 
-          className="py-8 border rounded-[24px] relative"
-          style={{
-            background: "linear-gradient(180deg, #FFF5EC 0%, #FEEFE1 100%)",
-            borderColor: "#E9D8C7",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
-            paddingLeft: "48px",
-            paddingRight: "48px"
-          }}
-        >
-          <div className="absolute left-[126px] top-10 bottom-10 w-px" style={{ backgroundColor: "rgba(0,0,0,0.08)" }} />
-          <div className="space-y-8 relative z-10">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex gap-6 items-start rounded-xl p-2 -mx-2">
-                <div className="w-12 text-right shrink-0 pt-0.5 flex justify-end">
-                  <Skeleton level={loadingLevel} className="h-3 w-8" />
-                </div>
-                <div className="relative flex flex-col items-center">
-                  <Skeleton level={loadingLevel} className="w-3 h-3 rounded-full mt-1.5" />
-                </div>
-                <div className="flex-1 pb-2">
-                  <Skeleton level={loadingLevel} className="h-4 w-32 mb-2" />
-                  <Skeleton level={loadingLevel} className="h-3 w-20" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    fetchStories();
+  }, [items]);
+
+  if (loading || timelineItems.length === 0) {
+    return null;
   }
 
   return (
     <div className="py-8 border-t border-border mt-8">
       <Reveal>
-        <h2 className="text-2xl font-sans font-bold tracking-tight mb-6 text-[#111827]">Story Evolution</h2>
+        <h2 className="text-2xl font-sans font-bold tracking-tight mb-6 text-[#111827] dark:text-white">Story Evolution</h2>
       </Reveal>
-      <div 
+      <m.div 
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-100px" }}
+        variants={{
+          hidden: { clipPath: "circle(30px at center)" },
+          visible: { 
+            clipPath: "circle(150% at center)", 
+            transition: { duration: 2.0, ease: [0.22, 1, 0.36, 1] } 
+          }
+        }}
         className="py-8 border rounded-[24px] relative"
         style={{
           background: "linear-gradient(180deg, #FFF5EC 0%, #FEEFE1 100%)",
@@ -74,10 +84,16 @@ export function StoryEvolution() {
           paddingRight: "48px"
         }}
       >
-        <div className="absolute left-[126px] top-10 bottom-10 w-px" style={{ backgroundColor: "rgba(0,0,0,0.08)" }} />
-        
-        <StaggerContainer className="space-y-8 relative z-10">
-          {mockTimeline.map((item, idx) => (
+        <m.div
+          variants={{
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { delay: 1.2, duration: 0.8, ease: "easeOut" } }
+          }}
+        >
+          <div className="absolute left-[126px] top-10 bottom-10 w-px" style={{ backgroundColor: "rgba(0,0,0,0.08)" }} />
+          
+          <StaggerContainer className="space-y-8 relative z-10">
+          {timelineItems.map((item) => (
             <StaggerItem key={item.id} className="relative">
               <m.div
                 whileHover={{ scale: MotionScales.card }}
@@ -112,8 +128,9 @@ export function StoryEvolution() {
               </m.div>
             </StaggerItem>
           ))}
-        </StaggerContainer>
-      </div>
+          </StaggerContainer>
+        </m.div>
+      </m.div>
     </div>
   );
 }

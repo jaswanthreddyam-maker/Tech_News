@@ -37,29 +37,73 @@ class RSSIngestionCapability(CapabilityInterface):
 
     async def execute(self, payload: dict[str, Any], context: Any) -> dict[str, Any]:
         feed_url = payload.get("feed_url")
+        from app.core.config import settings
+
         if not feed_url:
             raise ValueError("feed_url is required")
 
         feed = feedparser.parse(feed_url)
-        entries = []
-        for entry in feed.entries:
-            # Parse published date safely
-            published_at = None
+        parse_status = "SUCCESS" if getattr(feed, "bozo", 0) == 0 else "PARSE_WARNING"
+        fetch_status = getattr(feed, "status", 200)
+
+        raw_entries = getattr(feed, "entries", [])
+        discovered_count = len(raw_entries)
+
+        parsed_items = []
+        for idx, entry in enumerate(raw_entries):
+            published_dt = None
+            published_iso = None
             if hasattr(entry, 'published'):
                 try:
-                    published_at = date_parser.parse(entry.published).isoformat()
+                    dt = date_parser.parse(entry.published)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    published_dt = dt
+                    published_iso = dt.isoformat()
                 except Exception:
                     pass
 
-            entries.append({
+            parsed_items.append({
                 "feed_url": feed_url,
-                "entry_url": entry.link,
-                "title": entry.title,
-                "published_at": published_at,
+                "entry_url": getattr(entry, 'link', ''),
+                "title": getattr(entry, 'title', ''),
+                "published_at": published_iso,
+                "published_dt": published_dt,
+                "original_index": idx,
                 "author": entry.author if hasattr(entry, 'author') else None
             })
 
-        return {"entries": entries}
+        # Guardrail 1: Date-safe sorting with fallback to original feed order if date is missing/invalid
+        # Entries with valid published_dt sorted newest-first; entries without dates retain original feed order at the end.
+        def sort_key(item):
+            dt = item["published_dt"]
+            if dt is not None:
+                return (1, dt.timestamp())
+            return (0, -item["original_index"])
+
+        parsed_items.sort(key=sort_key, reverse=True)
+
+        max_limit = getattr(settings, "MAX_ENTRIES_PER_SOURCE_PER_CYCLE", 25)
+        entry_limit_applied = len(parsed_items) > max_limit
+        bounded_items = parsed_items[:max_limit]
+
+        accepted_entries = []
+        for item in bounded_items:
+            item_copy = dict(item)
+            item_copy.pop("published_dt", None)
+            item_copy.pop("original_index", None)
+            accepted_entries.append(item_copy)
+
+        return {
+            "entries": accepted_entries,
+            "telemetry": {
+                "fetch_status": fetch_status,
+                "parse_status": parse_status,
+                "discovered_count": discovered_count,
+                "accepted_count": len(accepted_entries),
+                "entry_limit_applied": entry_limit_applied
+            }
+        }
 
 
 class WebFetchCapability(CapabilityInterface):

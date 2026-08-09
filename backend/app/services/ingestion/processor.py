@@ -60,27 +60,25 @@ def clean_reddit_wrappers(text: str) -> str:
 
 def clean_and_sanitize_html(raw_html_or_text: str) -> str:
     """
-    Takes raw HTML or raw text, strips boilerplates/scripts/styles,
-    safeguards against XSS attacks, and structures readable semantic paragraphs.
-    Preserves lists, headings, and core formatting while preventing raw tags.
+    Takes raw HTML or raw text, isolates the primary editorial container,
+    strips all non-editorial noise (navigation, footers, sub-menus, widgets, boilerplate),
+    prevents duplicate text line extraction, and produces clean semantic HTML.
     """
     if not raw_html_or_text:
         return "<p>No content available.</p>"
 
-    # Check if raw input is HTML or just plain text
+    # 1. Check if raw input is HTML or just plain text
     is_html = bool(BeautifulSoup(raw_html_or_text, "html.parser").find())
 
     if not is_html:
-        # It's plain text, clean Reddit wrappers and wrap in paragraphs
         text = clean_reddit_wrappers(raw_html_or_text)
         paragraphs = text.split("\n\n")
         clean_html = "".join(f"<p>{p.strip()}</p>" for p in paragraphs if p.strip())
         return clean_html if clean_html else "<p>No content available.</p>"
 
-    # Input is HTML, parse with BeautifulSoup
     soup = BeautifulSoup(raw_html_or_text, "html.parser")
 
-    # 1. Strip unsafe tags to prevent XSS and security vulnerabilities
+    # 2. Decompose unsafe and non-editorial structural tags
     unsafe_tags = [
         "script",
         "style",
@@ -102,198 +100,324 @@ def clean_and_sanitize_html(raw_html_or_text: str) -> str:
         "applet",
         "meta",
         "link",
+        "header",
+        "footer",
+        "nav",
+        "aside",
+        "menu",
     ]
     for tag in soup.find_all(unsafe_tags):
         tag.decompose()
 
-    # 2. Strip unsafe attributes to prevent XSS (onmouseover, onclick, etc.)
+    # 3. Decompose non-editorial containers by class / id / role attributes
+    noise_patterns = re.compile(
+        r"header|footer|nav|sidebar|menu|breadcrumb|site-nav|global-nav|ad-|advertisement|"
+        r"promo|popup|cookie|modal|social|share|comment|related|trending|popular|see-all|"
+        r"author-bio|follow-|subscribe|newsletter|topic-chip|topic-subscribe|widget|toolbar|"
+        r"rating-card|rating-widget|privacy|terms",
+        re.IGNORECASE,
+    )
+    for element in soup.find_all(attrs={"class": noise_patterns}):
+        element.decompose()
+    for element in soup.find_all(attrs={"id": noise_patterns}):
+        element.decompose()
+    for element in soup.find_all(
+        attrs={"role": re.compile(r"navigation|banner|contentinfo|complementary", re.IGNORECASE)}
+    ):
+        element.decompose()
+
+    # 4. Clean attributes to prevent XSS while keeping safe attributes
     for tag in soup.find_all(True):
-        # Keep only safe attributes
         safe_attrs = {}
         for attr, value in tag.attrs.items():
             if attr in ("href", "title", "alt", "src", "class"):
-                # Clean javascript: links in href
-                if attr == "href" and value.strip().lower().startswith("javascript:"):
+                if attr == "href" and str(value).strip().lower().startswith("javascript:"):
                     continue
                 safe_attrs[attr] = value
         tag.attrs = safe_attrs
 
-    # 3. Strip common ad/comment boilerplates inside HTML
-    boilerplate_patterns = re.compile(
-        r"comment|share|social|advertisement|sidebar|menu|footer|header|nav|widget|banner|ad-|promo|popup|cookie",
-        re.IGNORECASE,
-    )
-    for element in soup.find_all(attrs={"class": boilerplate_patterns}):
-        element.decompose()
-    for element in soup.find_all(attrs={"id": boilerplate_patterns}):
-        element.decompose()
+    # 5. Locate Primary Editorial Container
+    container = None
+    container_selectors = [
+        "article",
+        '[role="main"]',
+        "main",
+        ".article-body",
+        ".post-content",
+        ".entry-content",
+        ".article-content",
+        ".story-body",
+        ".content-body",
+        ".review-body",
+        "#article-body",
+        "#main-content",
+        ".main-content",
+    ]
+    for selector in container_selectors:
+        found = soup.select_one(selector)
+        if found:
+            container = found
+            break
 
-    # 4. Extract safe readable tags and build a clean container
-    safe_body_elements = soup.find_all(
-        ["p", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code", "strong", "em", "a"]
+    if not container:
+        container = soup.find("body") or soup
+
+    # 6. Extract block-level content elements inside container
+    block_elements = container.find_all(
+        ["p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "blockquote", "pre", "table", "figure"]
     )
 
-    if not safe_body_elements:
-        # Fallback to general body container text parsing if no standard tags matched
-        body_text = soup.get_text(separator="\n\n", strip=True)
+    if not block_elements:
+        body_text = container.get_text(separator="\n\n", strip=True)
         return clean_and_sanitize_html(body_text)
 
-    # Reconstruct clean html tree
-    output_html = []
+    output_blocks = []
+    seen_texts = set()
 
-    # Track tags that need to be standalone block-level elements
-    block_tags = ("p", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "a")
+    contamination_patterns = [
+        "skip to main content",
+        "see all",
+        "posts from this topic",
+        "follow topics and authors",
+        "cookie policy",
+        "privacy policy",
+        "terms of service",
+        "advertisement",
+        "more stories",
+        "related articles",
+        "share this article",
+        "follow us",
+        "download the app",
+        "sign up",
+        "sign in",
+        "subscribe to",
+        "photography by",
+        "all rights reserved",
+        "copyright",
+    ]
 
-    for elem in safe_body_elements:
-        # Skip elements that are nested inside other safe tags to prevent duplicates
-        if elem.parent and elem.parent.name in safe_body_elements:
+    for elem in block_elements:
+        # Prevent parent-child double processing (e.g. if elem is <p> inside a <blockquote> or <figure>)
+        if elem.parent and elem.parent.name in ["p", "blockquote", "figure", "li", "td", "th"]:
             continue
 
         tag_name = elem.name
+
+        # Preserve structured HTML tables
+        if tag_name == "table":
+            table_text = elem.get_text().strip()
+            norm_table = re.sub(r"\s+", " ", table_text.lower())
+            if norm_table and norm_table not in seen_texts:
+                seen_texts.add(norm_table)
+                output_blocks.append(
+                    f'<div className="overflow-x-auto my-4"><table className="w-full border-collapse border border-border text-sm">{elem.decode_contents()}</table></div>'
+                )
+            continue
+
+        # Figure handling: render clean caption
+        if tag_name == "figure":
+            caption_tag = elem.find("figcaption")
+            caption_text = caption_tag.get_text().strip() if caption_tag else ""
+            if caption_text:
+                norm_cap = re.sub(r"\s+", " ", caption_text.lower())
+                if norm_cap not in seen_texts:
+                    seen_texts.add(norm_cap)
+                    output_blocks.append(f'<p class="text-xs italic text-muted-foreground my-2">{caption_text}</p>')
+            continue
+
         text_content = elem.get_text().strip()
         if not text_content:
             continue
-            
-        contamination_patterns = [
-            "skip to main content",
-            "tech reviews",
-            "sign up",
-            "sign in",
-            "subscribe to",
-            "cookie policy",
-            "privacy policy",
-            "terms of service",
-            "advertisement",
-            "more stories",
-            "related articles",
-            "share this article",
-            "follow us on",
-            "download the app",
-        ]
-        
-        lower_text = text_content.lower()
-        if any(pat in lower_text for pat in contamination_patterns):
-            # Skip this element if it contains boilerplate patterns
+
+        # Normalize text for deduplication
+        norm_text = re.sub(r"\s+", " ", text_content.lower())
+
+        # Deduplication check
+        if norm_text in seen_texts:
             continue
 
+        # Contamination check
+        if any(pat in norm_text for pat in contamination_patterns):
+            continue
 
-        if tag_name in block_tags:
-            # Build clean tag
-            if tag_name == "a":
-                # Convert standalone links into inline paragraphs or strip
-                href = elem.get("href", "")
-                output_html.append(
-                    f'<p><a href="{href}" target="_blank" rel="noopener noreferrer">{text_content}</a></p>'
-                )
-            elif tag_name == "p":
-                output_html.append(f"<p>{text_content}</p>")
-            elif tag_name == "pre" or tag_name == "code":
-                output_html.append(f"<pre><code>{text_content}</code></pre>")
-            elif tag_name.startswith("h"):
-                output_html.append(f"<{tag_name} class='font-bold text-white mt-4 mb-2'>{text_content}</{tag_name}>")
-            elif tag_name == "blockquote":
-                output_html.append(
-                    f"<blockquote class='border-l-4 border-accent pl-4 italic my-4 text-neutral-400'>{text_content}</blockquote>"
-                )
-            else:
-                # Lists ul/ol - render child items cleanly
-                list_items = "".join(
-                    f"<li class='list-disc list-inside ml-4'>{li.get_text().strip()}</li>"
-                    for li in elem.find_all("li")
-                    if li.get_text().strip()
-                )
-                if list_items:
-                    output_html.append(f"<{tag_name} class='space-y-1 my-3'>{list_items}</{tag_name}>")
-        else:
-            # Standalone inline tag - wrap in paragraph
-            output_html.append(f"<p>{text_content}</p>")
+        # Reject short navigational fragment lines (e.g. standalone "Amazon", "Apple", "Tech", "Reviews")
+        words = text_content.split()
+        if len(words) <= 3 and tag_name == "p":
+            if not re.search(r"[.!?:]", text_content):
+                continue
 
-    return "\n".join(output_html)
+        # Mark as seen
+        seen_texts.add(norm_text)
+
+        # Build clean HTML output tags
+        if tag_name == "p":
+            output_blocks.append(f"<p>{text_content}</p>")
+        elif tag_name.startswith("h"):
+            output_blocks.append(
+                f"<{tag_name} class='font-bold text-foreground mt-4 mb-2'>{text_content}</{tag_name}>"
+            )
+        elif tag_name == "blockquote":
+            output_blocks.append(
+                f"<blockquote class='border-l-4 border-primary pl-4 italic my-4 text-muted-foreground'>{text_content}</blockquote>"
+            )
+        elif tag_name == "pre":
+            output_blocks.append(f"<pre><code>{text_content}</code></pre>")
+        elif tag_name in ["ul", "ol"]:
+            list_items = []
+            for li in elem.find_all("li", recursive=False) or elem.find_all("li"):
+                li_text = li.get_text().strip()
+                norm_li = re.sub(r"\s+", " ", li_text.lower())
+                if li_text and norm_li not in seen_texts:
+                    seen_texts.add(norm_li)
+                    list_items.append(f"<li class='list-disc list-inside ml-4'>{li_text}</li>")
+            if list_items:
+                output_blocks.append(f"<{tag_name} class='space-y-1 my-3'>{''.join(list_items)}</{tag_name}>")
+
+    return "\n".join(output_blocks) if output_blocks else "<p>No content available.</p>"
 
 
-def map_category_id(title: str, content: str) -> int:
+def _normalize_text(text: str) -> str:
+    return text.lower() if text else ""
+
+def _count_matches(text: str, keywords: list[str]) -> int:
+    if not text:
+        return 0
+    sorted_kws = sorted(keywords, key=len, reverse=True)
+    count = 0
+    text_copy = " " + text + " "
+    for kw in sorted_kws:
+        pattern = r'\b' + re.escape(kw) + r'\b'
+        matches = len(re.findall(pattern, text_copy))
+        if matches > 0:
+            count += matches
+            text_copy = re.sub(pattern, ' ', text_copy)
+    return count
+
+def map_category_slug(title: str, content: str, source_name: str = "") -> str:
     """
-    Dynamically maps articles to seeded PostgreSQL Category IDs based on keyword density.
-    Seeded IDs:
-    1: Artificial Intelligence
-    2: Robotics
-    3: Startups
-    4: Cybersecurity
-    5: Software Development
-    6: Space & Science
+    Multi-signal classifier with Evidence-Density Tie-Breaker and Protected Positives.
     """
-    text = (title + " " + content).lower()
-
-    # Keyword categories
-    keywords = {
-        1: [
-            "ai",
-            "llm",
-            "gpt",
-            "artificial intelligence",
-            "neural",
-            "openai",
-            "anthropic",
-            "deepmind",
-            "machine learning",
-            "transformer",
-            "claude",
-        ],
-        2: ["robot", "humanoid", "automation", "drone", "cybernetics", "mechanical", "factory floor"],
-        3: [
-            "funding",
-            "round",
-            "series a",
-            "series b",
-            "startup",
-            "valuation",
-            "acquired",
-            "acquisition",
-            "venture capital",
-            "seed stage",
-        ],
-        4: [
-            "security",
-            "cybersecurity",
-            "hacked",
-            "breach",
-            "exploit",
-            "vulnerability",
-            "zk-snark",
-            "encryption",
-            "ransomware",
-            "malware",
-            "auth",
-        ],
-        5: [
-            "next.js",
-            "react",
-            "rust",
-            "framework",
-            "python",
-            "api",
-            "developer",
-            "deployment",
-            "github",
-            "npm",
-            "vercel",
-            "tailwind",
-        ],
-        6: ["space", "rocket", "mars", "fusion", "quantum", "nasa", "spacex", "astronomy", "scientific", "reactor"],
+    DICTIONARY = {
+        "artificial-intelligence": {
+            "positive": ["llm", "transformer", "generative ai", "chatgpt", "neural network", "inference", "machine learning", "training", "gemini", "claude", "gpt", "ai model", "ai agents", "prompt engineering"],
+            "negative": ["laptop", "tablet", "smartphone", "review", "funding", "lawsuit", "legislation", "smart home", "cybersecurity"],
+            "priors": ["OpenAI Blog", "Anthropic News", "Google DeepMind", "NVIDIA AI Blog", "Google Blog"]
+        },
+        "cybersecurity": {
+            "positive": ["vulnerability", "zero-day", "zero day", "breach", "hacked", "malware", "ransomware", "encryption", "patched", "cve", "exploit", "authentication", "cyber", "cybersecurity", "penetration testing"],
+            "negative": ["funding", "startup", "revenue"],
+            "priors": []
+        },
+        "hardware": {
+            "positive": ["gpu", "cpu", "processor", "semiconductor", "chip", "silicon", "laptop", "tablet", "smartphone", "review", "gadget", "wacom", "battery", "rtx", "iphone", "macbook", "hardware", "architecture"],
+            "negative": ["software", "cloud"],
+            "priors": ["NVIDIA AI Blog", "The Verge"]
+        },
+        "robotics": {
+            "positive": ["robot", "robotics", "autonomous", "drone", "self-driving", "humanoid", "waymo", "robotaxi", "boston dynamics"],
+            "negative": [],
+            "priors": ["Google DeepMind"]
+        },
+        "science": {
+            "positive": ["quantum", "physics", "fusion", "reactor", "space", "nasa", "spacex", "astronomy", "biotech", "medical", "genome", "weather forecasting", "cyclone", "climate"],
+            "negative": [],
+            "priors": []
+        },
+        "startups-and-business": {
+            "positive": ["funding", "series a", "series b", "venture capital", "valuation", "acquired", "acquisition", "seed stage", "revenue", "q1", "q2", "q3", "q4", "ipo", "enterprise", "startup", "raises"],
+            "negative": ["review", "gameplay", "zero-day"],
+            "priors": ["TechCrunch"]
+        },
+        "policy": {
+            "positive": ["legislation", "executive order", "regulation", "senate", "congress", "white house", "eu", "lawmaker", "lawsuit", "ruling", "copyright", "antitrust", "mandate", "fcc", "ftc"],
+            "negative": [],
+            "priors": []
+        },
+        "technology": {
+            "positive": ["browser", "app", "update", "feature", "web", "streaming", "streaming service", "roku", "software"],
+            "negative": [],
+            "priors": ["The Verge", "TechCrunch", "Ars Technica", "Hacker News"]
+        }
     }
 
-    scores = {cat_id: 0 for cat_id in keywords}
+    SPECIALIZED_CATEGORIES = [c for c in DICTIONARY.keys() if c != "technology"]
 
-    for cat_id, word_list in keywords.items():
-        for word in word_list:
-            # Count occurrences
-            scores[cat_id] += text.count(word)
+    title_norm = _normalize_text(title)
+    content_norm = _normalize_text(content)
+    
+    scores = {}
+    details = {}
 
-    best_cat = max(scores, key=scores.get)
-    if scores[best_cat] == 0:
-        # Default fallback
-        return 1
-    return best_cat
+    for cat in SPECIALIZED_CATEGORIES:
+        d = DICTIONARY[cat]
+        t_count = _count_matches(title_norm, d["positive"])
+        c_count = _count_matches(content_norm, d["positive"])
+        n_t_count = _count_matches(title_norm, d["negative"])
+        n_c_count = _count_matches(content_norm, d["negative"])
+        
+        t_score = min(t_count * 3, 9)
+        c_score = min(c_count * 1, 5)
+        
+        # Protected Positives
+        raw_neg = (n_t_count + n_c_count) * -5
+        if t_score >= 3 and n_t_count == 0:
+            raw_neg = 0
+            
+        n_score = max(raw_neg, -10)
+        s_score = 2 if source_name in d["priors"] else 0
+        
+        total = t_score + c_score + n_score + s_score
+        scores[cat] = total
+        details[cat] = {"t": t_score, "c": c_score, "n": n_score, "s": s_score}
+
+    # Sort using total score, then title score, then content score (Evidence-Density Tie-Breaker)
+    def sort_key(item):
+        cat, score = item
+        d = details[cat]
+        return (score, d["t"], d["c"])
+
+    sorted_cats = sorted(scores.items(), key=sort_key, reverse=True)
+    best_cat, best_score = sorted_cats[0]
+    second_best_cat, second_best_score = sorted_cats[1] if len(sorted_cats) > 1 else (None, 0)
+    
+    margin = best_score - second_best_score
+    
+    # 1. Confidence Gate
+    pass_conf = best_score >= 4
+    
+    # 2. Direct Evidence Gate
+    pass_evid = (details[best_cat]["t"] + details[best_cat]["c"]) > 0
+    
+    # 3. Margin Gate with Tie-Breaker
+    pass_margin = margin >= 1
+    if margin == 0 and second_best_cat:
+        # Check if tie broken by evidence density
+        if details[best_cat]["t"] > details[second_best_cat]["t"]:
+            pass_margin = True
+        elif details[best_cat]["t"] == details[second_best_cat]["t"]:
+            if details[best_cat]["c"] > details[second_best_cat]["c"]:
+                pass_margin = True
+    
+    if pass_conf and pass_margin and pass_evid:
+        return best_cat
+        
+    return "technology"
+
+
+def map_category_id(title: str, content: str, category_map: dict[str, int] | None = None, source_name: str = "") -> int:
+    """
+    Dynamically maps articles to seeded PostgreSQL Category IDs based on keyword density and database IDs.
+    """
+    slug = map_category_slug(title, content, source_name)
+    if category_map and slug in category_map:
+        return category_map[slug]
+    if category_map and "cybersecurity" in category_map and slug == "security":
+        return category_map["cybersecurity"]
+    if category_map:
+        # Default to technology if available, else first item
+        return category_map.get("technology", next(iter(category_map.values())))
+    return 7
+
 
 
 def generate_seo_metadata(title: str, content: str) -> dict[str, Any]:

@@ -18,8 +18,19 @@ export class ErrorBoundary extends Component<Props, State> {
     error: null
   };
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  public static getDerivedStateFromError(error: any): State {
+    let normalizedError: Error;
+    if (error instanceof Error) {
+      normalizedError = error;
+    } else if (typeof error === "string") {
+      normalizedError = new Error(error);
+    } else if (error && typeof error === "object") {
+      const msg = error.message || (error.type ? `Event error of type '${error.type}'` : "Unexpected application error");
+      normalizedError = new Error(msg);
+    } else {
+      normalizedError = new Error("An unexpected error disrupted the render tree.");
+    }
+    return { hasError: true, error: normalizedError };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {

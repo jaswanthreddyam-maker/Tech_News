@@ -5,7 +5,7 @@ import { List } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TableOfContentsProps {
-  selector?: string; // e.g., "article.prose"
+  selector?: string;
 }
 
 interface HeadingInfo {
@@ -15,32 +15,51 @@ interface HeadingInfo {
   element: HTMLElement;
 }
 
+/**
+ * Clean HTML heading text by stripping anchor markers like ¶, #, and trailing whitespace
+ */
+function sanitizeHeadingText(rawText: string): string {
+  if (!rawText) return "";
+  return rawText
+    .replace(/[¶#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function TableOfContents({ selector = "article" }: TableOfContentsProps) {
   const [headings, setHeadings] = useState<HeadingInfo[]>([]);
   const [activeId, setActiveId] = useState<string>("");
 
   useEffect(() => {
-    // Wait for the DOM content to be present
-    const elements = Array.from(document.querySelectorAll(`${selector} h2, ${selector} h3`)) as HTMLElement[];
-    
-    const parsedHeadings = elements.map((el, index) => {
-      // Ensure element has an ID
+    const elements = Array.from(
+      document.querySelectorAll(`${selector} h2, ${selector} h3`)
+    ) as HTMLElement[];
+
+    const parsedHeadings: HeadingInfo[] = [];
+
+    elements.forEach((el, index) => {
+      const cleanText = sanitizeHeadingText(el.innerText);
+      
+      // Filter out empty or trivial headings
+      if (!cleanText || cleanText.length < 2) return;
+
       if (!el.id) {
         el.id = `heading-${index}`;
       }
-      return {
+
+      parsedHeadings.push({
         id: el.id,
-        text: el.innerText,
+        text: cleanText,
         level: Number(el.tagName.charAt(1)),
         element: el,
-      };
+      });
     });
 
     setHeadings(parsedHeadings);
 
-    if (parsedHeadings.length === 0) return;
+    if (parsedHeadings.length < 2) return;
 
-    // Set up IntersectionObserver
+    // Trigger active state when heading is near the top of viewport
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -49,7 +68,7 @@ export function TableOfContents({ selector = "article" }: TableOfContentsProps) 
           }
         });
       },
-      { rootMargin: "0px 0px -80% 0px" } // trigger when heading is near the top
+      { rootMargin: "0px 0px -75% 0px" }
     );
 
     elements.forEach((el) => observer.observe(el));
@@ -59,41 +78,60 @@ export function TableOfContents({ selector = "article" }: TableOfContentsProps) 
 
   const memoizedHeadings = useMemo(() => headings, [headings]);
 
-  if (memoizedHeadings.length === 0) return null;
+  // Hide entire panel if fewer than 2 valid headings exist
+  if (memoizedHeadings.length < 2) return null;
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 space-y-5 sticky top-24">
-      <div className="flex items-center gap-2 border-b border-border/50 pb-4">
-        <List className="w-4 h-4 text-muted-foreground" />
-        <h3 className="font-sans font-bold text-sm text-foreground tracking-tight">
+    <div className="bg-card/40 border border-border/50 rounded-xl p-4 space-y-3 shadow-sm">
+      <div className="flex items-center gap-2 border-b border-border/40 pb-2.5">
+        <List className="w-3.5 h-3.5 text-primary" strokeWidth={1.75} />
+        <h3 className="font-mono font-medium text-[11px] uppercase tracking-wider text-muted-foreground">
           In this article
         </h3>
       </div>
 
-      <nav className="max-h-[60vh] overflow-y-auto scrollbar-thin">
-        <ul className="space-y-3">
-          {memoizedHeadings.map((heading, index) => (
-            <li 
-              key={`${heading.id}-${index}`} 
-              style={{ paddingLeft: `${(heading.level - 2) * 12}px` }}
-            >
-              <a
-                href={`#${heading.id}`}
-                className={cn(
-                  "block text-sm transition-colors",
-                  activeId === heading.id 
-                    ? "text-primary font-bold" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                onClick={(e) => {
-                  e.preventDefault();
-                  heading.element.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
+      <nav className="max-h-[300px] overflow-y-auto scrollbar-thin pr-1">
+        <ul className="space-y-1.5 font-sans">
+          {memoizedHeadings.map((heading, index) => {
+            const isActive = activeId === heading.id;
+            const isH3 = heading.level === 3;
+
+            return (
+              <li
+                key={`${heading.id}-${index}`}
+                className={cn("transition-all", isH3 ? "pl-3" : "pl-0")}
               >
-                {heading.text}
-              </a>
-            </li>
-          ))}
+                <a
+                  href={`#${heading.id}`}
+                  className={cn(
+                    "group flex items-start gap-2 text-xs py-1.5 px-2 rounded-lg transition-all leading-relaxed line-clamp-2",
+                    isActive
+                      ? "text-primary font-bold bg-primary/10 border-l-2 border-primary"
+                      : "text-muted-foreground/80 hover:text-foreground hover:bg-muted/20"
+                  )}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    heading.element.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }}
+                >
+                  <span className="shrink-0 mt-1 text-[10px]">
+                    {isActive ? (
+                      <span className="text-primary font-bold">●</span>
+                    ) : isH3 ? (
+                      <span className="text-muted-foreground/40">•</span>
+                    ) : (
+                      <span className="text-muted-foreground/60">○</span>
+                    )}
+                  </span>
+
+                  <span className="min-w-0">{heading.text}</span>
+                </a>
+              </li>
+            );
+          })}
         </ul>
       </nav>
     </div>

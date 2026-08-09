@@ -7,13 +7,14 @@ interface StaggerContainerProps extends HTMLMotionProps<"div"> {
   children: React.ReactNode;
 }
 
-export function StaggerContainer({ children, className, ...props }: StaggerContainerProps) {
-  const [isMounted, setIsMounted] = useState(false);
-  const shouldReduceMotion = useReducedMotion();
+export const StaggerContainer = React.forwardRef<HTMLDivElement, StaggerContainerProps>(
+  ({ children, className, ...props }, ref) => {
+    const [isMounted, setIsMounted] = useState(false);
+    const shouldReduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+    useEffect(() => {
+      setIsMounted(true);
+    }, []);
 
   const containerVariants = {
     hidden: {},
@@ -25,28 +26,31 @@ export function StaggerContainer({ children, className, ...props }: StaggerConta
     },
   };
 
-  if (!isMounted) {
-    const { initial, animate, exit, transition, variants, whileInView, viewport, ...divProps } = props as any;
+    if (!isMounted) {
+      const { initial, animate, exit, transition, variants, whileInView, viewport, ...divProps } = props as any;
+      return (
+        <div ref={ref} className={className} {...divProps}>
+          {children}
+        </div>
+      );
+    }
+
     return (
-      <div className={className} {...divProps}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        variants={containerVariants}
+        className={className}
+        {...props}
+      >
         {children}
-      </div>
+      </m.div>
     );
   }
-
-  return (
-    <m.div
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, amount: 0.2 }}
-      variants={containerVariants}
-      className={className}
-      {...props}
-    >
-      {children}
-    </m.div>
-  );
-}
+);
+StaggerContainer.displayName = "StaggerContainer";
 
 interface StaggerItemProps extends HTMLMotionProps<"div"> {
   children: React.ReactNode;

@@ -188,8 +188,16 @@ SOURCES = [
     {
         "name": "Anthropic News",
         "category": "official",
+        "method": "html_adapter",
+        "url": "https://www.anthropic.com/news",
+        "credibility_score": 98,
+        "crawl_interval": 900,
+    },
+    {
+        "name": "Google Blog",
+        "category": "official",
         "method": "rss",
-        "url": "https://www.anthropic.com/news.rss",
+        "url": "https://blog.google/rss/",
         "credibility_score": 98,
         "crawl_interval": 900,
     },
@@ -377,12 +385,15 @@ async def main():
             # --- Seed Sources ---
             for source_data in SOURCES:
                 existing = await session.execute(select(Source).where(Source.name == source_data["name"]))
-                if existing.scalars().first() is None:
+                src = existing.scalars().first()
+                if src is None:
                     src = Source(**source_data)
                     session.add(src)
                     logger.info(f"Created source: {source_data['name']}")
                 else:
-                    logger.info(f"Source already exists: {source_data['name']}")
+                    src.url = source_data["url"]
+                    src.method = source_data["method"]
+                    logger.info(f"Updated source: {source_data['name']} (url: {src.url}, method: {src.method})")
 
             await session.flush()
 
@@ -439,11 +450,12 @@ async def main():
                 proc_res = await session.execute(select(ProcessedArticle).limit(1))
 
                 if raw_res.scalars().first() is None and proc_res.scalars().first() is None:
-                    from celery_app import run_scheduled_scrapers_task
-
-                    # We use delay to queue it in Redis. Worker will pick it up once it starts.
-                    run_scheduled_scrapers_task.delay()
-                    logger.info("Triggered initial news ingestion task to populate homepage.")
+                    try:
+                        from celery_app import run_scheduled_scrapers_task
+                        run_scheduled_scrapers_task.delay()
+                        logger.info("Triggered initial news ingestion task to populate homepage.")
+                    except Exception as ce:
+                        logger.warning(f"Could not enqueue initial ingestion task via Celery/Redis: {ce}")
                 else:
                     logger.info("Articles already exist in database, skipping initial ingestion trigger.")
             except Exception as e:

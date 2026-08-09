@@ -49,7 +49,7 @@ class ProjectionRepairService:
                 "word_count": len(pa.content.split()) if pa.content else 0,
                 "reading_time": pa.reading_time,
                 "images": [],
-                "tags": pa.tags.split(',') if pa.tags else [],
+                "tags": getattr(pa, 'tags', '').split(',') if getattr(pa, 'tags', None) else [],
                 "source": pa.source_name,
                 "license": "Copyright",
                 "hash": pa.thumbnail_hash or "hash",

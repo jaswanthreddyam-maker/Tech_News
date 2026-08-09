@@ -17,7 +17,7 @@ router = APIRouter()
 @router.get("", response_model=StandardResponse[list])
 async def get_recommendations(
     history_ids: list[int] = Query(..., description="List of recently read article IDs"),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -38,16 +38,20 @@ async def get_recommendations(
 
     from app.core.redis import get_redis_client
 
-    redis = get_redis_client()
     history_str = ",".join(str(i) for i in sorted(history_ids))
     history_hash = hashlib.md5(history_str.encode("utf-8")).hexdigest()
     cache_key = f"recommendations:{history_hash}:limit:{limit}"
 
-    if redis:
-        cached_data = await redis.get(cache_key)
-        if cached_data:
-            logger.info("API Recommendations: Serving from cache")
-            return StandardResponse(correlation_id=correlation_id, data=json.loads(cached_data))
+    try:
+        import asyncio
+        redis = get_redis_client()
+        if redis:
+            cached_data = await asyncio.wait_for(redis.get(cache_key), timeout=0.05)
+            if cached_data:
+                logger.info("API Recommendations: Serving from cache")
+                return StandardResponse(correlation_id=correlation_id, data=json.loads(cached_data))
+    except Exception as e:
+        logger.warning(f"Redis get failed in recommendations: {e}")
 
     # We use the most recently read article as the pivot for simplicity
     # (In the future, we could average the embeddings of the history_ids)
@@ -105,8 +109,13 @@ async def get_recommendations(
             }
         )
 
-    if redis and recommended:
-        await redis.setex(cache_key, 900, json.dumps(recommended))  # 15 min TTL
+    if recommended:
+        try:
+            redis = get_redis_client()
+            if redis:
+                await redis.setex(cache_key, 900, json.dumps(recommended))  # 15 min TTL
+        except Exception as e:
+            logger.warning(f"Redis set failed in recommendations: {e}")
 
     logger.info(f"API Recommendations: Returning {len(recommended)} items")
     return StandardResponse(correlation_id=correlation_id, data=recommended)
@@ -118,7 +127,7 @@ from app.services.recommendations.engine import RecommendationEngine
 @router.get("/feed", response_model=StandardResponse[list[RecommendationResponse]])
 async def get_personalized_feed(
     anonymous_id: str = Query(None, description="Anonymous device ID"),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user_optional)
 ):

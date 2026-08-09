@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "project": "Tech News Today",
+  "version": "RC4",
+  "environment": "development",
+  "ports": {
+    "frontend": 3000,
+    "backend": 8000,
+    "postgres": 5433,
+    "redis": 6379,
+    "nginx": 80
+  },
+  "defaults": {
+    "mode": "full",
+    "dockerMode": "hybrid_ready",
+    "openBrowser": false,
+    "healthTimeoutSeconds": 60,
+    "maxAutoRetries": 1,
+    "watchIntervalSeconds": 20
+  },
+  "containers": {
+    "db": "tech-news-db",
+    "redis": "tech-news-redis",
+    "backend": "tech-news-backend",
+    "worker": "tech-news-worker",
+    "beat": "tech-news-beat",
+    "frontend": "tech-news-frontend",
+    "nginx": "tech-news-nginx"
+  },
+  "database": {
+    "user": "postgres",
+    "dbName": "tech_news_today"
+  },
+  "healthCheckEndpoints": {
+    "liveness": "/api/v1/health/live",
+    "readiness": "/api/v1/health/ready",
+    "cqrs": "/api/v1/health/cqrs",
+    "runtime": "/api/v1/health/runtime"
+  }
+}

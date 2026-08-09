@@ -36,10 +36,37 @@ async def _async_check_and_publish_scheduled_drafts_task():
             return
 
         pipeline = PublishingPipeline(db)
+        published_count = 0
         for draft in drafts:
             logger.info(f"Publishing scheduled draft: {draft.id} - {draft.title}")
             try:
                 await pipeline.publish(draft.id)
+                published_count += 1
                 logger.info(f"Successfully published scheduled draft: {draft.id}")
             except Exception as e:
                 logger.error(f"Failed to publish scheduled draft {draft.id}: {e}")
+
+        # Guardrail 2: Batch cache invalidation ONCE after loop finishes ONLY if state changed
+        if published_count > 0:
+            from app.services.cache_service import CacheService
+            await CacheService.invalidate_homepage_cache(reason=f"published_{published_count}_scheduled_drafts")
+
+@celery_app.task(name="tasks.editorial.purge_expired_articles")
+def purge_expired_articles_task():
+    """
+    Purges expired articles every minute.
+    """
+    from celery_app import run_in_worker_loop
+    run_in_worker_loop(_async_purge_expired_articles_task())
+
+async def _async_purge_expired_articles_task():
+    logger.info("Starting expired articles purge loop...")
+    from app.services.ranking.news_ranking_engine import expire_and_purge_articles
+    from celery_app import get_celery_session
+    async with get_celery_session() as db:
+        metrics = await expire_and_purge_articles(db)
+        if metrics.get("purged_articles_total", 0) > 0:
+            logger.info(f"Purge complete. Metrics: {metrics}")
+            from app.services.cache_service import CacheService
+            await CacheService.invalidate_homepage_cache(reason=f"purged_{metrics['purged_articles_total']}_expired_articles")
+

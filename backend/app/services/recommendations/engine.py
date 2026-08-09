@@ -97,7 +97,7 @@ class BehavioralStrategy(RecommendationStrategy):
 
         # Simple heuristic: if we have categories, filter by them
         if categories:
-            from app.models.category import Category
+            from app.models.article import Category
             cat_stmt = select(Category.id).where(Category.name.in_(categories))
             cat_res = await session.execute(cat_stmt)
             cat_ids = cat_res.scalars().all()
@@ -194,7 +194,9 @@ class BehavioralStrategy(RecommendationStrategy):
             "title": c.article.title,
             "slug": c.article.slug,
             "summary": c.article.summary,
-            "hero_image": c.article.hero_image or c.article.image_url,
+            "hero_image": c.article.hero_image or c.article.image_url or c.article.thumbnail_local,
+            "thumbnail_local": c.article.thumbnail_local,
+            "thumbnail_status": c.article.thumbnail_status,
             "source_name": c.article.source_name,
             "published_at": c.article.published_at.isoformat() if c.article.published_at else None,
         }
@@ -224,7 +226,9 @@ class TrendingStrategy(RecommendationStrategy):
                 "title": a.title,
                 "slug": a.slug,
                 "summary": a.summary,
-                "hero_image": a.hero_image or a.image_url,
+                "hero_image": a.hero_image or a.image_url or a.thumbnail_local,
+                "thumbnail_local": a.thumbnail_local,
+                "thumbnail_status": a.thumbnail_status,
                 "source_name": a.source_name,
                 "published_at": a.published_at.isoformat() if a.published_at else None,
             }
@@ -240,13 +244,18 @@ class TrendingStrategy(RecommendationStrategy):
 class RecommendationEngine:
     async def get_feed(self, session: AsyncSession, user_id: int | None, anonymous_id: str | None, limit: int = 10) -> list[RecommendationResponse]:
         from app.services.recommendations.registry import RecommendationRegistry
+        from app.services.recommendations.curator import EditorialCurator
+
+        candidate_limit = max(15, limit * 2)
         behavioral = RecommendationRegistry.get("behavioral")
-        results = await behavioral.recommend(session, user_id, anonymous_id, limit)
+        results = await behavioral.recommend(session, user_id, anonymous_id, candidate_limit)
 
         # Cold start fallback
         if len(results) < min(3, limit):
             trending = RecommendationRegistry.get("trending")
-            fallback = await trending.recommend(session, user_id, anonymous_id, limit - len(results))
+            fallback = await trending.recommend(session, user_id, anonymous_id, candidate_limit - len(results))
             results.extend(fallback)
 
-        return results[:limit]
+        # Pass retrieved candidate pool through EditorialCurator
+        curated_feed = EditorialCurator.curate(results, limit=limit)
+        return curated_feed

@@ -147,6 +147,11 @@ celery_app.conf.beat_schedule = {
         "schedule": 43200.0,  # Every 12 hours
         "options": {"queue": "default"},
     },
+    "periodic-purge-expired-articles": {
+        "task": "tasks.editorial.purge_expired_articles",
+        "schedule": 60.0,  # Every minute
+        "options": {"queue": "default"},
+    },
     "periodic-editorial-decision-snapshot": {
         "task": "tasks.editorial.log_editorial_decision_snapshot",
         "schedule": 3600.0,  # Every hour
@@ -201,6 +206,11 @@ celery_app.conf.beat_schedule = {
     "retention-cleanup": {
         "task": "tasks.backup.run_retention_task",
         "schedule": crontab(hour=3, minute=0),
+        "options": {"queue": "default"},
+    },
+    "recover-pending-thumbnails": {
+        "task": "tasks.recovery.recover_pending_thumbnails",
+        "schedule": 300.0,
         "options": {"queue": "default"},
     },
 }
@@ -340,19 +350,18 @@ async def enqueue_fresh_articles(db) -> int:
 
     prioritized_articles = []
 
-    # Enforce Source Cap: max 3 articles per source per prioritization cycle
     for src_id, art_list in source_groups.items():
-        capped_list = art_list[:3]  # Freshest 3
-        prioritized_articles.extend(capped_list)
+        prioritized_articles.extend(art_list)
 
     # Rank prioritized list: weight by source credibility
     prioritized_articles.sort(key=lambda x: x[1].credibility_score if x[1] else 50, reverse=True)
 
-    # Select top 8 high-density stories to enqueue
-    top_selection = prioritized_articles[:8]
+    # Operational batch limit (e.g. max 50 per cycle) to ensure scale safety without artificial business caps
+    OPERATIONAL_BATCH_LIMIT = 50
+    batch_selection = prioritized_articles[:OPERATIONAL_BATCH_LIMIT]
 
     enqueued_count = 0
-    for raw_art, _ in top_selection:
+    for raw_art, _ in batch_selection:
         # Mark as 'ai_queued' in database
         raw_art.status = "ai_queued"
         # Schedule task
@@ -828,8 +837,8 @@ def download_thumbnail_task(article_id: int, candidates: list):
 
                 if not ai_generated:
                     thumb_res = {
-                        "thumbnail_url": "/images/fallback-news.webp",
-                        "thumbnail_local": "/images/fallback-news.webp",
+                        "thumbnail_url": None,
+                        "thumbnail_local": None,
                         "thumbnail_hash": "fallback",
                         "thumbnail_source": "fallback",
                         "thumbnail_type": "FALLBACK",
@@ -837,7 +846,10 @@ def download_thumbnail_task(article_id: int, candidates: list):
                     }
                     winner_pass = "fallback"
                     winner_score = 0
-                    logger.warning(f"Image Task: Assigning fallback banner for article ID {article_id}. Reason: {thumb_res.get('thumbnail_generation_reason')}")
+                    logger.warning(
+                        f"Image Task: No usable thumbnail for article ID {article_id}. "
+                        f"Reason: {thumb_res.get('thumbnail_generation_reason')}"
+                    )
 
             # Log all evaluated candidates
             for item in valid_candidates:
@@ -910,6 +922,98 @@ def download_thumbnail_task(article_id: int, candidates: list):
 
     res = run_in_worker_loop(_execute())
     return res
+
+
+@celery_app.task(name="tasks.recovery.recover_pending_thumbnails")
+def recover_pending_thumbnails_task():
+    """
+    Self-healing task: Queries pending ProcessedArticles (>2 min old, retry_count < 3),
+    atomically claims them (status='recovering'), and dispatches thumbnail download tasks.
+    """
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import select
+    from app.core.config import settings
+    from app.models.article import ProcessedArticle
+    from app.services.ingestion.image_helper import extract_all_candidate_urls
+
+    async def _execute():
+        async with get_celery_session() as db:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
+            from sqlalchemy.orm import selectinload
+            from app.services.ingestion.processor import decompress_html
+            stmt = (
+                select(ProcessedArticle)
+                .options(selectinload(ProcessedArticle.raw_article))
+                .where(
+                    ProcessedArticle.thumbnail_status == "pending",
+                    ProcessedArticle.created_at <= cutoff,
+                    ProcessedArticle.thumbnail_retry_count < 3
+                )
+                .with_for_update(skip_locked=True)
+                .limit(20)
+            )
+            res = await db.execute(stmt)
+            pending_arts = res.scalars().all()
+
+            if not pending_arts:
+                return {"recovered": 0}
+
+            count = 0
+            for art in pending_arts:
+                art.thumbnail_status = "recovering"
+                art.thumbnail_retry_count = (art.thumbnail_retry_count or 0) + 1
+                art.thumbnail_last_attempt_at = datetime.now(timezone.utc)
+
+                if art.thumbnail_retry_count >= 3:
+                    art.thumbnail_status = "failed"
+                    art.thumbnail_generation_reason = "Max retries exceeded"
+                    logger.warning(f"Thumbnail Recovery: Article {art.id} exceeded max retries (3). Marking failed.")
+                    continue
+
+                html_source = ""
+                if art.raw_article and art.raw_article.compressed_html:
+                    html_source = decompress_html(art.raw_article.compressed_html)
+                if not html_source:
+                    html_source = (art.raw_article.clean_text if art.raw_article else "") or art.content or ""
+                    
+                candidates = extract_all_candidate_urls(html_source, art.source_url or "")
+
+
+                # If RSS snippet lacked candidate images, fetch live article HTML from permalink
+                if not candidates and art.source_url and not ('/feed' in art.source_url or 'rss' in art.source_url):
+                    try:
+                        import httpx
+                        from app.services.ingestion.image_helper import is_safe_url
+                        if is_safe_url(art.source_url):
+                            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+                                resp = client.get(art.source_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+                                if resp.status_code == 200 and "html" in resp.headers.get("content-type", "").lower():
+                                    candidates = extract_all_candidate_urls(resp.text, art.source_url)
+                    except Exception as e:
+                        logger.warning(f"Thumbnail Recovery: Failed fetching live HTML for article {art.id} from {art.source_url}: {e}")
+
+                if not candidates and art.thumbnail_url:
+                    candidates = [{"url": art.thumbnail_url, "source": "og:image", "pre_score": 80}]
+
+                if candidates:
+                    download_thumbnail_task.delay(art.id, candidates[:settings.MAX_THUMBNAIL_CANDIDATES])
+                    count += 1
+                else:
+                    if 'reddit.com/r/MachineLearning/comments' in (art.source_url or ''):
+                        art.thumbnail_status = "no_image_available"
+                        art.thumbnail_generation_reason = "Verified text-only discussion thread"
+                    elif art.source_url and ('/feed' in art.source_url or 'rss' in art.source_url):
+                        art.thumbnail_status = "invalid_article_url"
+                        art.thumbnail_generation_reason = "Permalink points to RSS feed XML stream"
+                    else:
+                        art.thumbnail_status = "candidate_extraction_failed"
+                        art.thumbnail_generation_reason = "HTML parsed but no candidate images found"
+
+            await db.commit()
+            logger.info(f"Thumbnail Recovery: Enqueued thumbnail downloads for {count} pending articles.")
+            return {"recovered": count}
+
+    return run_in_worker_loop(_execute())
 
 
 @celery_app.task(name="tasks.ranking.rebuild_news_rankings")

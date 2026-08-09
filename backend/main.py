@@ -2,10 +2,11 @@ import logging
 import mimetypes
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Depends, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 mimetypes.add_type("image/webp", ".webp")
@@ -15,7 +16,8 @@ from app.api.v1.routes import (
     chat,
 )
 from app.core.config import settings
-from app.core.database import async_engine, verify_database_connection
+from app.core.database import async_engine, verify_database_connection, get_db
+
 from app.core.logging import LoggingMiddleware, correlation_id_ctx, setup_logging
 from app.core.middleware import MaintenanceModeMiddleware
 from app.core.redis import close_redis_connection, verify_redis_connection
@@ -49,6 +51,18 @@ async def lifespan(app: FastAPI):
     redis_ok = await verify_redis_connection()
     if not redis_ok:
         logger.warning("Redis connection validation failed. Cache services compromised.")
+
+    # Run startup reconciliation
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.services.ranking.news_ranking_engine import expire_and_purge_articles
+        logger.info("Running startup article expiration reconciliation...")
+        async with AsyncSessionLocal() as db:
+            metrics = await expire_and_purge_articles(db)
+            if metrics.get("purged_articles_total", 0) > 0:
+                logger.info(f"Startup reconciliation purged articles. Metrics: {metrics}")
+    except Exception as e:
+        logger.warning(f"Startup reconciliation failed: {e}")
 
     logger.info("Startup complete. System is healthy and accepting routes.")
 
@@ -138,6 +152,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
+        if request.url.path.startswith("/api/v1/uploads/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -182,6 +198,47 @@ async def metrics():
     """
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-# 7. Mount Versioned Router Tree
+# 7. Root Health Probes for Load Balancers / Railway
+@app.get("/health/live", tags=["System"])
+async def root_health_live():
+    """Process-level liveness probe: returns 200 immediately with NO dependency calls."""
+    return {"status": "healthy", "process": "alive", "service": "tech-news-today-backend"}
+
+@app.get("/health", tags=["System"])
+@app.get("/health/ready", tags=["System"])
+async def root_health_ready(db=Depends(get_db)):
+    """Application-level readiness probe: actively validates PostgreSQL & Redis connectivity."""
+    postgres_ok = False
+    redis_ok = False
+
+    try:
+        await db.execute(text("SELECT 1"))
+        postgres_ok = True
+    except Exception as e:
+        logger.error(f"Readiness probe: Postgres check failed: {e}")
+
+    try:
+        from app.core.redis import verify_redis_connection
+        redis_ok = await verify_redis_connection()
+    except Exception as e:
+        logger.error(f"Readiness probe: Redis check failed: {e}")
+
+    is_ready = postgres_ok and redis_ok
+    status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "healthy" if is_ready else "unhealthy",
+            "dependencies": {
+                "postgres": "connected" if postgres_ok else "unreachable",
+                "redis": "connected" if redis_ok else "unreachable",
+            },
+        },
+    )
+
+
+# 8. Mount Versioned Router Tree
 api_router.include_router(chat.router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
+

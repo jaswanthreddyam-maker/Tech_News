@@ -126,6 +126,7 @@ class ArticleProjector:
 
         stmt = insert(ArticleReadModel).values(
             id=artifact_id,
+            slug=article_data.get("slug"),
             url=article_data["url"],
             canonical_url=article_data.get("canonical_url"),
             title=article_data["title"],
@@ -155,9 +156,17 @@ class ArticleProjector:
         )
 
         # Upsert logic (DO UPDATE SET) to keep projection perfectly synced
+        # IMPORTANT: thumbnail_url and thumbnail_local use COALESCE to prevent
+        # ArticlePublished events (which fire before Celery thumbnail task finishes)
+        # from overwriting valid thumbnail data that was already persisted by
+        # a previous ArticleThumbnailUpdated projection event.
+        from sqlalchemy import func, text
+
+        articles_table = ArticleReadModel.__table__
         stmt = stmt.on_conflict_do_update(
-            index_elements=['url'], # unique constraint
+            index_elements=['id'], # primary key constraint
             set_={
+                'slug': stmt.excluded.slug,
                 'title': stmt.excluded.title,
                 'subtitle': stmt.excluded.subtitle,
                 'summary': stmt.excluded.summary,
@@ -170,8 +179,8 @@ class ArticleProjector:
                 'hash': stmt.excluded.hash,
                 'updated_at': stmt.excluded.updated_at,
                 'published_at': stmt.excluded.published_at,
-                'thumbnail_url': stmt.excluded.thumbnail_url,
-                'thumbnail_local': stmt.excluded.thumbnail_local,
+                'thumbnail_url': func.coalesce(stmt.excluded.thumbnail_url, articles_table.c.thumbnail_url),
+                'thumbnail_local': func.coalesce(stmt.excluded.thumbnail_local, articles_table.c.thumbnail_local),
                 'is_test_data': stmt.excluded.is_test_data,
                 'freshness_score': stmt.excluded.freshness_score,
                 'engagement_score': stmt.excluded.engagement_score,
@@ -201,7 +210,7 @@ class ArticleProjector:
             .values(
                 thumbnail_local=payload.get("thumbnail_local"),
                 thumbnail_url=payload.get("thumbnail_url"),
-                hash=payload.get("thumbnail_hash")
+                thumbnail_status=payload.get("status", "downloaded")
             )
         )
 

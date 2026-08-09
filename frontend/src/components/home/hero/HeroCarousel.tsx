@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { FeaturedArticle } from "./types";
 import { HeroCarouselSkeleton } from "./HeroCarouselSkeleton";
-import { HeroCarouselClient } from "./HeroCarouselClient";
+import { HeroScene } from "./v2/HeroScene";
 
 interface HeroCarouselProps {
   items: FeaturedArticle[];
@@ -29,7 +29,7 @@ export function HeroCarousel({
   }
 
   return (
-    <HeroCarouselClient
+    <HeroScene
       items={items}
       editorPicks={editorPicks}
       latest={latest}

@@ -1,8 +1,24 @@
-from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
 from app.schemas.ai_artifacts import BaseAIArtifact
+
+
+class DocumentType(str, Enum):
+    BREAKING_NEWS = "breaking_news"
+    FEATURE = "feature"
+    INTERVIEW = "interview"
+    OPINION = "opinion"
+    EDITORIAL = "editorial"
+    REVIEW = "review"
+    HOW_TO = "how_to"
+    NEWSLETTER = "newsletter"
+    ROUNDUP = "roundup"
+    LIVE_BLOG = "live_blog"
+    PRODUCT_ANNOUNCEMENT = "product_announcement"
+    RESEARCH = "research"
+    EXPLAINER = "explainer"
 
 
 class SummaryTimelineEvent(BaseModel):
@@ -35,6 +51,22 @@ class StructuredSummaryMetadata(BaseModel):
     context_version: str
 
 class StructuredSummary(BaseAIArtifact):
+    document_type: DocumentType = Field(
+        default=DocumentType.BREAKING_NEWS,
+        description="Document classification enum"
+    )
+    is_multi_topic: bool = Field(
+        default=False,
+        description="True if document contains multiple distinct topics or sections without a single >40% dominant topic."
+    )
+    primary_topics: list[str] = Field(
+        default_factory=list,
+        description="List of primary topics covered in the document"
+    )
+    dominant_topic_percentage: float = Field(
+        default=100.0,
+        description="Estimated percentage (0-100) of the document dedicated to the top primary topic."
+    )
     headline: str
     executive_summary: str
     key_takeaways: list[SummaryTakeaway]

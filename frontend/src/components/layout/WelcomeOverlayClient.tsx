@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useReducer } from "react";
 import { m, AnimatePresence } from "framer-motion";
-
-/* ═══════════════════════════════════════════════════════════════════
- *  TYPES & CONFIGURATION
- * ═══════════════════════════════════════════════════════════════════ */
+import { OverlayParticles } from "./welcome/OverlayParticles";
+import { OverlayProgress } from "./welcome/OverlayProgress";
+import { RevealPrompt } from "./welcome/RevealPrompt";
+import { SkipHint } from "./welcome/SkipHint";
 
 interface WelcomeOverlayClientProps {
   isMounted: boolean;
@@ -13,208 +13,150 @@ interface WelcomeOverlayClientProps {
   onComplete: () => void;
 }
 
-type Stage = 0 | 1 | 2 | 3; // 0 = idle/SSR, 1-3 = animation stages
+export type OverlayState = "intro" | "stage1" | "stage2" | "stage3" | "skipping" | "finished";
 
-/** Stage timeline — each entry is [enterDelay, holdDuration] in ms from animation start */
-const TIMELINE: Record<1 | 2 | 3, number> = {
-  1: 0,
-  2: 1300,
-  3: 2800,
-};
-const AUTO_REVEAL_AT = 5500;
+type OverlayAction =
+  | { type: "SET_STAGE"; stage: OverlayState }
+  | { type: "SKIP" }
+  | { type: "FINISH" };
 
-/** Shared blur transition values */
-const BLUR_ENTER = {
-  opacity: 0,
-  filter: "blur(16px)",
-  scale: 0.97,
-  y: 12,
-};
-const BLUR_VISIBLE = {
-  opacity: 1,
-  filter: "blur(0px)",
-  scale: 1,
-  y: 0,
-};
-const BLUR_EXIT = {
-  opacity: 0,
-  filter: "blur(16px)",
-  scale: 0.97,
-  y: 8,
+function overlayReducer(state: OverlayState, action: OverlayAction): OverlayState {
+  switch (action.type) {
+    case "SET_STAGE":
+      if (state === "skipping" || state === "finished") return state;
+      return action.stage;
+    case "SKIP":
+      if (state === "finished") return state;
+      return state === "stage3" ? "finished" : "skipping";
+    case "FINISH":
+      return "finished";
+    default:
+      return state;
+  }
+}
+
+const STAGES: { state: OverlayState; delay: number }[] = [
+  { state: "stage1", delay: 0 },
+  { state: "stage2", delay: 600 },
+  { state: "stage3", delay: 1400 },
+];
+
+const AUTO_REVEAL_AT = 2500;
+
+const BLUR_VARIANTS = {
+  enter: { opacity: 0, filter: "blur(16px)", scale: 0.97, y: 12 },
+  visible: { opacity: 1, filter: "blur(0px)", scale: 1, y: 0 },
+  exit: { opacity: 0, filter: "blur(16px)", scale: 0.97, y: 8 },
 };
 
-/** Reduced-motion variants (simple fade) */
-const FADE_ENTER = { opacity: 0 };
-const FADE_VISIBLE = { opacity: 1 };
-const FADE_EXIT = { opacity: 0 };
+const FADE_VARIANTS = {
+  enter: { opacity: 0 },
+  visible: { opacity: 1 },
+  exit: { opacity: 0 },
+};
 
-/** Premium easing curves */
 const EASE_IN_OUT: [number, number, number, number] = [0.4, 0, 0.2, 1];
 const EASE_OUT: [number, number, number, number] = [0, 0, 0.2, 1];
 const PEEL_EASE: [number, number, number, number] = [0.76, 0, 0.24, 1];
 
-/** Single word config */
-const WORDS: { text: string; isBrand?: boolean }[] = [
-  { text: "Welcome" },
-  { text: "To" },
-  { text: "Tech-News Today", isBrand: true },
+const WORDS: { text: string; stage: OverlayState; isBrand?: boolean }[] = [
+  { text: "Welcome", stage: "stage1" },
+  { text: "To", stage: "stage2" },
+  { text: "Tech-News Today", stage: "stage3", isBrand: true },
 ];
-
-/* ═══════════════════════════════════════════════════════════════════
- *  CSS KEYFRAMES — injected once into <head>
- * ═══════════════════════════════════════════════════════════════════ */
-
-const CSS_KEYFRAMES = `
-  @keyframes _wo-float {
-    0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.12; }
-    50% { transform: translateY(-60px) translateX(15px) scale(1.3); opacity: 0.35; }
-  }
-  @keyframes _wo-flare {
-    0% { transform: scaleX(0.9); opacity: 0.5; }
-    100% { transform: scaleX(1.1); opacity: 0.75; }
-  }
-  @keyframes _wo-bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(5px); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .wo-particle { animation: none !important; opacity: 0.12 !important; }
-  }
-`;
-
-/* ═══════════════════════════════════════════════════════════════════
- *  PARTICLES — deterministic positions
- * ═══════════════════════════════════════════════════════════════════ */
-
-const PARTICLES = [
-  { top: "12%", left: "15%", s: 3, d: 0 },
-  { top: "45%", left: "8%", s: 5, d: 2 },
-  { top: "72%", left: "22%", s: 4, d: 1 },
-  { top: "18%", left: "82%", s: 4, d: 3 },
-  { top: "52%", left: "88%", s: 3, d: 0 },
-  { top: "28%", left: "74%", s: 5, d: 5 },
-  { top: "15%", left: "48%", s: 3, d: 3.5 },
-  { top: "64%", left: "42%", s: 4, d: 1.5 },
-  { top: "38%", left: "32%", s: 3, d: 4.5 },
-];
-
-/* ═══════════════════════════════════════════════════════════════════
- *  COMPONENT
- * ═══════════════════════════════════════════════════════════════════ */
 
 export default function WelcomeOverlayClient({
   isMounted,
   hasPlayed,
   onComplete,
 }: WelcomeOverlayClientProps) {
-  const [stage, setStage] = useState<Stage>(0);
+  const [overlayState, dispatch] = useReducer(overlayReducer, "intro");
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [isSkipping, setIsSkipping] = useState(false);
-  const [skipTriggered, setSkipTriggered] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
-  const started = useRef(false);
-  const completed = useRef(false);
+  const completedRef = useRef(false);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<Stage>(0);
 
-  useEffect(() => {
-    stageRef.current = stage;
-  }, [stage]);
+  // Synchronous state ref for event handlers
+  const stateRef = useRef(overlayState);
+  stateRef.current = overlayState;
 
-  // Detect prefers-reduced-motion
+  // Detect reduced-motion preference
   useEffect(() => {
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReducedMotion(mql.matches);
-    const handler = (e: MediaQueryListEvent) => { setReducedMotion(e.matches); };
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
     mql.addEventListener("change", handler);
-    return () => { mql.removeEventListener("change", handler); };
+    return () => mql.removeEventListener("change", handler);
   }, []);
-
-  // Inject keyframes
-  useEffect(() => {
-    const el = document.createElement("style");
-    el.textContent = CSS_KEYFRAMES;
-    document.head.appendChild(el);
-    return () => { document.head.removeChild(el); };
-  }, []);
-
-  // Lock scroll during animation
-  useEffect(() => {
-    if (stage > 0 && !completed.current) {
-      document.body.style.overflow = "hidden";
-      window.scrollTo(0, 0);
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [stage]);
-
-  // Focus the overlay on mount for accessibility
-  useEffect(() => {
-    if (isMounted && hasPlayed === false && overlayRef.current) {
-      overlayRef.current.focus();
-    }
-  }, [isMounted, hasPlayed]);
 
   const doComplete = useCallback(() => {
-    if (completed.current) return;
-    completed.current = true;
-    document.body.style.overflow = "";
-    setIsVisible(false);
-  }, []);
+    if (completedRef.current) return;
+    completedRef.current = true;
+    if (typeof document !== "undefined") {
+      document.body.style.overflow = "";
+    }
+    try {
+      sessionStorage.setItem("welcome-played", "1");
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("welcome-overlay-complete"));
+    }
+    dispatch({ type: "FINISH" });
+    onComplete();
+  }, [onComplete]);
 
-  // State machine — deterministic single-timeline
+  const handleSkip = useCallback(
+    (e?: Event) => {
+      if (completedRef.current) return;
+
+      if (e instanceof KeyboardEvent && (e.key === " " || e.key === "Enter")) {
+        e.preventDefault();
+      }
+
+      dispatch({ type: "SKIP" });
+      doComplete();
+    },
+    [doComplete]
+  );
+
+  const doCompleteRef = useRef(doComplete);
+  useEffect(() => {
+    doCompleteRef.current = doComplete;
+  }, [doComplete]);
+
+  // Timeline & Scroll lock effect
   useEffect(() => {
     if (!isMounted || hasPlayed === true) return;
-    if (started.current) return;
-    started.current = true;
 
-    // If reduced motion, skip straight to reveal after brief pause
+    document.body.style.overflow = "hidden";
+    window.scrollTo(0, 0);
+
     if (reducedMotion) {
-      setStage(3);
-      const t = setTimeout(doComplete, 1500);
-      return () => { clearTimeout(t); };
+      dispatch({ type: "SET_STAGE", stage: "stage3" });
+      const t = setTimeout(() => doCompleteRef.current(), 800);
+      return () => {
+        clearTimeout(t);
+        document.body.style.overflow = "";
+      };
     }
 
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    for (const [key, delay] of Object.entries(TIMELINE)) {
-      timers.push(setTimeout(() => { setStage(Number(key) as Stage); }, delay));
-    }
-    timers.push(setTimeout(doComplete, AUTO_REVEAL_AT));
+    const timers = STAGES.map(({ state, delay }) =>
+      setTimeout(() => dispatch({ type: "SET_STAGE", stage: state }), delay)
+    );
+    timers.push(setTimeout(() => doCompleteRef.current(), AUTO_REVEAL_AT));
 
-    return () => { timers.forEach(clearTimeout); };
-  }, [isMounted, hasPlayed, reducedMotion, doComplete]);
+    return () => {
+      timers.forEach(clearTimeout);
+      document.body.style.overflow = "";
+    };
+  }, [isMounted, hasPlayed, reducedMotion]);
 
-  // Skip handler
-  const handleSkip = useCallback((e?: Event) => {
-    if (completed.current) return;
-
-    if (e && e.type === "keydown") {
-      const keyEvent = e as KeyboardEvent;
-      if (keyEvent.key === " " || keyEvent.key === "Enter") {
-        keyEvent.preventDefault();
-      }
-    }
-
-    // Skip with fade-out (200-300ms) only if interacting during the animation
-    const shouldFade = stageRef.current < 3;
-    setIsSkipping(shouldFade);
-    setSkipTriggered(true);
-  }, []);
-
+  // Global skip listener
   useEffect(() => {
-    if (skipTriggered) {
-      doComplete();
-    }
-  }, [skipTriggered, doComplete]);
+    if (!isMounted || hasPlayed === true || completedRef.current) return;
 
-  // Listen to skip interactions globally
-  useEffect(() => {
-    if (!isMounted || hasPlayed === true || completed.current) return;
-
-    const handleGlobalInteraction = (e: Event) => {
-      // Only left click triggers skip
-      if (e.type === "mousedown" || e.type === "pointerdown") {
-        const mouseEvent = e as MouseEvent;
-        if (mouseEvent.button !== 0) return;
+    const handleInteraction = (e: Event) => {
+      if (e instanceof MouseEvent || e instanceof PointerEvent) {
+        if (e.button !== 0) return;
       }
       handleSkip(e);
     };
@@ -225,30 +167,47 @@ export default function WelcomeOverlayClient({
       }
     };
 
-    window.addEventListener("mousedown", handleGlobalInteraction, { capture: true });
-    window.addEventListener("touchstart", handleGlobalInteraction, { capture: true, passive: true });
-    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    const events: [string, EventListener, boolean?][] = [
+      ["mousedown", handleInteraction as EventListener, true],
+      ["touchstart", handleInteraction as EventListener, true],
+      ["keydown", handleKeyDown as EventListener, true],
+    ];
+
+    events.forEach(([type, fn, capture]) =>
+      window.addEventListener(type, fn, { capture, passive: type === "touchstart" })
+    );
 
     return () => {
-      window.removeEventListener("mousedown", handleGlobalInteraction, { capture: true });
-      window.removeEventListener("touchstart", handleGlobalInteraction, { capture: true });
-      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+      events.forEach(([type, fn, capture]) =>
+        window.removeEventListener(type, fn, { capture })
+      );
     };
   }, [isMounted, hasPlayed, handleSkip]);
 
-  const handleClick = () => {
-    if (stage === 3) doComplete();
-  };
+  // Focus trap accessibility
+  useEffect(() => {
+    if (isMounted && hasPlayed === false && overlayRef.current) {
+      overlayRef.current.focus();
+    }
+  }, [isMounted, hasPlayed]);
 
-  /* ─── Animation variants ─── */
-  const enterAnim = reducedMotion ? FADE_ENTER : BLUR_ENTER;
-  const visibleAnim = reducedMotion ? FADE_VISIBLE : BLUR_VISIBLE;
-  const exitAnim = reducedMotion ? FADE_EXIT : BLUR_EXIT;
-  const wordDuration = reducedMotion ? 0.3 : 0.5;
-
-  /* ─── SSR / pre-mount: render static Step 1 frame ─── */
   const isSSR = !isMounted || hasPlayed === null;
-  const activeStage: Stage = isSSR ? 1 : stage === 0 ? 1 : stage;
+  const isVisible = overlayState !== "finished";
+  const isSkipping = overlayState === "skipping";
+  const activeStage = isSSR || overlayState === "intro" ? "stage1" : overlayState;
+
+  const stageNumberMap: Record<OverlayState, number> = {
+    intro: 1,
+    stage1: 1,
+    stage2: 2,
+    stage3: 3,
+    skipping: 1,
+    finished: 3,
+  };
+  const activeStageNumber = stageNumberMap[activeStage];
+
+  const variants = reducedMotion ? FADE_VARIANTS : BLUR_VARIANTS;
+  const wordDuration = reducedMotion ? 0.25 : 0.35;
 
   return (
     <AnimatePresence onExitComplete={onComplete}>
@@ -262,7 +221,7 @@ export default function WelcomeOverlayClient({
             duration: isSkipping ? 0.25 : 1.0,
             ease: isSkipping ? "easeOut" : PEEL_EASE,
           }}
-          onClick={handleClick}
+          onClick={() => activeStage === "stage3" && doComplete()}
           tabIndex={-1}
           role="dialog"
           aria-modal="true"
@@ -280,206 +239,90 @@ export default function WelcomeOverlayClient({
             overflow: "hidden",
             fontFamily: "Georgia, 'Times New Roman', serif",
             userSelect: "none",
-            cursor: activeStage === 3 ? "pointer" : "default",
+            cursor: activeStage === "stage3" ? "pointer" : "default",
             willChange: "transform, opacity",
           }}
         >
-      {/* ─── Ambient Particles ─── */}
-      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-        {PARTICLES.map((p, i) => (
+          <OverlayParticles />
+
+          {/* Center Stage Word Display */}
           <div
-            key={i}
-            className="wo-particle"
             style={{
-              position: "absolute",
-              top: p.top,
-              left: p.left,
-              width: `${p.s}px`,
-              height: `${p.s}px`,
-              backgroundColor: "var(--muted)",
-              borderRadius: "50%",
-              opacity: 0.12,
-              filter: "blur(1px)",
-              animation: `_wo-float ${10 + i * 0.7}s ease-in-out ${p.d}s infinite`,
-              willChange: "transform, opacity",
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "140px",
+              width: "100%",
             }}
-          />
-        ))}
-      </div>
-
-      {/* ─── Center Stage: Word Display ─── */}
-      <div
-        style={{
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "140px",
-          width: "100%",
-        }}
-      >
-        <AnimatePresence mode="wait">
-          {WORDS.map((word, i) => {
-            const wordStage = (i + 1) as Stage;
-            if (activeStage !== wordStage) return null;
-
-            return (
-              <m.div
-                key={`word-${wordStage}`}
-                initial={isSSR ? { opacity: 1 } : enterAnim}
-                animate={visibleAnim}
-                exit={exitAnim}
-                transition={{
-                  duration: wordDuration,
-                  ease: EASE_IN_OUT,
-                }}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  willChange: "transform, opacity, filter",
-                }}
-              >
-                <h1
-                  style={{
-                    fontSize: word.isBrand
-                      ? "clamp(3rem, 7.5vw, 5rem)"
-                      : "clamp(2.5rem, 6vw, 4.2rem)",
-                    fontWeight: word.isBrand ? 700 : 500,
-                    letterSpacing: word.isBrand ? "-0.02em" : "0.02em",
-                    margin: 0,
-                    color: "var(--foreground)",
-                    textShadow: "0 0 40px color-mix(in srgb, var(--accent) 20%, transparent)",
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {word.text}
-                </h1>
-
-                {/* Subtle accent glow line — visible on stages 1, 3 */}
-                {(wordStage === 1 || wordStage === 3) && (
-                  <m.div
-                    initial={{ opacity: 0, scaleX: 0.5 }}
-                    animate={{ opacity: 0.6, scaleX: 1 }}
-                    transition={{ duration: 1.2, ease: EASE_OUT, delay: 0.3 }}
-                    style={{
-                      marginTop: "20px",
-                      width: "180px",
-                      height: "1.5px",
-                      background:
-                        "radial-gradient(circle, var(--accent) 0%, color-mix(in srgb, var(--accent) 40%, transparent) 40%, transparent 75%)",
-                      boxShadow: "0 0 16px 3px color-mix(in srgb, var(--accent) 25%, transparent)",
-                      animation: "_wo-flare 3s ease-in-out infinite alternate",
-                      willChange: "transform, opacity",
-                    }}
-                  />
-                )}
-              </m.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-
-      {/* ─── Reveal Prompt (Stage 3 only) ─── */}
-      {activeStage === 3 && !isSSR && (
-        <m.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: EASE_OUT, delay: 1.0 }}
-          style={{
-            position: "absolute",
-            bottom: "15%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "6px",
-            fontFamily: "var(--font-sans, system-ui, sans-serif)",
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            color: "var(--muted)",
-            animation: "_wo-bounce 2s ease-in-out infinite",
-            cursor: "pointer",
-            willChange: "transform",
-          }}
-        >
-          <span>Reveal Homepage</span>
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ opacity: 0.7 }}
           >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <polyline points="19 12 12 19 5 12" />
-          </svg>
-        </m.div>
-      )}
+            <AnimatePresence>
+              {WORDS.map((word) => {
+                if (activeStage !== word.stage) return null;
 
-      {/* ─── Skip Hint (Visible during stages 1-2) ─── */}
-      {!reducedMotion && !isSSR && stage < 3 && (
-        <m.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.55 }}
-          transition={{ delay: 0.5, duration: 0.4, ease: "easeOut" }}
-          style={{
-            position: "absolute",
-            bottom: "4%",
-            fontFamily: "var(--font-sans, system-ui, sans-serif)",
-            fontSize: "0.75rem",
-            fontWeight: 400,
-            letterSpacing: "0.05em",
-            color: "var(--muted)",
-            pointerEvents: "none",
-            willChange: "opacity",
-          }}
-        >
-          Click anywhere to skip
-        </m.div>
-      )}
+                return (
+                  <m.div
+                    key={`word-${word.stage}`}
+                    initial={isSSR ? { opacity: 1 } : variants.enter}
+                    animate={variants.visible}
+                    exit={variants.exit}
+                    transition={{ duration: wordDuration, ease: EASE_IN_OUT }}
+                    style={{
+                      position: "absolute",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      willChange: "transform, opacity, filter",
+                    }}
+                  >
+                    <h1
+                      style={{
+                        fontSize: word.isBrand
+                          ? "clamp(3rem, 7.5vw, 5rem)"
+                          : "clamp(2.5rem, 6vw, 4.2rem)",
+                        fontWeight: word.isBrand ? 700 : 500,
+                        letterSpacing: word.isBrand ? "-0.02em" : "0.02em",
+                        margin: 0,
+                        color: "var(--foreground)",
+                        textShadow:
+                          "0 0 40px color-mix(in srgb, var(--accent) 20%, transparent)",
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {word.text}
+                    </h1>
 
-      {/* ─── Progress Indicators ─── */}
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          position: "absolute",
-          bottom: "7%",
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 10,
-        }}
-      >
-        {[1, 2, 3].map((i) => {
-          const isActive = activeStage >= i;
-          const isCurrent = activeStage === i;
-          return (
-            <div
-              key={i}
-              style={{
-                width: "28px",
-                height: "2px",
-                backgroundColor: isActive
-                  ? "var(--foreground)"
-                  : "color-mix(in srgb, var(--foreground) 15%, transparent)",
-                opacity: isCurrent ? 1 : isActive ? 0.5 : 0.3,
-                transition: "all 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-                boxShadow: isCurrent
-                  ? "0 0 8px 1px color-mix(in srgb, var(--accent) 35%, transparent)"
-                  : "none",
-              }}
-            />
-          );
-        })}
-        </div>
-      </m.div>
+                    {(word.stage === "stage1" || word.stage === "stage3") && (
+                      <m.div
+                        initial={{ opacity: 0, scaleX: 0.5 }}
+                        animate={{ opacity: 0.6, scaleX: 1 }}
+                        transition={{ duration: 1.2, ease: EASE_OUT, delay: 0.3 }}
+                        style={{
+                          marginTop: "20px",
+                          width: "180px",
+                          height: "1.5px",
+                          background:
+                            "radial-gradient(circle, var(--accent) 0%, color-mix(in srgb, var(--accent) 40%, transparent) 40%, transparent 75%)",
+                          boxShadow:
+                            "0 0 16px 3px color-mix(in srgb, var(--accent) 25%, transparent)",
+                          animation: "_wo-flare 3s ease-in-out infinite alternate",
+                          willChange: "transform, opacity",
+                        }}
+                      />
+                    )}
+                  </m.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+
+          {activeStage === "stage3" && !isSSR && <RevealPrompt />}
+
+          {!reducedMotion && !isSSR && activeStage !== "stage3" && <SkipHint />}
+
+          <OverlayProgress activeStageNumber={activeStageNumber} />
+        </m.div>
       )}
     </AnimatePresence>
   );

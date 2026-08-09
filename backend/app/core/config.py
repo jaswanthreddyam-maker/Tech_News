@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     APP_ENV: str = ""
     EDITORIAL_WINDOW_HOURS: int = 24
     MAX_ARTICLES_PER_CATEGORY: int = 3
+    MAX_ENTRIES_PER_SOURCE_PER_CYCLE: int = 25
     FRESHNESS_DECAY_MODEL: str = "curved"  # "linear" or "curved"
     MAX_HOMEPAGE_ARTICLES: int = 30
     MINIMUM_EFFECTIVE_SCORE: float = 20.0
@@ -108,47 +109,54 @@ class Settings(BaseSettings):
     UPLOAD_PUBLIC_PREFIX: str = "/api/v1/uploads"
 
     # Configurable Ranking Engine Mappings
+    # Phase 2: Entity relevance weights capped at +15 max to prevent single-entity feed domination.
+    # These are additive bonuses for entity/company mentions in article text.
+    # Max contribution to impact score: 15 points (15% of 0-100 range).
     RANKING_COMPANY_WEIGHTS: dict = {
-        "openai": 30.0,
-        "nvidia": 30.0,
-        "google": 25.0,
-        "microsoft": 25.0,
-        "anthropic": 25.0,
-        "apple": 20.0,
-        "meta": 20.0,
-        "amazon": 15.0,
+        "openai": 15.0,
+        "nvidia": 15.0,
+        "google": 12.0,
+        "microsoft": 12.0,
+        "anthropic": 12.0,
+        "apple": 10.0,
+        "meta": 10.0,
+        "amazon": 8.0,
     }
+    # Phase 2: Tech keyword weights capped at +15 max.
+    # High-impact events (model releases, breaches) get the full 15.
+    # Lower-impact keywords get proportionally reduced values.
     RANKING_TECH_KEYWORDS: dict = {
-        "gpt-6": 35.0,
-        "gpt-5": 30.0,
-        "claude 4": 30.0,
-        "llama 4": 30.0,
-        "gemini 2": 25.0,
-        "model release": 25.0,
-        "breach": 25.0,
-        "data leak": 25.0,
-        "cybersecurity": 20.0,
-        "hack": 20.0,
-        "exploit": 20.0,
-        "leak": 15.0,
-        "space launch": 20.0,
-        "spacex": 20.0,
-        "orbit": 15.0,
-        "acquisition": 25.0,
-        "acquire": 25.0,
-        "merger": 25.0,
-        "buyout": 25.0,
-        "regulatory": 20.0,
-        "regulation": 20.0,
-        "antitrust": 20.0,
-        "lawsuit": 15.0,
+        "gpt-6": 15.0,
+        "gpt-5": 15.0,
+        "claude 4": 15.0,
+        "llama 4": 15.0,
+        "gemini 2": 12.0,
+        "model release": 12.0,
+        "breach": 15.0,
+        "data leak": 15.0,
+        "cybersecurity": 10.0,
+        "hack": 10.0,
+        "exploit": 10.0,
+        "leak": 8.0,
+        "space launch": 10.0,
+        "spacex": 10.0,
+        "orbit": 8.0,
+        "acquisition": 12.0,
+        "acquire": 12.0,
+        "merger": 12.0,
+        "buyout": 12.0,
+        "regulatory": 10.0,
+        "regulation": 10.0,
+        "antitrust": 10.0,
+        "lawsuit": 8.0,
     }
     RANKING_REDUCTIONS: dict = {
-        "minor update": -15.0,
-        "product update": -10.0,
-        "funding round": -10.0,
-        "blog post": -15.0,
+        "minor update": -10.0,
+        "product update": -8.0,
+        "funding round": -8.0,
+        "blog post": -10.0,
     }
+
 
     # Embedding Settings
     EMBEDDING_PROVIDER: str = "openai"
@@ -170,6 +178,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Editorial & Homepage Settings
+    MAX_HOMEPAGE_ARTICLES: int = 10
+    MAX_ARTICLES_PER_CATEGORY: int = 3
 
     # Initial Admin Provisioning
     INITIAL_ADMIN_EMAIL: str = ""

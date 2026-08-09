@@ -29,8 +29,8 @@ class RetrievalEngine:
         logger.info(f"Retrieving context for query: '{query}'")
 
         if article_id:
-            # If constrained to an article, fetch that article first
-            stmt = select(ArticleReadModel).where(ArticleReadModel.id == article_id)
+            target_id = str(article_id)
+            stmt = select(ArticleReadModel).where(ArticleReadModel.id == target_id)
             res = await db.execute(stmt)
             target_article = res.scalars().first()
 

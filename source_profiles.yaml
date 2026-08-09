@@ -1,0 +1,136 @@
+# Top 10 Tech Publisher Extraction Profiles (Versioned)
+_default:
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 1
+  selectors:
+    - "article"
+    - "main"
+    - '[itemprop="articleBody"]'
+    - ".article-body"
+    - ".post-content"
+    - ".entry-content"
+  exclude:
+    - ".ad"
+    - ".social-share"
+    - ".related-posts"
+    - ".comments"
+    - "#newsletter"
+
+the_verge:
+  name: "The Verge"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 10
+  selectors:
+    - ".duet-exact-article-body"
+    - ".c-entry-content"
+    - "article"
+  exclude:
+    - ".c-entry-hero"
+    - ".c-byline"
+    - ".c-compact-river"
+
+techcrunch:
+  name: "TechCrunch"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 10
+  selectors:
+    - ".article-content"
+    - ".entry-content"
+    - "article"
+  exclude:
+    - ".article-sidebar"
+    - ".embed-newsletter"
+
+ars_technica:
+  name: "Ars Technica"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 10
+  selectors:
+    - ".article-content"
+    - 'section[itemprop="articleBody"]'
+  exclude:
+    - ".article-author"
+    - ".social-left"
+
+wired:
+  name: "Wired"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 10
+  selectors:
+    - ".body__inner-container"
+    - ".article__body"
+  exclude:
+    - ".recirc-list"
+    - ".content-header"
+
+android_authority:
+  name: "Android Authority"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 8
+  selectors:
+    - ".entry-content"
+    - "#article-body"
+  exclude:
+    - ".related-box"
+    - ".author-card"
+
+9to5google:
+  name: "9to5Google"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 8
+  selectors:
+    - ".single-post-content"
+    - ".post-body"
+  exclude:
+    - ".post-meta"
+    - ".recirc-unit"
+
+toms_hardware:
+  name: "Tom's Hardware"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 8
+  selectors:
+    - "#article-body"
+    - ".content-wrapper"
+  exclude:
+    - ".hawk-widget"
+    - ".jwplayer"
+
+anandtech:
+  name: "AnandTech"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 8
+  selectors:
+    - ".article-content"
+  exclude:
+    - ".article-nav"
+
+engadget:
+  name: "Engadget"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 8
+  selectors:
+    - ".caas-body"
+    - ".article-text"
+  exclude:
+    - ".caas-share-buttons"
+
+windows_central:
+  name: "Windows Central"
+  version: "1.0.0"
+  last_updated: "2026-08-07"
+  priority: 8
+  selectors:
+    - "#article-body"
+  exclude:
+    - ".hawk-widget"

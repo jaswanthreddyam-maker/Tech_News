@@ -215,6 +215,13 @@ def evaluate_adaptive_quality(title: str, content: str, raw_html: str, meta_dict
     Deep adaptive content quality pipeline and extraction confidence analyzer.
     Returns scoring, confidence rating (0-100) and eligibility status.
     """
+    is_trusted_fallback = False
+    is_trusted = meta_dict.get("source_category") in ("official", "editorial")
+    is_rss_fallback = meta_dict.get("rss_fallback", False)
+    allow_rss_fallback = meta_dict.get("allow_rss_fallback", False)
+    
+    is_trusted_fallback = is_rss_fallback and is_trusted and allow_rss_fallback
+
     # 1. Base validation
     if not content or not title:
         return {"eligible": False, "confidence": 0.0, "reason": "Empty title or body content."}
@@ -223,13 +230,13 @@ def evaluate_adaptive_quality(title: str, content: str, raw_html: str, meta_dict
     total_words = len(words)
     if total_words < 80:
         # Legitimate short flashes (minimum 25 words) from official or editorial sources
-        is_trusted = meta_dict.get("source_category") in ("official", "editorial")
-        if not is_trusted or total_words < 25:
-            return {
-                "eligible": False,
-                "confidence": 0.0,
-                "reason": f"Insufficient content length ({total_words} words).",
-            }
+        if not is_trusted_fallback:
+            if not is_trusted or total_words < 25:
+                return {
+                    "eligible": False,
+                    "confidence": 0.0,
+                    "reason": f"Insufficient content length ({total_words} words).",
+                }
 
     # 2. Unique Token Ratio (Spam/Repeating markup detection)
     unique_words = len(set(words))
@@ -271,12 +278,13 @@ def evaluate_adaptive_quality(title: str, content: str, raw_html: str, meta_dict
             "confidence": 0.0,
             "reason": f"Extremely low unique token ratio ({unique_ratio:.2f}) - likely spam/boilerplate.",
         }
-    if truncated and total_words < 120:
-        return {
-            "eligible": False,
-            "confidence": 0.0,
-            "reason": f"Truncated snippet or paywall feed detected: {truncation_reason}.",
-        }
+    if not is_trusted_fallback:
+        if truncated and total_words < 120:
+            return {
+                "eligible": False,
+                "confidence": 0.0,
+                "reason": f"Truncated snippet or paywall feed detected: {truncation_reason}.",
+            }
 
     # 6. Extraction Confidence Score (0.0 to 1.0 Normalized)
     # parsing score: 1.0 if successfully parsed, 0.5 if fallback used
@@ -310,6 +318,7 @@ def evaluate_adaptive_quality(title: str, content: str, raw_html: str, meta_dict
         "paragraph_count": paragraph_count,
         "unique_ratio": round(unique_ratio, 2),
         "markup_ratio": round(markup_ratio, 3),
+        "is_degraded": is_trusted_fallback
     }
 
 

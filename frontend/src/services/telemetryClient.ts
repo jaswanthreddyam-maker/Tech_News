@@ -114,9 +114,9 @@ export class SSETransport implements TelemetryTransport {
       }
     });
 
-    this.eventSource.onerror = (err) => {
-
-      this.callbacks.onError(err);
+    this.eventSource.onerror = (err: any) => {
+      const message = typeof err === "string" ? err : (err?.message || "Telemetry event stream disconnected.");
+      this.callbacks.onError(message);
     };
 
     if (this.eventSource.onopen) {

@@ -5,7 +5,7 @@ const API_BASE_URL = process.env.INTERNAL_API_URL || (process.env.API_PROXY_TARG
 
 export class ServerTransport implements ApiTransport {
   async fetch(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-    const { params, headers, timeoutMs = 15000, tags, revalidate, ...restOptions } = options;
+    const { params, headers, timeoutMs = 3000, tags, revalidate, ...restOptions } = options;
     
     let url = `${API_BASE_URL}${endpoint}`;
     if (params) {

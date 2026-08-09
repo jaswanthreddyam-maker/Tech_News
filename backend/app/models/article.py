@@ -115,8 +115,10 @@ class ProcessedArticle(Base):
     hero_image: Mapped[str] = mapped_column(String, nullable=True)
     source_name: Mapped[str] = mapped_column(String(150), default="System")
     source_url: Mapped[str] = mapped_column(String, nullable=True)
-    clean_html: Mapped[str] = mapped_column(Text, nullable=True)
-    tags: Mapped[str] = mapped_column(Text, nullable=True)
+    document_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    is_multi_topic: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    primary_topics: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    dominant_topic_percentage: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     sentiment: Mapped[str] = mapped_column(String(20), nullable=True)
     ai_confidence: Mapped[float] = mapped_column(Numeric, default=95.0)
     reading_time: Mapped[int] = mapped_column(Integer, default=3)
@@ -143,11 +145,13 @@ class ProcessedArticle(Base):
     thumbnail_type: Mapped[str] = mapped_column(String(50), default="REAL_IMAGE", server_default="REAL_IMAGE")
     thumbnail_generation_reason: Mapped[str] = mapped_column(String(100), nullable=True)
     thumbnail_generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    thumbnail_retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+    thumbnail_last_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     scheduled_by: Mapped[str] = mapped_column(String(150), nullable=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False) # Deprecated, use publication_status
     freshness_score: Mapped[float] = mapped_column(Numeric, default=0.0)
     engagement_score: Mapped[float] = mapped_column(Numeric, default=0.0)
@@ -157,8 +161,11 @@ class ProcessedArticle(Base):
     enrichment_status: Mapped[str] = mapped_column(String(50), default="pending", server_default="pending")
     completed_enrichment_stages: Mapped[list] = mapped_column(JSON, default=list, server_default='[]')
 
-
     embedding_status: Mapped[str] = mapped_column(String(50), default="pending", index=True)
+    
+    __table_args__ = (
+        Index("idx_processed_articles_status_expires", "publication_status", "expires_at"),
+    )
     embedding = mapped_column(Vector(settings.EMBEDDING_DIMENSIONS), nullable=True)
     embedding_hash: Mapped[str] = mapped_column(String(64), nullable=True)
     embedding_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -200,6 +207,7 @@ class ArticleReadModel(Base):
     __tablename__ = "articles"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)  # Links to ArticleArtifact ID
+    slug: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     story_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     url: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     canonical_url: Mapped[str] = mapped_column(String, nullable=True)
@@ -227,12 +235,17 @@ class ArticleReadModel(Base):
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     thumbnail_url: Mapped[str] = mapped_column(String, nullable=True)
     thumbnail_local: Mapped[str] = mapped_column(String, nullable=True)
+    thumbnail_status: Mapped[str] = mapped_column(String(50), default="pending", server_default="pending")
     thumbnail_type: Mapped[str] = mapped_column(String(50), default="REAL_IMAGE", server_default="REAL_IMAGE")
     projected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     freshness_score: Mapped[float] = mapped_column(Numeric, default=0.0)
     engagement_score: Mapped[float] = mapped_column(Numeric, default=0.0)
     final_score: Mapped[float] = mapped_column(Numeric, default=0.0)
     category: Mapped[str] = mapped_column(String(100), nullable=True)
+    document_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    is_multi_topic: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    primary_topics: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    dominant_topic_percentage: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     published_status: Mapped[str] = mapped_column(String(50), nullable=True)
     is_test_data: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
 

@@ -1,5 +1,9 @@
 import React from "react";
+import { m, useReducedMotion } from "framer-motion";
 import { Container } from "@/components/layout/Container";
+import { useNavigationType } from "@/hooks/useNavigationType";
+import { DURATION, EASING, REVEAL_DELAYS } from "@/design-system/motion/tokens";
+
 
 interface ArticleLayoutProps {
   header: React.ReactNode;
@@ -34,6 +38,22 @@ export function ArticleLayout({
   navigation,
   focusMode,
 }: ArticleLayoutProps) {
+  const shouldReduceMotion = useReducedMotion();
+  const { isColdLoad } = useNavigationType();
+
+  const sidebarVariants = {
+    hidden: { opacity: 0, x: 30 },
+    visible: {
+      opacity: 1,
+      x: 0,
+      transition: {
+        duration: DURATION.normal,
+        ease: EASING.standard as any,
+        delay: REVEAL_DELAYS.sidebar,
+      },
+    },
+  };
+
   // Focus Mode layout: strips away sidebars, floats, and secondary widgets
   if (focusMode) {
     return (
@@ -73,7 +93,7 @@ export function ArticleLayout({
           {/* Header */}
           <div className="mb-8">{header}</div>
 
-          {/* Hero Image */}
+          {/* Hero Image — revealed before title in stagger order */}
           {heroImageNode && <div className="mb-10">{heroImageNode}</div>}
 
           {/* AI Summary (Executive Brief) */}
@@ -89,27 +109,27 @@ export function ArticleLayout({
           {timeline && <div className="mb-16">{timeline}</div>}
 
           {/* AI Conversational Search - Below Article */}
-          <div className="mb-16">{askAI}</div>
+          <div className="mb-12">{askAI}</div>
 
-          {/* Related Coverage - Below Ask AI on Mobile/Tablet */}
-          <div className="xl:hidden mb-16">{related}</div>
+          {/* Explore Related Topics & Related Stories - Below Content (All Viewports) */}
+          <div className="mb-12">{related}</div>
 
-          {/* Source Credibility - Bottom on Mobile/Tablet */}
-          <div className="xl:hidden">{sourceCredibility}</div>
-
-          {/* Footer Navigation */}
+          {/* Footer Navigation / Continue Reading */}
           {navigation && <div className="mt-12">{navigation}</div>}
         </div>
 
-        {/* Right Sidebar (Desktop only for these elements) */}
-        <aside className="hidden xl:block w-[350px] shrink-0 space-y-8">
-          <div className="sticky top-24 space-y-8">
+        {/* Right Sticky Sidebar — Article Navigation & Relationships ONLY */}
+        <m.aside
+          initial={isColdLoad && !shouldReduceMotion ? "hidden" : false}
+          animate="visible"
+          variants={isColdLoad && !shouldReduceMotion ? sidebarVariants : {}}
+          className="hidden xl:block w-[320px] shrink-0"
+        >
+          <div className="sticky top-24 flex flex-col gap-6">
             {sourceCredibility}
-            {knowledgePanel}
             {toc}
-            {related}
           </div>
-        </aside>
+        </m.aside>
 
         {/* Tablet Accordion TOC (Hidden on Desktop) */}
         <div className="xl:hidden w-full max-w-[var(--reader-max-width,72ch)] mx-auto mb-8">{toc}</div>

@@ -18,6 +18,7 @@ from app.models.tnt_knowledge import (
     TimelineEventNode,
     TopicNode,
 )
+import app.models.editorial
 from app.models.workspace import WorkspaceArticle, WorkspaceNote
 
 logger = logging.getLogger("tech_news.ai.chat.retrieval_strategy")
@@ -46,38 +47,43 @@ class ArticleRetrievalStrategy(BaseRetrievalStrategy):
     """Retrieves context specifically locked to a given article ID, and includes its knowledge graph."""
 
     async def retrieve(self, query: str, db: AsyncSession, **kwargs) -> list[dict[str, Any]]:
-        article_id = kwargs.get("article_id")
-        if not article_id:
+        raw_id = kwargs.get("article_id")
+        if not raw_id:
             logger.warning("ArticleRetrievalStrategy called without article_id, falling back to general.")
             return await self.engine.retrieve(query=query, db=db, limit=10)
+
+        article_id = str(raw_id)
 
         # 1. Fetch the main article
         articles = await self.engine.retrieve(query=query, db=db, limit=1, article_id=article_id)
         if not articles:
-            return []
+            # Fall back to general semantic search if target article is not found by ID
+            return await self.engine.retrieve(query=query, db=db, limit=10)
 
-        output = []
-        output.extend(articles)
+        output = list(articles)
 
-        # 2. Fetch entities
-        stmt_ent = select(EntityNode).join(ArticleEntityLink).where(ArticleEntityLink.article_id == article_id)
-        for ent in (await db.execute(stmt_ent)).scalars().all():
-            output.append({"type": "entity", "id": ent.id, "title": ent.canonical_name, "description": ent.description})
+        try:
+            # 2. Fetch entities
+            stmt_ent = select(EntityNode).join(ArticleEntityLink).where(ArticleEntityLink.article_id == article_id)
+            for ent in (await db.execute(stmt_ent)).scalars().all():
+                output.append({"type": "entity", "id": ent.id, "title": ent.canonical_name, "description": ent.description})
 
-        # 3. Fetch topics
-        stmt_top = select(TopicNode).join(ArticleTopicLink).where(ArticleTopicLink.article_id == article_id)
-        for top in (await db.execute(stmt_top)).scalars().all():
-            output.append({"type": "topic", "id": top.name, "title": top.name, "description": f"Category: {top.taxonomy_category}"})
+            # 3. Fetch topics
+            stmt_top = select(TopicNode).join(ArticleTopicLink).where(ArticleTopicLink.article_id == article_id)
+            for top in (await db.execute(stmt_top)).scalars().all():
+                output.append({"type": "topic", "id": top.name, "title": top.name, "description": f"Category: {top.taxonomy_category}"})
 
-        # 4. Fetch timeline events
-        stmt_time = select(TimelineEventNode).where(TimelineEventNode.article_id == article_id)
-        for evt in (await db.execute(stmt_time)).scalars().all():
-            output.append({"type": "timeline_event", "id": evt.id, "title": f"{evt.date} - {evt.event_type}", "description": evt.description})
+            # 4. Fetch timeline events
+            stmt_time = select(TimelineEventNode).where(TimelineEventNode.article_id == article_id)
+            for evt in (await db.execute(stmt_time)).scalars().all():
+                output.append({"type": "timeline_event", "id": evt.id, "title": f"{evt.date} - {evt.event_type}", "description": evt.description})
 
-        # 5. Fetch relationships
-        stmt_rel = select(RelationshipEdge).where(RelationshipEdge.article_id == article_id)
-        for rel in (await db.execute(stmt_rel)).scalars().all():
-            output.append({"type": "relationship", "id": rel.id, "title": f"{rel.source_id} {rel.predicate} {rel.target_id}", "description": ""})
+            # 5. Fetch relationships
+            stmt_rel = select(RelationshipEdge).where(RelationshipEdge.article_id == article_id)
+            for rel in (await db.execute(stmt_rel)).scalars().all():
+                output.append({"type": "relationship", "id": rel.id, "title": f"{rel.source_id} {rel.predicate} {rel.target_id}", "description": ""})
+        except Exception as e:
+            logger.warning(f"Knowledge graph retrieval error for article {article_id}: {e}")
 
         return output
 

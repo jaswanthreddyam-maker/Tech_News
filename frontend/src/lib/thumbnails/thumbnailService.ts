@@ -2,6 +2,7 @@ interface ArticleThumbnailData {
   thumbnail_local?: string | null;
   thumbnail_url?: string | null;
   image_url?: string | null;
+  thumbnail_status?: string | null;
   category?: string;
   thumbnail_source?: string;
 }
@@ -22,20 +23,28 @@ const GENERIC_BLUR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQA
 export const thumbnailService = {
   getPublicImageUrl(article: ArticleThumbnailData | null | undefined): string | null {
     if (!article) return null;
-    
-    // 1. Primary remote URL (API provided or absolute HTTP URL)
-    if (article.thumbnail_url) return article.thumbnail_url;
-    if (article.image_url) return article.image_url;
-    
-    // 2. Convert internal backend paths to Next.js API proxy routes
-    if (article.thumbnail_local) {
-      if (article.thumbnail_local.startsWith('/app/uploads/')) {
-        return article.thumbnail_local.replace('/app/uploads/', '/api/v1/uploads/');
+
+    // 1. Primary: Prefer local processed WebP thumbnail asset if present and downloaded/valid
+    if (article.thumbnail_local && (article.thumbnail_status === "downloaded" || !article.thumbnail_status)) {
+      let localUrl = article.thumbnail_local;
+      if (localUrl.startsWith('/app/uploads/')) {
+        localUrl = localUrl.replace('/app/uploads/', '/api/v1/uploads/');
       }
-      // If it's already a relative path that doesn't start with /app/, return it
-      return article.thumbnail_local;
+      if (!failedUrls.has(localUrl)) {
+        return localUrl;
+      }
     }
-    
+
+    // 2. Secondary Fallback: Remote publisher HTTP URL
+    if (article.thumbnail_url && !failedUrls.has(article.thumbnail_url)) {
+      return article.thumbnail_url;
+    }
+
+    // 3. Legacy Fallback: image_url
+    if (article.image_url && !failedUrls.has(article.image_url)) {
+      return article.image_url;
+    }
+
     return null;
   },
 

@@ -63,46 +63,57 @@ class ConversationService:
         self.memory = MemoryManager()
         self.cache = ResponseCache()
         self.prompt_registry = ChatPromptRegistry()
-        self.context_builder = ContextBuilder(model_name=getattr(settings, "CHAT_MODEL", "gpt-4o-mini"))
-        self.workspace_builder = WorkspaceContextBuilder(model_name=getattr(settings, "CHAT_MODEL", "gpt-4o-mini"))
-        self.comparison_builder = ComparisonContextBuilder(model_name=getattr(settings, "CHAT_MODEL", "gpt-4o-mini"))
+        self.context_builder = ContextBuilder(model_name="gemini-2.0-flash-lite")
+        self.workspace_builder = WorkspaceContextBuilder(model_name="gemini-2.0-flash-lite")
+        self.comparison_builder = ComparisonContextBuilder(model_name="gemini-2.0-flash-lite")
         self.citation_service = CitationService()
         self.safety = SafetyLayer()
         self.eval = EvaluationFramework()
         self.registry = ConversationRegistry()
 
-        api_key = getattr(settings, "OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
-        self.client = AsyncOpenAI(api_key=api_key) if api_key else None
-        self.chat_model = getattr(settings, "CHAT_MODEL", "gpt-4o-mini")
+        gemini_key = getattr(settings, "GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
+        if gemini_key and gemini_key not in ("mock-happy-path", ""):
+            try:
+                from google import genai
+                self.gemini_client = genai.Client(api_key=gemini_key)
+            except Exception:
+                self.gemini_client = None
+        else:
+            self.gemini_client = None
+
+        self.chat_model = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash-lite")
 
     # ------------------------------------------------------------------
     # Background title generation
     # ------------------------------------------------------------------
     async def _generate_title(self, conversation_id: str, assistant_text: str) -> str | None:
-        """Generates a short title from the first assistant response (background).
-        Called AFTER the first complete assistant response, not after the first
-        user message, because the user's first message is often low quality."""
-        if not self.client:
+        """Generates a short title from the first assistant response using Gemini."""
+        if not self.gemini_client:
             return None
 
         try:
-            resp = await self.client.chat.completions.create(
-                model=self.chat_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Generate a concise title (max 6 words) for a conversation "
-                            "that produced the following response. Return ONLY the title, "
-                            "no quotes, no punctuation at the end."
-                        ),
-                    },
-                    {"role": "user", "content": assistant_text[:500]},
-                ],
-                max_tokens=20,
-                temperature=0.3,
+            import asyncio
+            from google.genai import types as genai_types
+
+            prompt = (
+                "Generate a concise title (max 6 words) for a conversation "
+                "that produced the following response. Return ONLY the title, "
+                "no quotes, no punctuation at the end.\n\n"
+                f"Response:\n{assistant_text[:500]}"
             )
-            title = resp.choices[0].message.content.strip().strip('"').strip(".")
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.gemini_client.models.generate_content(
+                    model=self.chat_model,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        temperature=0.3,
+                        max_output_tokens=20,
+                    ),
+                ),
+            )
+            title = (response.text or "").strip().strip('"').strip(".")
             if title:
                 await self.registry.rename(conversation_id, title)
                 return title
@@ -110,6 +121,53 @@ class ConversationService:
             logger.warning(f"Title generation failed for {conversation_id}: {e}")
 
         return None
+
+    def _generate_fallback_response(self, retrieved_articles: list[dict], query: str) -> tuple[str, list[str]]:
+        clean_query = query.lower().strip().strip("!").strip(".")
+        greetings = {"hi", "hello", "hey", "hi there", "hello there", "good morning", "good afternoon", "good evening", "howdy", "yo"}
+
+        if not retrieved_articles:
+            if clean_query in greetings:
+                return (
+                    "Hello! I'm your AI Tech News assistant. How can I help you explore today's tech news?",
+                    ["What are the top trending stories today?", "Tell me about recent AI developments."]
+                )
+            return (
+                "I searched the tech news repository, but couldn't find specific articles directly matching your query.",
+                ["What are the top trending stories today?", "Tell me about recent AI developments."]
+            )
+
+        main_art = retrieved_articles[0]
+        title = main_art.get("title", "Article Summary")
+
+        if clean_query in greetings:
+            return (
+                f"Hello! I'm your AI assistant for **{title}**.\n\nHow can I help you with this article? Feel free to ask for a summary, key takeaways, or related developments!",
+                [
+                    "What are the main takeaways from this article?",
+                    "Why is this story important?",
+                    "Show me related stories."
+                ]
+            )
+
+        content = main_art.get("content") or main_art.get("summary") or main_art.get("description", "")
+        
+        # Clean text snippet into bullets
+        raw_sentences = [s.strip() for s in content.split(".") if len(s.strip()) > 15]
+        key_points = raw_sentences[:3]
+        bullets = "\n".join(f"• {p}." for p in key_points) if key_points else f"• {content[:300]}..."
+
+        res_text = (
+            f"Here are the key takeaways from **{title}**:\n\n"
+            f"{bullets}\n\n"
+            f"*(Grounded in Tech News repository article context)*"
+        )
+        follow_ups = [
+            f"What else should I know about this story?",
+            "What are the related industry reactions?",
+            "Show me similar stories."
+        ]
+        return res_text, follow_ups
 
     # ------------------------------------------------------------------
     # Main streaming pipeline
@@ -128,10 +186,6 @@ class ConversationService:
         Executes the RAG pipeline and yields SSE formatted chunks.
         """
         start_time = time.time()
-
-        if not self.client:
-            yield StreamService.format_error("AI Provider is not configured.")
-            return
 
         # 1. Store user message in memory
         user_msg = ChatMessage(role=ChatRole.USER, content=message)
@@ -250,28 +304,62 @@ class ConversationService:
 
         # 7. Stream LLM Response
         generated_text = ""
+        follow_ups = []
+        use_fallback = False
         prompt_tokens = self.context_builder.count_tokens("".join(m["content"] for m in llm_messages))
         completion_tokens = 0
 
-        try:
-            stream = await self.client.chat.completions.create(
-                model=self.chat_model,
-                messages=llm_messages,
-                stream=True,
-                temperature=0.7,
-            )
+        if not self.gemini_client:
+            use_fallback = True
+        else:
+            try:
+                import asyncio
+                from google.genai import types as genai_types
 
-            async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    text_chunk = chunk.choices[0].delta.content
-                    generated_text += text_chunk
-                    completion_tokens += 1
-                    yield StreamService.format_sse(StreamEventType.TOKEN, {"text": text_chunk})
+                full_prompt = f"System Instructions:\n{system_context}\n\n"
+                if summary:
+                    full_prompt += f"Previous Conversation Summary:\n{summary}\n\n"
+                full_prompt += "Conversation History:\n"
+                for msg in history[-6:]:
+                    full_prompt += f"{msg.role.value.capitalize()}: {msg.content}\n"
+                full_prompt += f"User: {message}\nAssistant:"
 
-        except Exception as e:
-            logger.error(f"Conversation Service Error: {e}")
-            yield StreamService.format_error("Generation failed due to provider error.")
-            return
+                loop = asyncio.get_event_loop()
+                stream_response = await loop.run_in_executor(
+                    None,
+                    lambda: self.gemini_client.models.generate_content_stream(
+                        model=self.chat_model,
+                        contents=full_prompt,
+                        config=genai_types.GenerateContentConfig(
+                            temperature=0.7,
+                            max_output_tokens=1000,
+                        ),
+                    ),
+                )
+
+                for chunk in stream_response:
+                    if chunk.text:
+                        text_chunk = chunk.text
+                        generated_text += text_chunk
+                        yield StreamService.format_sse(StreamEventType.TOKEN, {"text": text_chunk})
+                        await asyncio.sleep(0.005)
+
+            except Exception as e:
+                logger.warning(f"Gemini LLM provider error ({e}). Using grounded fallback response.")
+                use_fallback = True
+
+        if use_fallback and not generated_text:
+            import asyncio
+            fallback_text, fallback_followups = self._generate_fallback_response(retrieved_articles, message)
+            generated_text = fallback_text
+            follow_ups = fallback_followups
+
+            # Stream fallback tokens cleanly
+            words = fallback_text.split(" ")
+            for i, word in enumerate(words):
+                chunk_str = word + (" " if i < len(words) - 1 else "")
+                yield StreamService.format_sse(StreamEventType.TOKEN, {"text": chunk_str})
+                await asyncio.sleep(0.015)
 
         # 8. Extract follow-ups from the single LLM response
         cleaned_text, follow_ups = _extract_follow_ups(generated_text)

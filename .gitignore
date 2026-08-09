@@ -34,6 +34,10 @@ node_modules/
 .next/
 backend/celerybeat-schedule
 backend/celerybeat-schedule.*
+scratch_*.py
+backend/scratch_*.py
+backend/storage/backups/
+
 # Node / NextJS files
 node_modules/
 /frontend/.next/
@@ -51,6 +55,7 @@ node_modules/
 .env.test.local
 .env.production.local
 *.env
+dev.config.local.json
 
 # Docker data stores & persistent volumes
 .docker-volumes/

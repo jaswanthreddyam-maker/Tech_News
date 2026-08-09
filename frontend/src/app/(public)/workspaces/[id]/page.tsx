@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api/client";
 import Link from "next/link";
+import { ArticleLink } from "@/domains/article/ArticleLink";
 import { ConversationalSearch } from "@/components/ai/ConversationalSearch";
 import { NotebookEditor } from "@/components/workspace/NotebookEditor";
 import { Skeleton } from "@/design-system/components/Skeleton";
@@ -344,9 +345,9 @@ export default function WorkspaceDashboard() {
                   <div key={wa.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex items-start justify-between group">
                     <div className="flex-1 min-w-0 pr-4">
                       <h3 className="font-semibold text-gray-900 truncate">
-                        <Link href={`/articles/${wa.article.slug}`} className="hover:text-primary-600 transition-colors">
+                        <ArticleLink article={wa.article as any} section="WorkspacePage" className="hover:text-primary-600 transition-colors">
                           {wa.article.title}
-                        </Link>
+                        </ArticleLink>
                       </h3>
                       <p className="text-xs text-gray-500 mt-1 line-clamp-2">{wa.article.summary}</p>
                     </div>

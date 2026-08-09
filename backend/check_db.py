@@ -1,16 +1,22 @@
 import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy import text
+from sqlalchemy import select
+from app.core.database import AsyncSessionLocal
+from app.models.article import ProcessedArticle
 
-async def main():
-    engine = create_async_engine('postgresql+asyncpg://postgres:postgres_secure_pass@db:5432/tech_news_today')
-    async with engine.connect() as conn:
-        result = await conn.execute(text("SELECT id, title, LEFT(content, 500) FROM processed_articles WHERE source_name='The Verge' LIMIT 3;"))
-        for row in result:
-            print(f"ID: {row[0]}")
-            print(f"Title: {row[1]}")
-            print(f"Content: {row[2]}")
-            print("---")
+async def run():
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            select(
+                ProcessedArticle.title,
+                ProcessedArticle.thumbnail_status,
+                ProcessedArticle.thumbnail_generation_reason,
+                ProcessedArticle.candidate_count,
+                ProcessedArticle.thumbnail_type,
+                ProcessedArticle.thumbnail_local
+            ).order_by(ProcessedArticle.id.desc()).limit(10)
+        )
+        for r in res.all():
+            print(f"Title: {r[0][:30]} | Status: {r[1]} | Reason: {r[2]} | Cand: {r[3]} | Type: {r[4]} | Local: {r[5]}")
 
-if __name__ == '__main__':
-    asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(run())

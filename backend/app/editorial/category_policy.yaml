@@ -1,0 +1,32 @@
+categories:
+  artificial-intelligence:
+    headline: "Artificial Intelligence"
+    display_order: 1
+
+  cybersecurity:
+    headline: "Cybersecurity"
+    display_order: 2
+
+  hardware:
+    headline: "Hardware & Devices"
+    display_order: 3
+
+  robotics:
+    headline: "Robotics"
+    display_order: 4
+
+  science:
+    headline: "Science & Quantum"
+    display_order: 5
+
+  startups-and-business:
+    headline: "Startups & Business"
+    display_order: 6
+
+  policy:
+    headline: "Policy & Governance"
+    display_order: 7
+
+  technology:
+    headline: "General Technology"
+    display_order: 8

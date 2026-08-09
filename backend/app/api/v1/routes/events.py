@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from app.core.event_bus import EVENT_CHANNEL
 from app.core.redis import get_redis_client
-from app.core.security import get_current_user
+from app.core.security import get_current_user_optional
 from app.models.user import User
 
 logger = logging.getLogger("tech_news.events")
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/stream")
-async def sse_event_stream(current_user: User = Depends(get_current_user)):
+async def sse_event_stream(current_user: User | None = Depends(get_current_user_optional)):
     """
     Server-Sent Events stream of real pipeline agent events.
     Subscribes to Redis pub/sub and forwards events to connected clients.

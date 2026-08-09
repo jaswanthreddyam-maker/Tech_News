@@ -8,6 +8,7 @@ import { useLoadingState } from '@/design-system/hooks/useLoadingState';
 import { EmptyState, EmptyIllustration } from '@/components/common/EmptyState';
 import { MessageCircle } from 'lucide-react';
 import Link from 'next/link';
+import { ArticleLink } from "@/domains/article/ArticleLink";
 
 interface ConversationalSearchProps {
   conversationId: string | null;
@@ -21,93 +22,7 @@ interface ConversationalSearchProps {
   workspaceId?: number;
 }
 
-const EvidenceBadge = ({ evidence }: { evidence: NonNullable<ChatMessage['evidence']> }) => {
-  const [expanded, setExpanded] = useState(false);
-  const { items, confidence } = evidence;
-
-  if (!items || items.length === 0) return null;
-
-  // Group items by type
-  const types = ['article', 'entity', 'topic', 'timeline_event', 'relationship', 'note', 'comparison', 'conversation'];
-  const groupedItems: Record<string, typeof items> = {};
-  let totalCount = 0;
-  
-  types.forEach(t => {
-    const matched = items.filter(i => i.type === t);
-    if (matched.length > 0) {
-      groupedItems[t] = matched;
-      totalCount += matched.length;
-    }
-  });
-
-  return (
-    <div className="mb-3 text-xs bg-muted/20 border border-border/50 rounded-lg overflow-hidden transition-all duration-200 shadow-sm">
-      <button 
-        type="button"
-        className="w-full px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        onClick={() => setExpanded(!expanded)}
-        aria-expanded={expanded}
-      >
-        <div className="flex items-center gap-3">
-          <span className="font-medium text-foreground">Based on Knowledge Graph:</span>
-          <div className="flex items-center gap-2 text-muted-foreground flex-wrap max-w-md">
-            {Object.entries(groupedItems).map(([type, list]) => (
-              <span key={type}>✓ {list.length} {list.length === 1 ? type.replace('_', ' ') : type.replace('_', ' ') + 's'}</span>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {confidence && (
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-              confidence === 'High' ? 'text-emerald-500 bg-emerald-500/10' : 
-              confidence === 'Medium' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10'
-            }`}>
-              Coverage: {confidence}
-            </span>
-          )}
-          <svg className={`w-4 h-4 text-muted-foreground transform transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </button>
-      
-      {expanded && (
-        <div className="px-3 py-2 border-t border-border/50 bg-card space-y-3 max-h-60 overflow-y-auto">
-          {types.map((type) => {
-            const typeItems = groupedItems[type];
-            if (!typeItems) return null;
-            return (
-              <div key={type}>
-                <div className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-1">
-                  {type.replace('_', ' ')}s
-                </div>
-                <ul className="space-y-1">
-                  {typeItems.map((item, idx) => (
-                    <li key={idx} className="flex items-start text-muted-foreground">
-                      <span className="w-1.5 h-1.5 rounded-full bg-border mr-2 shrink-0 mt-1.5"></span>
-                      <div className="flex flex-col min-w-0">
-                        {item.url ? (
-                          <Link href={item.url} className="hover:text-primary hover:underline truncate">
-                            {item.title || item.id}
-                          </Link>
-                        ) : (
-                          <span className="font-medium truncate">{item.title || item.id}</span>
-                        )}
-                        {item.description && (
-                          <span className="text-[10px] opacity-80 mt-0.5 leading-tight">{item.description}</span>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
+const EvidenceBadge: React.FC<{ evidence?: any }> = () => null;
 
 export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
   conversationId,
@@ -128,11 +43,14 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
   const [contextA, setContextA] = useState('');
   const [contextB, setContextB] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   
   const loadingLevel = useLoadingState(isLoading);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -233,7 +151,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 p-4 overflow-y-auto space-y-6">
+      <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-6">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full space-y-4">
             <EmptyState>
@@ -311,12 +229,12 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
                   className={`max-w-[85%] rounded-2xl px-5 py-4 ${
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground rounded-br-sm'
-                      : 'bg-muted text-foreground rounded-bl-sm'
+                      : 'bg-zinc-100 text-zinc-950 rounded-bl-sm border border-zinc-300 shadow-md'
                   }`}
                 >
                   {/* Searching state */}
                   {msg.role === 'assistant' && msg.status === 'searching' && (
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground animate-pulse">
+                    <div className="flex items-center space-x-2 text-sm text-zinc-600 animate-pulse">
                       <svg
                         className="w-4 h-4 animate-spin"
                         viewBox="0 0 24 24"
@@ -341,7 +259,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
                       <div className="space-y-2.5 mt-1">
                         <Skeleton level={loadingLevel} className="h-4 w-3/4" />
                         <Skeleton level={loadingLevel} className="h-4 w-1/2" />
-                        <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground/70">
+                        <div className="flex items-center gap-2 pt-1 text-xs text-zinc-600">
                           <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
                             <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                           </svg>
@@ -358,7 +276,9 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
                   {/* Message content */}
                   <div
                     className={`prose prose-sm max-w-none ${
-                      msg.role === 'user' ? 'prose-invert' : ''
+                      msg.role === 'user'
+                        ? 'prose-invert text-primary-foreground'
+                        : 'text-zinc-950 font-normal prose-headings:text-zinc-950 prose-p:text-zinc-950 prose-p:leading-relaxed prose-strong:text-zinc-950 prose-strong:font-bold prose-li:text-zinc-950 prose-code:text-zinc-950 prose-a:text-indigo-600'
                     }`}
                   >
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -415,12 +335,13 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
                     <div className="space-y-1.5">
                       {msg.citations.map((cit, idx) => (
                         <div key={idx} className="flex items-center justify-between text-xs">
-                          <Link
-                             href={`/articles/${cit.article_id}`}
+                          <ArticleLink
+                            article={{ id: cit.article_id, slug: String(cit.article_id), title: cit.title } as any}
+                            section="AIChatCitation"
                             className="text-primary hover:underline truncate max-w-[70%]"
                           >
                             [{idx + 1}] {cit.title}
-                          </Link>
+                          </ArticleLink>
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${confidenceColor(
                               cit.confidence

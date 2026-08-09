@@ -39,6 +39,7 @@ export interface Article {
   cluster_id?: string;
   is_archived?: boolean;
   reading_time?: number;
+  url?: string | null;
 }
 
 export interface SourceHealth {

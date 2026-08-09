@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import { ArticleLink } from "@/domains/article/ArticleLink";
 import { Link2, Layers, Shuffle, ArrowRight } from "lucide-react";
 
 interface RelatedArticle {
@@ -43,9 +44,10 @@ export function SemanticRelated({ articles }: SemanticRelatedProps) {
 
       <div className="space-y-4">
         {articles.map((article) => (
-          <Link 
+          <ArticleLink 
             key={article.id} 
-            href={`/articles/${article.slug}`}
+            article={article as any}
+            section="SemanticRelated"
             className="group block p-3 rounded-lg border border-border/50 bg-card/60 hover:bg-card transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
           >
             <div className="flex items-center gap-1.5 mb-2">
@@ -65,7 +67,7 @@ export function SemanticRelated({ articles }: SemanticRelatedProps) {
               </span>
               <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors group-hover:translate-x-1" />
             </div>
-          </Link>
+          </ArticleLink>
         ))}
       </div>
     </div>

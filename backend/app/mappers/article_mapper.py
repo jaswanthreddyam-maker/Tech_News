@@ -23,8 +23,11 @@ class ArticleMapper:
             published_at=model.published_at,
             thumbnail_url=resolved_url,
             thumbnail_local=clean_local,
-            key_takeaways=getattr(model, "key_takeaways", None) or None,
-            alt_text=getattr(model, "alt_text", None)
+            alt_text=getattr(model, "alt_text", None),
+            document_type=getattr(model, "document_type", None),
+            is_multi_topic=getattr(model, "is_multi_topic", None),
+            primary_topics=getattr(model, "primary_topics", None),
+            dominant_topic_percentage=getattr(model, "dominant_topic_percentage", None)
         )
 
     @staticmethod
@@ -49,6 +52,10 @@ class ArticleMapper:
             thumbnail_local=clean_local,
             key_takeaways=getattr(model, "key_takeaways", None) or None,
             alt_text=getattr(model, "alt_text", None),
+            document_type=getattr(model, "document_type", None),
+            is_multi_topic=getattr(model, "is_multi_topic", None),
+            primary_topics=getattr(model, "primary_topics", None),
+            dominant_topic_percentage=getattr(model, "dominant_topic_percentage", None),
             topics=topics or [],
             entities=entities or []
         )

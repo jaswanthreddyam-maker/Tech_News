@@ -17,9 +17,11 @@ async def resolve_owner(
     if user and getattr(user, "id", None):
         return OwnerType.USER, str(user.id)
 
-    # Fall back to anonymous client_id cookie
+    anon_header = request.headers.get("X-Anonymous-ID") or request.headers.get("x-anonymous-id")
+    if anon_header:
+        return OwnerType.ANONYMOUS, anon_header
+
     client_id = request.cookies.get("client_id")
     if not client_id:
-        # In a real scenario we might want to reject this, but for now we follow the existing pattern
         client_id = str(uuid.uuid4())
     return OwnerType.ANONYMOUS, client_id

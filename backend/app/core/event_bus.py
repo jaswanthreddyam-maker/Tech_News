@@ -14,6 +14,7 @@ async def publish_event(agent: str, message: str, status: str = "info", metadata
     Events are consumed by the SSE /events/stream endpoint.
     """
     try:
+        import asyncio
         from app.core.redis import get_redis_client
 
         client = get_redis_client()
@@ -27,11 +28,11 @@ async def publish_event(agent: str, message: str, status: str = "info", metadata
             event["meta"] = metadata
         event_str = json.dumps(event)
 
-        # Publish to SSE Pub/Sub
-        await client.publish(EVENT_CHANNEL, event_str)
+        async def _pub():
+            await client.publish(EVENT_CHANNEL, event_str)
+            await client.lpush("recent_events", event_str)
+            await client.ltrim("recent_events", 0, 49)
 
-        # Cache in a rolling list of the last 50 events
-        await client.lpush("recent_events", event_str)
-        await client.ltrim("recent_events", 0, 49)
+        await asyncio.wait_for(_pub(), timeout=0.1)
     except Exception as e:
         logger.warning(f"EventBus: Failed to publish event: {e}")

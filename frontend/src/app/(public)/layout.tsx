@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { ConditionalFooter } from "@/components/layout/ConditionalFooter";
-import { GlobalAssistant } from "@/components/ai/GlobalAssistant";
+import { GlobalAssistantWrapper } from "@/components/ai/GlobalAssistantWrapper";
 
 export default function PublicLayout({
   children,
@@ -16,7 +16,7 @@ export default function PublicLayout({
       <Navbar />
       <main id="main-content" className="flex-1 focus:outline-none" tabIndex={-1}>{children}</main>
       <ConditionalFooter />
-      <GlobalAssistant />
+      <GlobalAssistantWrapper />
     </div>
   );
 }

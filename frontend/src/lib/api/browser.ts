@@ -55,6 +55,12 @@ export class BrowserTransport implements ApiTransport {
     const token = sessionManager.getAccessToken() || useAppStore.getState().adminToken;
     if (token) {
       requestHeaders.set("Authorization", `Bearer ${token}`);
+    } else {
+      const { getAnonymousId } = require("./anonymousId");
+      const anonId = getAnonymousId();
+      if (anonId) {
+        requestHeaders.set("X-Anonymous-ID", anonId);
+      }
     }
 
     const controller = new AbortController();
@@ -63,6 +69,7 @@ export class BrowserTransport implements ApiTransport {
     try {
       const response = await fetch(url, {
         ...restOptions,
+        cache: "no-store",
         headers: requestHeaders,
         signal: controller.signal,
         credentials: "include",

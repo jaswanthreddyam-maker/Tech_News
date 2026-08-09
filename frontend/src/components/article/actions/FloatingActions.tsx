@@ -14,6 +14,9 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api/client";
 import { m, useReducedMotion } from "framer-motion";
 import { MotionScales } from "@/design-system/motion/tokens";
+import { useNavigationType } from "@/hooks/useNavigationType";
+import { DURATION, EASING, REVEAL_DELAYS } from "@/design-system/motion/tokens";
+
 
 interface FloatingActionsProps {
   url: string;
@@ -34,15 +37,15 @@ export function FloatingActions({ url, title, articleId }: FloatingActionsProps)
   const shouldReduceMotion = useReducedMotion();
 
   React.useEffect(() => {
-    if (articleId) {
-      apiFetch<string[]>("/me/saved")
-        .then((res) => {
-          setIsSaved(res.includes(articleId));
-        })
-        .catch(() => {
-          // Silently fail — user may not be logged in
-        });
-    }
+    import("@/lib/session/sessionManager").then(({ sessionManager }) => {
+      if (articleId && sessionManager.getAccessToken()) {
+        apiFetch<string[]>("/me/saved")
+          .then((res) => {
+            setIsSaved(res.includes(articleId));
+          })
+          .catch(() => {});
+      }
+    });
   }, [articleId]);
 
   const handleShare = async () => {
@@ -143,17 +146,39 @@ export function FloatingActions({ url, title, articleId }: FloatingActionsProps)
   };
 
   const SaveIcon = isSaved ? BookmarkCheck : Bookmark;
+  const { isColdLoad } = useNavigationType();
+  const playEntrance = isColdLoad && !shouldReduceMotion;
 
-  const toolbarVariants = {
-    hidden: shouldReduceMotion ? { opacity: 0 } : { opacity: 0, x: -12, y: 24 },
+  // Desktop toolbar: slide in from left, icons stagger one-by-one
+  const desktopContainerVariants = {
+    hidden: { opacity: 0, x: -30 },
     visible: {
       opacity: 1,
       x: 0,
+      transition: {
+        duration: DURATION.normal,
+        ease: EASING.standard as any,
+        delay: REVEAL_DELAYS.toolbar,
+        staggerChildren: 0.04,
+        delayChildren: REVEAL_DELAYS.toolbar + 0.1,
+      },
+    },
+  };
+
+  const iconItemVariants = {
+    hidden: { opacity: 0, y: 8 },
+    visible: { opacity: 1, y: 0, transition: { duration: DURATION.fast } },
+  };
+
+  const toolbarVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
       y: 0,
       transition: {
-        duration: shouldReduceMotion ? 0.15 : 0.75,
-        ease: (shouldReduceMotion ? "linear" : [0.22, 1, 0.36, 1]) as any,
-        delay: 0.25,
+        duration: DURATION.normal,
+        ease: EASING.standard as any,
+        delay: REVEAL_DELAYS.toolbar,
       },
     },
   };
@@ -162,82 +187,75 @@ export function FloatingActions({ url, title, articleId }: FloatingActionsProps)
     <>
       {/* ── Desktop Floating Sidebar ── */}
       <m.aside
-        initial={false}
+        initial={playEntrance ? "hidden" : false}
         animate="visible"
-        variants={toolbarVariants}
+        variants={playEntrance ? desktopContainerVariants : {}}
         className="hidden xl:flex flex-col items-center gap-4 sticky top-32 h-fit w-16 shrink-0"
         aria-label="Article actions"
       >
         <div className="flex flex-col gap-3 p-3 rounded-full bg-background/80 border border-border backdrop-blur shadow-sm">
-          <Button variant="ghost" size="icon" className={iconBtnClass} asChild>
-            <m.button
-              onClick={handleShare}
-              aria-label="Share article"
-              whileHover={{ scale: MotionScales.hover }}
-              whileTap={{ scale: MotionScales.tap }}
-            >
-              <Share2 className="w-4 h-4" />
-            </m.button>
-          </Button>
+          <m.div variants={playEntrance ? iconItemVariants : {}}>
+            <Button variant="ghost" size="icon" className={iconBtnClass} asChild>
+              <m.button
+                onClick={handleShare}
+                aria-label="Share article"
+                whileHover={{ scale: MotionScales.hover }}
+                whileTap={{ scale: MotionScales.tap }}
+              >
+                <Share2 className="w-4 h-4" />
+              </m.button>
+            </Button>
+          </m.div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className={[
-              iconBtnClass,
-              isSaved
-                ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary"
-                : "",
-            ].join(" ")}
-            asChild
-          >
-            <m.button
-              onClick={handleSave}
-              aria-label={isSaved ? "Remove bookmark" : "Bookmark article"}
-              aria-pressed={isSaved}
-              whileHover={{ scale: MotionScales.hover }}
-              whileTap={{ scale: MotionScales.tap }}
+          <m.div variants={playEntrance ? iconItemVariants : {}}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={[
+                iconBtnClass,
+                isSaved ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary" : "",
+              ].join(" ")}
+              asChild
             >
-              <SaveIcon className="w-4 h-4" />
-            </m.button>
-          </Button>
+              <m.button
+                onClick={handleSave}
+                aria-label={isSaved ? "Remove bookmark" : "Bookmark article"}
+                aria-pressed={isSaved}
+                whileHover={{ scale: MotionScales.hover }}
+                whileTap={{ scale: MotionScales.tap }}
+              >
+                <SaveIcon className="w-4 h-4" />
+              </m.button>
+            </Button>
+          </m.div>
 
-          {/* Temporarily disabled workspace action
-          <Button variant="ghost" size="icon" className={iconBtnClass} asChild>
-            <m.button
-              onClick={handleWorkspace}
-              aria-label="Add to workspace"
-              whileHover={{ scale: MotionScales.hover }}
-              whileTap={{ scale: MotionScales.tap }}
-            >
-              <FolderPlus className="w-4 h-4" />
-            </m.button>
-          </Button>
-          */}
-
-          <Button variant="ghost" size="icon" className={iconBtnClass} asChild>
-            <m.button
-              onClick={handleCopy}
-              aria-label="Copy article link"
-              whileHover={{ scale: MotionScales.hover }}
-              whileTap={{ scale: MotionScales.tap }}
-            >
-              <Copy className="w-4 h-4" />
-            </m.button>
-          </Button>
+          <m.div variants={playEntrance ? iconItemVariants : {}}>
+            <Button variant="ghost" size="icon" className={iconBtnClass} asChild>
+              <m.button
+                onClick={handleCopy}
+                aria-label="Copy article link"
+                whileHover={{ scale: MotionScales.hover }}
+                whileTap={{ scale: MotionScales.tap }}
+              >
+                <Copy className="w-4 h-4" />
+              </m.button>
+            </Button>
+          </m.div>
 
           <div className="w-full h-px bg-border/60 my-0.5" role="separator" />
 
-          <Button variant="ghost" size="icon" className={iconBtnClass} asChild>
-            <m.button
-              onClick={handlePrint}
-              aria-label="Print article"
-              whileHover={{ scale: MotionScales.hover }}
-              whileTap={{ scale: MotionScales.tap }}
-            >
-              <Printer className="w-4 h-4" />
-            </m.button>
-          </Button>
+          <m.div variants={playEntrance ? iconItemVariants : {}}>
+            <Button variant="ghost" size="icon" className={iconBtnClass} asChild>
+              <m.button
+                onClick={handlePrint}
+                aria-label="Print article"
+                whileHover={{ scale: MotionScales.hover }}
+                whileTap={{ scale: MotionScales.tap }}
+              >
+                <Printer className="w-4 h-4" />
+              </m.button>
+            </Button>
+          </m.div>
         </div>
       </m.aside>
 

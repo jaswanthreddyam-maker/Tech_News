@@ -26,6 +26,7 @@ export function ArticleThumbnail({
   const [resolution, setResolution] = useState<ThumbnailResolution>(() => {
     return thumbnailService.resolveThumbnail(article);
   });
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     // Only after hydration (client-side), we can safely check localStorage
@@ -50,9 +51,11 @@ export function ArticleThumbnail({
           fill
           sizes={sizes}
           priority={priority}
-          className={imgClassName}
+          fetchPriority={priority ? "high" : undefined}
+          className={`${imgClassName} transition-opacity duration-300 ${isLoaded ? "opacity-100" : "opacity-0"}`}
           placeholder="blur"
           blurDataURL={resolution.blurDataURL}
+          onLoadingComplete={() => setIsLoaded(true)}
           onError={handleError}
           unoptimized={true} // Bypasses next/image remotePatterns requirement for dynamic news sources
         />

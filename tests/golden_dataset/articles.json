@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "title": "Introducing Gemini 3.5 Flash Cyber — Google DeepMind",
+    "url": "https://deepmind.google/technologies/gemini/flash-cyber",
+    "source": "Google DeepMind",
+    "category": "Artificial Intelligence",
+    "published_at": "2026-08-07T03:55:28Z",
+    "summary": "Google DeepMind introduces Gemini 3.5 Flash Cyber featuring specialized cybersecurity defense and vulnerability detection capabilities."
+  },
+  {
+    "id": 2,
+    "title": "Google Unveils Gemini 3.5 Flash Cyber Model for AI Security",
+    "url": "https://techcrunch.com/2026/08/07/google-gemini-3-5-flash-cyber",
+    "source": "TechCrunch",
+    "category": "Artificial Intelligence",
+    "published_at": "2026-08-07T03:58:10Z",
+    "summary": "TechCrunch reports on Google's new Gemini 3.5 Flash Cyber announcement focusing on autonomous vulnerability patching."
+  },
+  {
+    "id": 3,
+    "title": "Silicon Valley loves young founders. Until it doesn't.",
+    "url": "https://techcrunch.com/2026/08/07/silicon-valley-young-founders",
+    "source": "TechCrunch",
+    "category": "Startups",
+    "published_at": "2026-08-07T02:15:28Z",
+    "summary": "An in-depth analysis of changing venture capital dynamics and founder age trends across Silicon Valley."
+  },
+  {
+    "id": 4,
+    "title": "Gemini Robotics 2 brings whole body intelligence to robots",
+    "url": "https://deepmind.google/discover/blog/gemini-robotics-2",
+    "source": "Google DeepMind",
+    "category": "Robotics",
+    "published_at": "2026-08-07T01:30:00Z",
+    "summary": "Gemini Robotics 2 combines physical spatial reasoning and real-time motor control for humanoid robotics."
+  },
+  {
+    "id": 5,
+    "title": "At AI Summit, South Korea Outlines Its AI Future With NVIDIA",
+    "url": "https://blogs.nvidia.com/blog/south-korea-ai-summit-nvidia",
+    "source": "NVIDIA AI Blog",
+    "category": "Artificial Intelligence",
+    "published_at": "2026-08-07T02:25:28Z",
+    "summary": "South Korea announces strategic partnership with NVIDIA to build national sovereign AI infrastructure."
+  },
+  {
+    "id": 6,
+    "title": "Google Unveils Gemini 3.5 Flash Cyber Model for AI Security",
+    "url": "https://theverge.com/2026/08/07/google-gemini-3-5-flash-cyber-security",
+    "source": "The Verge",
+    "category": "Artificial Intelligence",
+    "published_at": "2026-08-07T04:00:00Z",
+    "summary": "The Verge covers Google's Gemini 3.5 Flash Cyber release, highlighting new autonomous red-teaming functions."
+  },
+  {
+    "id": 7,
+    "title": "Apple Unveils M5 Max Chip with 32 Core GPU",
+    "url": "https://9to5mac.com/2026/08/07/apple-m5-max-chip",
+    "source": "9to5Mac",
+    "category": "Hardware",
+    "published_at": "2026-08-07T04:10:00Z",
+    "summary": "Apple announces next-generation M5 Max silicon architecture optimized for local LLM inference."
+  },
+  {
+    "id": 8,
+    "title": "Apple M5 Max Chip Announced with 32 Core GPU for AI",
+    "url": "https://macrumors.com/2026/08/07/apple-m5-max-announced",
+    "source": "MacRumors",
+    "category": "Hardware",
+    "published_at": "2026-08-07T04:12:00Z",
+    "summary": "MacRumors highlights Apple's M5 Max chip launch targeting high-performance local AI workloads."
+  }
+]

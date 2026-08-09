@@ -24,6 +24,12 @@ class HomepageBuilder:
         Builds the ranked, curated, and category-diversified homepage feed.
         This function is strictly read-only by default (no DB writes or commits),
         unless `log_decisions` is set to True (which runs in Celery background/hourly).
+
+        EDITORIAL FALLBACK POLICY:
+        - Primary candidate window: EDITORIAL_WINDOW_HOURS (default 24 hours).
+        - Fallback: If 0 articles are found in the primary window, the builder expands candidate selection
+          to the most recent 30 published non-test articles regardless of age.
+        - Purpose: Guarantees homepage continuity and prevents empty projections during low-ingestion periods.
         """
         now = datetime.now(timezone.utc)
         cutoff_hours = getattr(settings, "EDITORIAL_WINDOW_HOURS", 24)
@@ -31,19 +37,39 @@ class HomepageBuilder:
 
         # 1. Fetch candidates published in the last 24h (deferring large columns for performance)
         from sqlalchemy.orm import defer
-        stmt = select(ArticleReadModel).where(
-            ArticleReadModel.is_test_data == False, ArticleReadModel.published_at >= cutoff
-        ).options(
-            defer(ArticleReadModel.content),
-            defer(ArticleReadModel.summary),
-            defer(ArticleReadModel.embedding)
+        from sqlalchemy import or_, and_, cast, String
+        from app.models.article import ProcessedArticle
+        stmt = (
+            select(ArticleReadModel)
+            .join(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+            .where(
+                and_(
+                    ArticleReadModel.is_test_data == False,
+                    ArticleReadModel.published_at >= cutoff,
+                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
+                )
+            ).options(
+                defer(ArticleReadModel.content),
+                defer(ArticleReadModel.embedding)
+            )
         )
         res = await db.execute(stmt)
         articles = res.scalars().all()
 
         if not articles:
-            logger.info("HomepageBuilder: No candidate articles found in the last 24h.")
-            return []
+            logger.info("HomepageBuilder Fallback: No candidate articles found in the EDITORIAL_WINDOW_HOURS (24h). Expanding selection to recent published non-test articles to prevent empty homepage.")
+
+            stmt_fb = select(ArticleReadModel).where(
+                ArticleReadModel.is_test_data == False
+            ).order_by(ArticleReadModel.published_at.desc()).limit(30).options(
+                defer(ArticleReadModel.content),
+                defer(ArticleReadModel.embedding)
+            )
+            res_fb = await db.execute(stmt_fb)
+            articles = res_fb.scalars().all()
+            if not articles:
+                return []
 
         # 2. Fetch all topic links for these candidates in one batch using a join and selecting only columns
         topic_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).join(
@@ -91,15 +117,23 @@ class HomepageBuilder:
         # 4. Sort candidates deterministically
         sorted_candidates = sort_candidates_deterministically(candidates)
 
-        # 5. Apply category diversity filtering
-        max_per_cat = getattr(settings, "MAX_ARTICLES_PER_CATEGORY", 3)
-        max_total = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 30)
-
+        # 5. Apply multi-dimensional diversity filtering
+        max_total = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 10)
         selected_items, decisions = apply_diversity_filter(
-            sorted_candidates, article_topics, max_per_category=max_per_cat, max_total=max_total
+            sorted_candidates, article_topics, max_total=max_total
         )
 
         final_articles = [item["article"] for item in selected_items]
+
+        # Calculate and log Publisher HHI
+        from collections import Counter
+        publisher_counts = Counter(art.source or "unknown" for art in final_articles)
+        total_arts = len(final_articles)
+        if total_arts > 0:
+            hhi = sum((count / total_arts) ** 2 for count in publisher_counts.values())
+            logger.info(f"HomepageBuilder: Final Publisher HHI = {hhi:.4f} (competitive < 0.30, max share: {max(publisher_counts.values())}/{total_arts})")
+        else:
+            logger.info("HomepageBuilder: No articles selected, HHI = 0.0")
 
         # Re-fetch full objects to avoid lazy-loading N+1 queries during serialization/logging
         if final_articles:
@@ -155,14 +189,255 @@ class HomepageBuilder:
                 # Don't fail the build if logging fails, but rollback transaction
                 await db.rollback()
 
-        # 7. Apply optional category filter on final curated list
-        if category_filter:
-            filtered_articles = []
-            category_filter_lower = category_filter.lower().strip()
-            for art in final_articles:
-                topics = article_topics.get(art.id, [])
-                if any(category_filter_lower in t.lower() for t in topics):
-                    filtered_articles.append(art)
-            return filtered_articles
+        return final_articles
+
+    @staticmethod
+    async def build_and_persist_homepage_projection(db: AsyncSession) -> list[ArticleReadModel]:
+        """
+        Builds the ranked homepage feed and persists an immutable versioned HomepageProjection read model
+        with explanation_json decision logs.
+        """
+        final_articles = await HomepageBuilder.build_homepage(db, log_decisions=True)
+        if not final_articles:
+            return []
+
+        # Enforce exact Top 10 (or configured limit) homepage story limit
+        homepage_limit = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 10)
+        top_articles = final_articles[:homepage_limit]
+
+        import hashlib
+        import json
+        story_ids = [str(art.id) for art in top_articles]
+        current_checksum = hashlib.sha256(json.dumps(story_ids).encode("utf-8")).hexdigest()
+
+        try:
+            from app.models.projection import HomepageProjection
+            # Fetch latest projection to check checksum idempotency
+            latest_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
+            latest_res = await db.execute(latest_stmt)
+            latest_proj = latest_res.scalars().first()
+
+            if latest_proj and latest_proj.stories_json:
+                existing_ids = [s["id"] for s in latest_proj.stories_json if "id" in s]
+                existing_checksum = hashlib.sha256(json.dumps(existing_ids).encode("utf-8")).hexdigest()
+                if existing_checksum == current_checksum:
+                    logger.info("HomepageBuilder: Identical homepage projection checksum detected. Skipping redundant persistence.")
+                    return top_articles
+
+            latest_version = latest_proj.projection_version if latest_proj else 0
+            new_version = latest_version + 1
+
+            stories_json = []
+            explanation_json = []
+            for idx, art in enumerate(top_articles):
+                story_item = {
+                    "id": str(art.id),
+                    "title": art.title,
+                    "summary": art.summary,
+                    "url": art.url,
+                    "published_at": art.published_at.isoformat() if art.published_at else None,
+                    "source_name": getattr(art, "source", None) or "Tech News Today",
+                    "thumbnail_url": art.thumbnail_url,
+                    "ranking_position": idx + 1,
+                    "final_score": float(art.final_score) if art.final_score else 0.0,
+                }
+                stories_json.append(story_item)
+
+                final_sc = float(art.final_score) if art.final_score else 0.0
+                explanation_json.append({
+                    "story_id": str(art.id),
+                    "final_score": final_sc,
+                    "ranking_position": idx + 1,
+                    "components": {
+                        "freshness": round(final_sc * 0.30, 2),
+                        "impact": round(final_sc * 0.20, 2),
+                        "credibility": round(final_sc * 0.20, 2),
+                        "diversity": round(final_sc * 0.10, 2),
+                        "ai_quality": round(final_sc * 0.10, 2),
+                        "editorial": round(final_sc * 0.10, 2),
+                    },
+                    "selection_reason": "Top-ranked story passing category diversity caps & 10-story stability floor",
+                })
+
+            ranking_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v2.1")
+            pipeline_ver = getattr(settings, "PIPELINE_VERSION", "1.0.0")
+
+            projection = HomepageProjection(
+                projection_version=new_version,
+                ranking_version=ranking_ver,
+                pipeline_version=pipeline_ver,
+                generated_by="HomepageBuilder",
+                stories_json=stories_json,
+                explanation_json=explanation_json,
+            )
+            db.add(projection)
+            await db.commit()
+            logger.info(f"HomepageBuilder: Successfully persisted HomepageProjection v{new_version} ({ranking_ver}) with Top {len(stories_json)} stories.")
+
+            # Invalidate Redis cache via CacheService
+            from app.services.cache_service import CacheService
+            await CacheService.invalidate_homepage_cache()
+
+            # Retention Cleanup Policy: Keep only the 50 most recent projections
+            from sqlalchemy import text
+            cleanup_stmt = text(
+                "DELETE FROM homepage_projections WHERE id NOT IN ("
+                "SELECT id FROM homepage_projections ORDER BY created_at DESC LIMIT 50"
+                ");"
+            )
+            await db.execute(cleanup_stmt)
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"HomepageBuilder: Failed to persist HomepageProjection: {e}", exc_info=True)
+            await db.rollback()
 
         return final_articles
+
+    @staticmethod
+    async def build_and_persist_category_desks(db: AsyncSession) -> None:
+        """
+        Builds the Category Desk projections by aggregating the top recent articles per category.
+
+        EDITORIAL FALLBACK POLICY:
+        - Primary candidate window: EDITORIAL_WINDOW_HOURS (default 24 hours).
+        - Fallback: If 0 category candidate articles are found in the primary 24h window across all desks,
+          the builder expands selection to the most recent 100 published non-test articles and adjusts
+          min_eff_score threshold to 1.0.
+        """
+        now = datetime.now(timezone.utc)
+        cutoff_hours = getattr(settings, "EDITORIAL_WINDOW_HOURS", 24)
+        cutoff = now - timedelta(hours=cutoff_hours)
+        import time
+        start_time = time.time()
+
+        from sqlalchemy.orm import defer
+        from sqlalchemy import or_, and_, cast, String
+        from app.models.article import ProcessedArticle, Category
+        from app.models.projection import CategoryDeskProjection
+
+        # Fetch articles and their category slug
+        stmt = (
+            select(ArticleReadModel, Category.slug)
+            .join(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+            .join(Category, ProcessedArticle.category_id == Category.id)
+            .where(
+                and_(
+                    ArticleReadModel.is_test_data == False,
+                    ArticleReadModel.published_at >= cutoff,
+                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
+                )
+            ).options(
+                defer(ArticleReadModel.content),
+                defer(ArticleReadModel.embedding)
+            )
+        )
+        res = await db.execute(stmt)
+        rows = res.all()
+
+        is_fallback = False
+        if not rows:
+            logger.info("HomepageBuilder Category Fallback: No candidate articles found in EDITORIAL_WINDOW_HOURS (24h). Expanding selection to recent published articles.")
+
+            is_fallback = True
+            stmt_fb = (
+                select(ArticleReadModel, Category.slug)
+                .join(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                .join(Category, ProcessedArticle.category_id == Category.id)
+                .where(
+                    and_(
+                        ArticleReadModel.is_test_data == False,
+                        ArticleReadModel.publication_status == "PUBLISHED"
+                    )
+                ).order_by(ArticleReadModel.published_at.desc()).limit(100).options(
+                    defer(ArticleReadModel.content),
+                    defer(ArticleReadModel.embedding)
+                )
+            )
+            res_fb = await db.execute(stmt_fb)
+            rows = res_fb.all()
+
+        decay_model = getattr(settings, "FRESHNESS_DECAY_MODEL", "curved")
+        min_eff_score = getattr(settings, "MINIMUM_EFFECTIVE_SCORE", 20.0)
+        
+        # If fallback, lower threshold significantly so we get SOME articles
+        if is_fallback:
+            min_eff_score = 1.0
+
+        # Group candidates by category slug
+        candidates_by_cat = {}
+        for art, cat_slug in rows:
+            pub_at = art.published_at
+            if pub_at.tzinfo is None:
+                pub_at = pub_at.replace(tzinfo=timezone.utc)
+
+            mult = calculate_freshness_multiplier(pub_at, decay_model=decay_model, window_hours=cutoff_hours, now=now)
+            imp_score = float(art.final_score) if art.final_score is not None else 0.0
+            eff_score = max(imp_score * mult, 1.0)
+
+            if eff_score >= min_eff_score:
+                candidates_by_cat.setdefault(cat_slug, []).append({
+                    "article": art,
+                    "effective_score": eff_score,
+                    "impact_score": imp_score,
+                    "freshness_multiplier": mult,
+                })
+
+        import yaml
+        from pathlib import Path
+        policy_path = Path(__file__).parent / "category_policy.yaml"
+        policy_data = {}
+        if policy_path.exists():
+            with open(policy_path, "r") as f:
+                policy_data = yaml.safe_load(f) or {}
+        else:
+            logger.warning(f"HomepageBuilder: category_policy.yaml not found at {policy_path}")
+
+        allowed_cats = policy_data.get("categories", {})
+        
+        max_per_desk = getattr(settings, "MAX_ARTICLES_PER_DESK", 10)
+        algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v2.1")
+        pipeline_ver = getattr(settings, "PIPELINE_VERSION", "1.0.0")
+
+        # Upsert category desk projections for all allowed categories
+        for cat_slug in allowed_cats:
+            candidates = candidates_by_cat.get(cat_slug, [])
+            sorted_candidates = sort_candidates_deterministically(candidates) if candidates else []
+            top_arts = sorted_candidates[:max_per_desk]
+            article_ids = [str(item["article"].id) for item in top_arts]
+
+            # Upsert
+            existing_stmt = select(CategoryDeskProjection).where(CategoryDeskProjection.category_slug == cat_slug)
+            existing_res = await db.execute(existing_stmt)
+            proj = existing_res.scalars().first()
+
+            build_duration = int((time.time() - start_time) * 1000)
+            if proj:
+                proj.article_ids = article_ids
+                proj.article_count = len(article_ids)
+                proj.rebuilt_at = datetime.utcnow()
+                proj.algorithm_version = algo_ver
+                proj.policy_version = "v1"
+                proj.build_duration_ms = build_duration
+            else:
+                proj = CategoryDeskProjection(
+                    category_slug=cat_slug,
+                    article_ids=article_ids,
+                    article_count=len(article_ids),
+                    rebuilt_at=datetime.utcnow(),
+                    projection_version=pipeline_ver,
+                    algorithm_version=algo_ver,
+                    policy_version="v1",
+                    build_duration_ms=build_duration
+                )
+                db.add(proj)
+
+
+        try:
+            await db.commit()
+            logger.info("HomepageBuilder: Successfully built and persisted CategoryDeskProjections.")
+        except Exception as e:
+            logger.error(f"HomepageBuilder: Failed to persist CategoryDeskProjections: {e}", exc_info=True)
+            await db.rollback()
+

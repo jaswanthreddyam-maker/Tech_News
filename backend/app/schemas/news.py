@@ -19,8 +19,12 @@ class ArticleBase(BaseModel):
     published_at: datetime | None = None
     thumbnail_url: str | None = None
     thumbnail_local: str | None = None
+    thumbnail_status: str | None = None
     key_takeaways: list[TakeawayItem] | None = None
-    alt_text: str | None = None
+    document_type: str | None = None
+    is_multi_topic: bool | None = None
+    primary_topics: list[str] | None = None
+    dominant_topic_percentage: float | None = None
 
 class ArticleCard(ArticleBase):
     """Schema for home feed and related article lists."""
@@ -29,17 +33,22 @@ class ArticleCard(ArticleBase):
 
     @classmethod
     def from_model(cls, model, topics: list[str] | None = None, entities: list[str] | None = None) -> "ArticleCard":
+        model_slug = getattr(model, "slug", None)
+        if model_slug and model_slug.startswith("http"):
+            model_slug = None
+        resolved_slug = model_slug or (model.url if model.url and not model.url.startswith("http") else model.id)
         return cls(
             id=model.id,
             title=model.title,
             url=model.url,
-            slug=model.url,
+            slug=resolved_slug,
             summary=model.summary,
             source=model.source,
             reading_time=model.reading_time,
             published_at=model.published_at,
             thumbnail_url=model.thumbnail_url,
             thumbnail_local=model.thumbnail_local,
+            thumbnail_status=getattr(model, "thumbnail_status", "downloaded" if model.thumbnail_local else "pending"),
             key_takeaways=getattr(model, "key_takeaways", None),
             alt_text=getattr(model, "alt_text", None),
             topics=topics or [],

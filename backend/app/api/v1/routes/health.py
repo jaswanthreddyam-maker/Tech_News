@@ -144,10 +144,15 @@ async def get_runtime_health(db: AsyncSession = Depends(get_db)):
         heartbeat_val = await client.get("telemetry:v2:celery_beat_heartbeat")
         if heartbeat_val:
             beat_ts = heartbeat_val.decode("utf-8") if isinstance(heartbeat_val, bytes) else heartbeat_val
-            beat_last_active = beat_ts
-            dt = datetime.fromisoformat(beat_ts)
-            now = datetime.now(timezone.utc)
-            beat_age_seconds = (now - dt).total_seconds()
+            import json
+            try:
+                hb_data = json.loads(beat_ts) if beat_ts.startswith("{") else {"last_tick": beat_ts}
+                beat_last_active = hb_data.get("last_tick")
+                dt = datetime.fromisoformat(beat_last_active)
+                now = datetime.now(timezone.utc)
+                beat_age_seconds = (now - dt).total_seconds()
+            except Exception:
+                beat_age_seconds = None
 
             # Since auto-rss-ingestion schedule is 900s, beat should trigger frequently
             if beat_age_seconds < 1200:  # 20 minutes
@@ -341,7 +346,7 @@ async def get_cqrs_health(response: Response, db: AsyncSession = Depends(get_db)
         outbox_stmt = select(func.count(EventOutbox.id)).where(EventOutbox.status == "pending")
         outbox_backlog = (await db.execute(outbox_stmt)).scalar() or 0
 
-        projection_lag = abs(processed_count - read_count)
+        projection_lag = max(0, processed_count - read_count)
 
         # Get latest timestamps
         latest_processed_stmt = select(ProcessedArticle.published_at).where(ProcessedArticle.published_status == "published").order_by(ProcessedArticle.published_at.desc()).limit(1)

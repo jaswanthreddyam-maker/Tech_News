@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArticleLayout,
@@ -16,15 +16,40 @@ import {
 import { ConversationalSearch } from "@/components/ai/ConversationalSearch";
 import { KnowledgePanel } from "@/components/knowledge/KnowledgePanel";
 import { apiFetch } from "@/lib/api/client";
+import { normalizeCanonicalArticle, CanonicalArticle } from "@/domains/article";
+import { ExploreRelatedTopics } from "@/components/article/recommendations/ExploreRelatedTopics";
+import { AdaptiveStoryCard } from "@/components/common/card/AdaptiveStoryCard";
+import { StickyReadingHeader } from "@/components/article/header/StickyReadingHeader";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Calendar, Sparkles } from "lucide-react";
-import { m, useReducedMotion } from "framer-motion";
+import { Calendar, Sparkles, Eye, Minimize2, Type } from "lucide-react";
+import { m, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { ArticleRevealSection } from "@/components/article/layout/ArticleRevealSection";
+import { ProgressiveImage } from "@/components/common/ProgressiveImage";
+import { ImageLightbox } from "@/components/common/ImageLightbox";
+import { useNavigationType } from "@/hooks/useNavigationType";
+import { REVEAL_DELAYS, DURATION, EASING } from "@/design-system/motion/tokens";
+import { StaggerContainer, StaggerItem } from "@/components/animations";
+
 
 export default function ArticlePageClient({ article: rawData }: { article: any }) {
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
+  const { isColdLoad } = useNavigationType();
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  const { scrollY } = useScroll();
+  const heroParallax = useTransform(scrollY, [0, 400], [0, 25]);
+
+  // Reading Focus: compact controls bar at scrollY > 200
+  const [isReadingMode, setIsReadingMode] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setIsReadingMode(window.scrollY > 200);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Reader States
   const [focusMode, setFocusMode] = useState(false);
@@ -97,12 +122,13 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
     }
   }, [compactMode]);
 
-  const createArticleConversation = useCallback(async (articleId: string) => {
+  const createArticleConversation = useCallback(async (articleId: string | number) => {
     try {
+      const parsedId = typeof articleId === "number" ? articleId : parseInt(articleId, 10);
       const data = await apiFetch<{ conversation_id: string }>('/chat/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'ARTICLE', article_id: articleId }),
+        body: JSON.stringify({ mode: 'ARTICLE', article_id: isNaN(parsedId) ? null : parsedId }),
       });
       if (data && data.conversation_id) {
         setConversationId(data.conversation_id);
@@ -121,55 +147,29 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
   // Unpack API response fields
   const { article, content, clean_html, images, knowledge, related, navigation, scoring_debug } = rawData;
 
-  // Restore and save scroll position with namespaced article id (up to last 50 entries)
+  // Reset scroll position to top (0, 0) immediately upon article page mount and after layout paint
   useEffect(() => {
-    // TEMPORARILY DISABLED SCROLL RESTORATION FOR TESTING
-    /*
-    if (!article?.id) return;
+    if (typeof window === "undefined") return;
 
-    const scrollKey = `article:${article.id}:scroll`;
+    // Reset scroll instantly
+    window.scrollTo(0, 0);
 
+    // Reinforce reset after next animation frame and 50ms delay (post layout paint)
+    const handle = requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+    });
     const timer = setTimeout(() => {
-      const savedScroll = localStorage.getItem(scrollKey);
-      if (savedScroll) {
-        const y = parseInt(savedScroll, 10);
-        if (!isNaN(y)) {
-          window.scrollTo({ top: y, behavior: "instant" as any });
-        }
-      }
-    }, 500); // 500ms delay to let layout stabilize and images render
-
-    const handleScroll = () => {
-      const currentScroll = window.scrollY;
-      localStorage.setItem(scrollKey, currentScroll.toString());
-
-      // Limit stored histories to last 50 entries to avoid storage leaks
-      try {
-        const keys = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith("article:") && key.endsWith(":scroll")) {
-            keys.push(key);
-          }
-        }
-        if (keys.length > 50) {
-          keys.slice(0, keys.length - 50).forEach(k => localStorage.removeItem(k));
-        }
-      } catch (e) {
-        console.error("Error managing scroll cache:", e);
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
+      window.scrollTo(0, 0);
+    }, 50);
 
     return () => {
+      cancelAnimationFrame(handle);
       clearTimeout(timer);
-      window.removeEventListener("scroll", handleScroll);
     };
-    */
   }, [article?.id]);
 
-  // Keyboard Shortcuts: context-aware and input-gated
+  // ESC to go back (article close gesture)
+  // Swipe from left edge handled via CSS touch-action + pointer events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -181,7 +181,14 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
         return;
       }
 
-      if (e.key === "j" || e.key === "J") {
+      if (e.key === "Escape") {
+        // ESC: if not in focus mode, go back
+        if (!focusMode) {
+          router.back();
+          return;
+        }
+        setFocusMode(false);
+      } else if (e.key === "j" || e.key === "J") {
         if (navigation?.previous?.url) {
           router.push(`/articles/${navigation.previous.url}`);
         }
@@ -192,11 +199,7 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
       } else if (e.key === "/") {
         e.preventDefault();
         const searchInput = document.querySelector('input[type="search"]') || document.querySelector('input');
-        if (searchInput) {
-          (searchInput as HTMLInputElement).focus();
-        }
-      } else if (e.key === "Escape") {
-        setFocusMode(false);
+        if (searchInput) (searchInput as HTMLInputElement).focus();
       } else if (e.key === "f" || e.key === "F") {
         e.preventDefault();
         const val = !focusMode;
@@ -208,6 +211,7 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [navigation, focusMode, compactMode, largeTextMode, router]);
+
 
   if (!rawData || !rawData.article) {
     return (
@@ -229,39 +233,35 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
   const heroImageCaption = heroImageObj.caption || "";
   const heroImageCredit = heroImageObj.credit || "";
 
-  const heroImageVariants = {
-    hidden: shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: shouldReduceMotion ? 0.15 : 0.6,
-        ease: (shouldReduceMotion ? "linear" : [0.22, 1, 0.36, 1]) as any,
-        delay: 0.1,
-      },
-    },
-  };
+  // Hero Image — clip-path vertical wipe + opacity (no blur — GPU expensive on large images)
+  // Starts BEFORE the headline in the reveal order (hero occupies half the viewport)
+
+  // Parallax: inner image moves 25px on scroll (barely perceptible — the best kind)
 
   const heroImageNode = heroImageSrc ? (
-    <m.div
-      initial={false}
-      animate="visible"
-      variants={heroImageVariants}
-    >
-      <figure className="my-8 overflow-hidden rounded-xl border border-border/50 bg-muted/20">
-        <img
-          src={heroImageSrc}
-          alt={heroImageAlt}
-          className="w-full object-cover max-h-[450px]"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = "/images/fallback-article.jpg";
-          }}
-        />
+    <ArticleRevealSection delay={REVEAL_DELAYS.hero}>
+      <figure className="my-8 overflow-hidden rounded-xl border border-border/50 bg-muted/20 relative">
+        <div ref={heroRef} className="overflow-hidden" style={{ maxHeight: 450 }}>
+          <m.div
+            style={!shouldReduceMotion ? { y: heroParallax } : {}}
+          >
+            <ProgressiveImage
+              src={heroImageSrc}
+              alt={heroImageAlt}
+              className="w-full"
+              imgClassName="max-h-[450px] w-full object-cover cursor-zoom-in"
+              onClick={() => setLightboxOpen(true)}
+            />
+          </m.div>
+        </div>
+
         {(heroImageCaption || heroImageCredit) && (
           <figcaption className="p-3 text-center text-xs text-muted-foreground bg-card/60 border-t border-border/30">
-            {heroImageCaption} {heroImageCredit && <span className="opacity-60">({heroImageCredit})</span>}
+            {heroImageCaption}{" "}
+            {heroImageCredit && <span className="opacity-60">({heroImageCredit})</span>}
           </figcaption>
         )}
+
         {article.thumbnail_type === "AI_GENERATED" && (
           <div className="absolute top-4 right-4 bg-primary/90 text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg backdrop-blur-md">
             <Sparkles className="w-3.5 h-3.5" />
@@ -269,8 +269,17 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
           </div>
         )}
       </figure>
-    </m.div>
+
+      {/* Lightbox */}
+      <ImageLightbox
+        src={heroImageSrc}
+        alt={heroImageAlt}
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+      />
+    </ArticleRevealSection>
   ) : null;
+
 
   // Key Takeaways Block
   const keyTakeawaysNode = article.key_takeaways && article.key_takeaways.length > 0 ? (
@@ -405,96 +414,124 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
     </div>
   ) : null;
 
+  const normalizedArticle = normalizeCanonicalArticle(article);
+  const normalizedRelated = (related?.articles || []).map((a: any) => normalizeCanonicalArticle(a));
+
   const relatedContent = (
-    <div className="mt-8">
-      <h3 className="text-xl font-bold mb-4">Related Articles</h3>
-      <div className="space-y-4">
-        {related?.articles?.map((a: any) => (
-          <Link href={`/articles/${a.url}`} key={a.id} className="block group">
-            <div className="bg-card border border-border p-4 rounded-lg group-hover:border-border/80 transition-colors">
-              <h4 className="font-semibold text-primary group-hover:underline mb-2">{a.title}</h4>
-              <p className="text-sm text-muted-foreground line-clamp-2">{a.summary}</p>
-              <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground/70">
-                <span>{a.source}</span>
-                <span>•</span>
-                <span>{new Date(a.published_at).toLocaleDateString()}</span>
-              </div>
-            </div>
-          </Link>
-        ))}
+    <div className="mt-12 space-y-12">
+      <ExploreRelatedTopics currentArticle={normalizedArticle} allArticles={normalizedRelated} />
+
+      <div className="pt-8 border-t border-border/40 space-y-6">
+        <div className="space-y-1">
+          <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground/70 font-semibold">
+            Coverage
+          </div>
+          <h3 className="text-2xl font-bold font-serif text-foreground">Related Stories</h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {normalizedRelated.map((a: CanonicalArticle) => (
+            <AdaptiveStoryCard key={a.id} article={a} />
+          ))}
+        </div>
       </div>
     </div>
   );
 
+
   return (
     <>
+      <StickyReadingHeader
+        title={article.title}
+        documentType={article.document_type}
+        isMultiTopic={article.is_multi_topic}
+        readingTimeMin={article.reading_time || 5}
+        largeTextMode={largeTextMode}
+        onToggleLargeText={() => {
+          const val = !largeTextMode;
+          setLargeTextMode(val);
+          savePreferences(focusMode, compactMode, val);
+        }}
+      />
       <ReadingProgress wordCount={article.word_count || content?.split(/\s+/).length || 500} />
-      
+
       <ArticleLayout
         focusMode={focusMode}
         actions={
-          <FloatingActions 
-            url={typeof window !== "undefined" ? window.location.href : ""} 
-            title={article.title} 
+          <FloatingActions
+            url={typeof window !== "undefined" ? window.location.href : ""}
+            title={article.title}
             articleId={article.id}
           />
         }
         header={
           <div className="space-y-6">
-            <ArticleHeader 
+            <ArticleHeader
               title={article.title}
-              category={"News"}
+              category={article.category || "News"}
               publishedAt={article.published_at ? new Date(article.published_at).toISOString() : new Date().toISOString()}
               readingTimeMin={article.reading_time || 5}
+              documentType={article.document_type}
+              isMultiTopic={article.is_multi_topic}
             />
-            {/* Reading Preferences Control Bar */}
-            <div className="flex items-center justify-between border-t border-b border-border/50 py-3">
+            {/* Reading Preferences Control Bar — compacts when scrolled (reading focus) */}
+            <div
+              className={cn(
+                "flex items-center justify-between border-t border-b border-border/50 transition-all duration-300 ease-out",
+                isReadingMode ? "py-1.5" : "py-3"
+              )}
+            >
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-xs font-mono">
-                <span className="text-muted-foreground uppercase tracking-wider hidden sm:inline">Mode:</span>
+                <span className="text-muted-foreground uppercase tracking-wider hidden sm:inline font-semibold">Mode:</span>
                 <button
+                  type="button"
                   onClick={() => {
                     const val = !focusMode;
                     setFocusMode(val);
                     savePreferences(val, compactMode, largeTextMode);
                   }}
                   className={cn(
-                    "px-3 py-1 rounded-full border transition-all text-[11px]",
+                    "motion-btn inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all text-[11px] font-semibold",
                     focusMode
-                      ? "bg-primary text-primary-foreground border-primary font-bold"
-                      : "border-border/50 text-muted-foreground hover:text-foreground"
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/30"
                   )}
                 >
-                  Zen Focus
+                  <Eye className="w-3 h-3" strokeWidth={1.75} />
+                  <span>Zen Focus</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     const val = !compactMode;
                     setCompactMode(val);
                     savePreferences(focusMode, val, largeTextMode);
                   }}
                   className={cn(
-                    "px-3 py-1 rounded-full border transition-all text-[11px]",
+                    "motion-btn inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all text-[11px] font-semibold",
                     compactMode
-                      ? "bg-primary text-primary-foreground border-primary font-bold"
-                      : "border-border/50 text-muted-foreground hover:text-foreground"
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/30"
                   )}
                 >
-                  Compact
+                  <Minimize2 className="w-3 h-3" strokeWidth={1.75} />
+                  <span>Compact</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     const val = !largeTextMode;
                     setLargeTextMode(val);
                     savePreferences(focusMode, compactMode, val);
                   }}
                   className={cn(
-                    "px-3 py-1 rounded-full border transition-all text-[11px]",
+                    "motion-btn inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all text-[11px] font-semibold",
                     largeTextMode
-                      ? "bg-primary text-primary-foreground border-primary font-bold"
-                      : "border-border/50 text-muted-foreground hover:text-foreground"
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/30"
                   )}
                 >
-                  Large Text
+                  <Type className="w-3 h-3" strokeWidth={1.75} />
+                  <span>Large Text</span>
                 </button>
               </div>
               <ReadingPreferences />
@@ -502,13 +539,16 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
           </div>
         }
         heroImageNode={heroImageNode}
+        // AI Summary reveals first after hero — reinforces product identity
         aiSummary={
-          <AISummaryCard 
-            summary={article.summary || ""}
-          />
+          <ArticleRevealSection delay={REVEAL_DELAYS.meta + 0.08}>
+            <AISummaryCard
+              summary={article.summary || ""}
+            />
+          </ArticleRevealSection>
         }
         sourceCredibility={
-          <SourceCredibility 
+          <SourceCredibility
             sourceName={article.source}
             sourceUrl={article.url}
             credibilityScore={"85"}
@@ -520,12 +560,14 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
           <TableOfContents selector="div.prose-theme" />
         }
         content={
-          <ArticleReader content={clean_html || content || ""} />
+          <ArticleRevealSection delay={REVEAL_DELAYS.body}>
+            <ArticleReader content={clean_html || content || ""} />
+          </ArticleRevealSection>
         }
         keyTakeaways={keyTakeawaysNode}
         askAI={
           <div className="space-y-6">
-            <ConversationalSearch 
+            <ConversationalSearch
               conversationId={conversationId}
               articleId={article.id}
               articleTitle={article.title}
@@ -539,7 +581,7 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
         }
         timeline={timelineNode}
         knowledgePanel={
-          <KnowledgePanel 
+          <KnowledgePanel
             entities={knowledge?.entities}
             topics={knowledge?.topics}
             timeline={knowledge?.timeline}

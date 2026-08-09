@@ -95,16 +95,39 @@ def run_article_intelligence_pipeline(self, article_id: int) -> dict:
                     if summary.key_takeaways
                     else []
                 )
+                doc_type = getattr(summary, "document_type", "Breaking News")
+                is_multi = getattr(summary, "is_multi_topic", False)
+                topics_list = getattr(summary, "primary_topics", [])
+                dom_pct = getattr(summary, "dominant_topic_percentage", 100.0)
+                exec_summary = getattr(summary, "executive_summary", "")
+
+                proc_values: dict = {
+                    "key_takeaways": takeaways_list,
+                    "document_type": doc_type,
+                    "is_multi_topic": is_multi,
+                    "primary_topics": topics_list,
+                    "dominant_topic_percentage": dom_pct,
+                }
+                read_values: dict = {
+                    "key_takeaways": takeaways_list,
+                    "document_type": doc_type,
+                    "is_multi_topic": is_multi,
+                    "primary_topics": topics_list,
+                    "dominant_topic_percentage": dom_pct,
+                }
+                if exec_summary:
+                    proc_values["summary"] = exec_summary
+                    read_values["summary"] = exec_summary
 
                 await session.execute(
                     update(ProcessedArticle)
                     .where(ProcessedArticle.id == article_id)
-                    .values(key_takeaways=takeaways_list)
+                    .values(**proc_values)
                 )
                 await session.execute(
                     update(ArticleReadModel)
                     .where(ArticleReadModel.id == str(article_id))
-                    .values(key_takeaways=takeaways_list)
+                    .values(**read_values)
                 )
                 await session.commit()
 

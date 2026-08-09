@@ -8,6 +8,7 @@ export interface FeaturedArticle {
   publishedAt: string;
   readTime: number;
   category: string;
+  url?: string | null;
 }
 
 export interface HeroCarouselProps {

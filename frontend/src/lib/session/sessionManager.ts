@@ -21,11 +21,17 @@ export const sessionManager = {
   setSession(token: string, expiresInSeconds: number = 900) {
     accessToken = token;
     tokenExpiresAt = Date.now() + (expiresInSeconds * 1000);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("has_session", "true");
+    }
   },
 
   clearSession() {
     accessToken = null;
     tokenExpiresAt = null;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("has_session");
+    }
   },
 
   async login(credentials: any): Promise<any> {
@@ -82,12 +88,19 @@ export const sessionManager = {
   },
 
   async refresh(): Promise<any> {
+    if (typeof window !== "undefined" && !localStorage.getItem("has_session")) {
+      return null;
+    }
+
     try {
       const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: "POST",
         credentials: "include"
       });
-      if (!res.ok) throw new Error("Refresh failed");
+      if (!res.ok) {
+        this.clearSession();
+        return null;
+      }
       
       const payload = await res.json();
       const data = payload.data || payload;
@@ -99,7 +112,7 @@ export const sessionManager = {
       return null;
     } catch (e) {
       this.clearSession();
-      throw e;
+      return null;
     }
   }
 };

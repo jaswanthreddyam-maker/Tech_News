@@ -12,11 +12,19 @@ class BaseAgent:
     def __init__(self, name: str):
         self.name = name
         self.logger = logging.getLogger(f"tech_news.agents.{name}")
+        try:
+            from app.core.config import settings
+            user_agent = getattr(settings, "USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+        except Exception:
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(15.0, connect=5.0),
             follow_redirects=True,
             headers={
-                "User-Agent": "TechNewsTodayBot/1.0 (+http://localhost/bot)"
+                "User-Agent": user_agent,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
             }
         )
 

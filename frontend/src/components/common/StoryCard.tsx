@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import React, { useState, useEffect, useCallback } from "react";
 import { m } from "framer-motion";
 import { MotionScales } from "@/design-system/motion/tokens";
 import { ArticleThumbnail } from "@/components/common/ArticleThumbnail";
 import { formatDistanceToNow } from "date-fns";
 import { RecommendationReasonBadges } from "@/components/recommendation/RecommendationReasonBadges";
+import { useArticleTransition } from "@/components/layout/RouteTransitionProvider";
+import { ArticleLink } from "@/domains/article/ArticleLink";
+import { resolve as resolveArticleMedia } from "@/domains/article/media/resolve";
 
 export interface StoryCardProps {
   article: {
@@ -15,6 +17,8 @@ export interface StoryCardProps {
     title: string;
     hero_image?: string | null;
     image_url?: string | null;
+    thumbnail_local?: string | null;
+    thumbnail_url?: string | null;
     source_name?: string | null;
     source?: string | null;
     published_at?: string | null;
@@ -32,12 +36,25 @@ export interface StoryCardProps {
 
 export function StoryCard({ article, recommendation, className = "" }: StoryCardProps) {
   const [isMounted, setIsMounted] = useState(false);
-  const imageUrl = article.hero_image || article.image_url;
+  const { setTransitionData } = useArticleTransition();
   const sourceName = article.source_name || article.source || "Unknown Source";
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const media = resolveArticleMedia(article as any);
+      setTransitionData({
+        cardRect: rect,
+        cardImageSrc: media.url,
+        cardTitle: article.title || null,
+      });
+    },
+    [article, setTransitionData]
+  );
 
   const CardContent = (
     <>
@@ -74,8 +91,9 @@ export function StoryCard({ article, recommendation, className = "" }: StoryCard
   );
 
   return (
-    <Link 
-      href={`/articles/${article.slug}`} 
+    <ArticleLink 
+      article={article} 
+      onClick={handleClick}
       className={`group block h-full ${className}`}
     >
       {!isMounted ? (
@@ -91,6 +109,6 @@ export function StoryCard({ article, recommendation, className = "" }: StoryCard
           {CardContent}
         </m.div>
       )}
-    </Link>
+    </ArticleLink>
   );
 }

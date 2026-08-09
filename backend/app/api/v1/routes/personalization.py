@@ -11,7 +11,7 @@ from app.services.personalization_service import PersonalizationService
 router = APIRouter()
 
 class ReadingHistoryPayload(BaseModel):
-    article_id: str
+    article_id: str | int
     progress: float
     completed: bool
     reading_time_seconds: int

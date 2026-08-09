@@ -7,6 +7,7 @@ import { Skeleton } from "@/design-system/components/Skeleton";
 import { useLoadingState } from "@/design-system/hooks/useLoadingState";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { ArticleLink } from "@/domains/article/ArticleLink";
 
 import { Reveal } from "@/components/animations";
 
@@ -55,7 +56,7 @@ export function RelatedStories() {
             <div className="space-y-4">
               {articles.map((article) => (
                 <div key={article.id} className="group">
-                  <Link href={`/articles/${article.slug}`} className="block">
+                  <ArticleLink article={article as any} section="RelatedStories" className="block">
                     <h4 className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2 mb-1">
                       {article.title}
                     </h4>
@@ -68,7 +69,7 @@ export function RelatedStories() {
                         </>
                       )}
                     </div>
-                  </Link>
+                  </ArticleLink>
                 </div>
               ))}
             </div>

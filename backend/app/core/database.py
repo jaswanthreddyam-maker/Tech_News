@@ -18,6 +18,28 @@ logger = logging.getLogger("tech_news.database")
 import os
 import sys
 
+def import_all_models():
+    """Ensures all SQLAlchemy model mappers are registered before executing queries."""
+    import importlib
+    model_names = [
+        "ai_artifacts", "analytics", "article", "behavioral", "certification",
+        "conversation", "distribution", "editorial", "event", "growth",
+        "intelligence", "knowledge", "memory", "recipient", "recommendation",
+        "research", "source", "story", "telemetry", "tnt_knowledge",
+        "user", "user_settings", "workspace"
+    ]
+    for name in model_names:
+        try:
+            importlib.import_module(f"app.models.{name}")
+        except Exception as e:
+            logger.warning(f"Could not import model {name}: {e}")
+    try:
+        importlib.import_module("app.briefing.models")
+    except Exception as e:
+        logger.warning(f"Could not import briefing models: {e}")
+
+import_all_models()
+
 from sqlalchemy.pool import NullPool
 
 is_testing = os.getenv("USE_NULL_POOL", "0") == "1" or "pytest" in sys.modules

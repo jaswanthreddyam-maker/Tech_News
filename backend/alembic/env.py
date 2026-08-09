@@ -35,6 +35,8 @@ import app.models.user_settings
 import app.models.workspace
 import app.core.events.models
 import app.newsletter.models
+import app.briefing.models
+
 
 # Import models for Alembic autogenerate support
 import app.models.telemetry
