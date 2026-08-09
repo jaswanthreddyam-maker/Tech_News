@@ -44,8 +44,7 @@ class HomepageBuilder:
                 and_(
                     ArticleReadModel.is_test_data == False,
                     ArticleReadModel.published_at >= cutoff,
-                    ArticleReadModel.publication_status == "PUBLISHED",
-                    or_(ArticleReadModel.expires_at == None, ArticleReadModel.expires_at > now)
+                    ArticleReadModel.publication_status == "PUBLISHED"
                 )
             ).options(
                 defer(ArticleReadModel.content),
