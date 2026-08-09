@@ -41,7 +41,7 @@ const STAGES: { state: OverlayState; delay: number }[] = [
   { state: "stage3", delay: 1400 },
 ];
 
-const AUTO_REVEAL_AT = 2500;
+const AUTO_REVEAL_AT = 3500;
 
 const BLUR_VARIANTS = {
   enter: { opacity: 0, filter: "blur(16px)", scale: 0.97, y: 12 },

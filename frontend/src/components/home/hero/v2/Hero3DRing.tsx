@@ -251,7 +251,7 @@ export function Hero3DRing() {
       };
 
       window.addEventListener("welcome-overlay-complete", handleOverlayComplete);
-      const fallbackTimer = setTimeout(startArrival, 4500);
+      const fallbackTimer = setTimeout(startArrival, 5500);
 
       return () => {
         window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
