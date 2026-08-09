@@ -12,6 +12,7 @@ from app.schemas.responses import PaginatedResponse, PaginationMetadata
 
 router = APIRouter()
 
+from typing import Any
 from fastapi import Response, Query, Depends
 
 _in_memory_homepage_cache: dict[str, Any] = {
