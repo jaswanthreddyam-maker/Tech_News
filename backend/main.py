@@ -149,6 +149,28 @@ async def generic_exception_handler(request: Request, exc: Exception):
 from starlette.middleware.base import BaseHTTPMiddleware
 
 
+class DynamicCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        
+        if request.method == "OPTIONS":
+            response = Response(status_code=204)
+            if origin:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Correlation-ID, X-Anonymous-ID, X-Admin-Token, Cache-Control"
+            return response
+
+        response = await call_next(request)
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Correlation-ID, X-Anonymous-ID, X-Admin-Token, Cache-Control"
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -162,29 +184,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+app.add_middleware(DynamicCORSMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(MaintenanceModeMiddleware)
-
-# Mount Security CORS Middleware LAST so it executes FIRST on all requests & error responses
-cors_origins = [str(origin).rstrip("/") for origin in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
-default_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://tech-news-alpha-eosin.vercel.app",
-]
-for default_origin in default_origins:
-    if default_origin not in cors_origins:
-        cors_origins.append(default_origin)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"https?://.*",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # 5. Mount Static Uploads Folder
 import os
