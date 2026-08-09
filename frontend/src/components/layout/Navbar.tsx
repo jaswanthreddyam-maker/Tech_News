@@ -45,10 +45,10 @@ export function Navbar() {
 
     window.addEventListener("hero-arrival-complete", handleArrivalComplete);
 
-    // Fallback timer (3.0s) to guarantee navbar appearance after arrival animation
+    // Fallback timer (7.5s) to guarantee navbar appearance after welcome + arrival sequence
     const fallbackTimer = setTimeout(() => {
       setNavVisible(true);
-    }, 3000);
+    }, 7500);
 
     return () => {
       window.removeEventListener("hero-arrival-complete", handleArrivalComplete);
@@ -56,10 +56,18 @@ export function Navbar() {
     };
   }, [pathname]);
 
-  // Scroll detection for glassy height & blur transition after 20px
+  // Hysteresis scroll detection to prevent mobile elastic overscroll strobing
   React.useEffect(() => {
+    let isScrolled = false;
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
+      const y = window.scrollY;
+      if (!isScrolled && y > 40) {
+        isScrolled = true;
+        setScrolled(true);
+      } else if (isScrolled && y < 15) {
+        isScrolled = false;
+        setScrolled(false);
+      }
     };
     handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -149,8 +157,8 @@ export function Navbar() {
             ? "opacity-100 translate-y-0 pointer-events-auto"
             : "opacity-0 -translate-y-4 pointer-events-none",
           scrolled
-            ? "h-14 bg-background/50 backdrop-blur-[30px] border-b border-white/[0.08] shadow-[0_16px_40px_-15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.12)]"
-            : "h-16 bg-transparent border-b border-transparent"
+            ? "h-14 sm:h-16 bg-background/50 backdrop-blur-[30px] border-b border-white/[0.08] shadow-[0_16px_40px_-15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.12)]"
+            : "h-14 sm:h-16 bg-transparent border-b border-transparent"
         )}
       >
         {/* Subtle Ambient Hero Light Reflection Line */}
