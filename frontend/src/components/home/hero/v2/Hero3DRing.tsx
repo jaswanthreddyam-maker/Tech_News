@@ -235,8 +235,7 @@ export function Hero3DRing() {
     // Synchronize arrival start with WelcomeOverlay if overlay is active on initial paint
     const isWelcomeOverlayActive =
       typeof window !== "undefined" &&
-      sessionStorage.getItem("welcome-played") !== "1" &&
-      document.querySelector('[role="dialog"][aria-label*="Welcome"]') !== null;
+      sessionStorage.getItem("welcome-played") !== "1";
 
     if (isWelcomeOverlayActive) {
       let isStarted = false;
