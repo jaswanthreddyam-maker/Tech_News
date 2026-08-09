@@ -8,10 +8,10 @@ import { useTrending } from "@/components/hooks/articles/useArticles";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 
 interface HeroCarouselProps {
-  items: FeaturedArticle[];
-  editorPicks: FeaturedArticle[];
-  latest: FeaturedArticle[];
-  aiInsights: FeaturedArticle[];
+  items?: FeaturedArticle[];
+  editorPicks?: FeaturedArticle[];
+  latest?: FeaturedArticle[];
+  aiInsights?: FeaturedArticle[];
 }
 
 export function HeroCarousel({

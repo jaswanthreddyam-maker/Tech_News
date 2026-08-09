@@ -9,8 +9,8 @@ import {
   Newsletter,
   StoryEvolution,
 } from "@/components/homepage";
-import { HeroCarouselServer } from "@/components/home/hero/HeroCarouselServer";
-import { HeroCarouselSkeleton } from "@/components/home/hero/HeroCarouselSkeleton";
+import { HeroCarousel } from "@/components/home/hero/HeroCarousel";
+import { HeroLcpPreloader } from "@/components/home/hero/HeroLcpPreloader";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 import { ResumeReading } from "@/components/reading/ResumeReading";
 import { SPACING } from "@/design-system/tokens";
@@ -79,14 +79,17 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
+      {/* Invisible Server Preloader for LCP Image */}
+      <Suspense fallback={null}>
+        <HeroLcpPreloader />
+      </Suspense>
+
       {/* Hero Spatial Stage Object */}
       <Container size="wide" className={`mt-2 ${SPACING.SECTION_GAP_XL}`}>
         <SectionErrorBoundary
           fallback={<Skeleton className="w-full h-[500px]" />}
         >
-          <Suspense fallback={<HeroCarouselSkeleton />}>
-            <HeroCarouselServer />
-          </Suspense>
+          <HeroCarousel />
         </SectionErrorBoundary>
       </Container>
 
