@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { apiFetch } from "../../services/api";
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 import { fetchInfrastructureHealth } from "@/lib/api/normalizers/infrastructure";
 import {
   Activity,
@@ -316,16 +317,7 @@ export default function AdminDashboardPage() {
 
   // SSE for live operations feed (Initial Load then stream forever)
   useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
-    let sseUrl = `${apiBase}/events/stream`;
-    if (typeof window !== "undefined") {
-      if (sseUrl.startsWith("/")) {
-        sseUrl = `${window.location.protocol}//${window.location.host}${sseUrl}`;
-      }
-      if (sseUrl.includes(":3000")) {
-        sseUrl = sseUrl.replace(":3000", "");
-      }
-    }
+    const sseUrl = `${getApiBaseUrl()}/events/stream`;
 
     let eventSource: EventSource | null = null;
     let reconnectDelay = 1000;

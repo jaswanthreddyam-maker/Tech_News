@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArticleLink } from "@/domains/article/ArticleLink";
 import { m, useInView, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight, Compass } from 'lucide-react';
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
 interface Session {
   session_id: string;
@@ -246,8 +247,7 @@ export function ResumeReading() {
         if (typeof window !== 'undefined') {
           anonId = localStorage.getItem('tnt_anon_id');
         }
-        
-        const url = new URL('/api/v1/behavioral/sessions', window.location.origin);
+        const url = new URL(`${getApiBaseUrl()}/behavioral/sessions`);
         url.searchParams.append('status', 'in_progress');
         url.searchParams.append('limit', '3');
         if (anonId) {

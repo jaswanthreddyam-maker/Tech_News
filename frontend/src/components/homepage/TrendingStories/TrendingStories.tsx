@@ -18,6 +18,7 @@ import {
 } from "./helpers";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
 /**
  * TrendingStories — Clean Architectural Orchestrator (v3.2 Direct 3D Matrix Motion)
@@ -60,7 +61,7 @@ export function TrendingStories() {
 
   // Listen to SSE events for thumbnail updates
   useEffect(() => {
-    const sseUrl = "/api/v1/events/stream";
+    const sseUrl = getApiBaseUrl() + "/events/stream";
     const es = new EventSource(sseUrl);
 
     es.onmessage = (event) => {

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "@/services/api";
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 import { 
   TrendingUp, 
   AlertCircle, 
@@ -82,7 +83,7 @@ export default function NewsroomDashboard() {
     apiFetch<CalibrationStatus>("/admin/editorial/calibration-status").then(res => setCalibration(res)).catch(() => {});
     
     // SSE Stream
-    const eventSource = new EventSource("/api/v1/admin/editorial/events");
+    const eventSource = new EventSource(`${getApiBaseUrl()}/admin/editorial/events`);
     eventSource.onmessage = (event) => {
       console.log("Real-time Editorial Event:", event.data);
     };

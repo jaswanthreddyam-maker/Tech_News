@@ -2,6 +2,7 @@
 
 import { openDB, IDBPDatabase } from 'idb';
 import { useCallback, useEffect, useRef } from 'react';
+import { getApiBaseUrl } from '@/lib/api/getApiBaseUrl';
 
 const DB_NAME = 'tnt-behavioral-db';
 const STORE_NAME = 'events-queue';
@@ -71,7 +72,7 @@ export function useOfflineQueue() {
 
       try {
         // Send to backend
-        const response = await fetch('/api/v1/behavioral/events', {
+        const response = await fetch(`${getApiBaseUrl()}/behavioral/events`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

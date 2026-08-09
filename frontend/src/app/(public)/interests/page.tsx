@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Lock, UserCircle, Activity } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/api/getApiBaseUrl';
 
 function getLocalAnonymousId() {
   if (typeof window === 'undefined') return null;
@@ -30,7 +31,7 @@ export default function InterestsPage() {
         const params = new URLSearchParams();
         if (anonId) params.append('anonymous_id', anonId);
         
-        const res = await fetch(`/api/v1/behavioral/interests?${params.toString()}`);
+        const res = await fetch(`${getApiBaseUrl()}/behavioral/interests?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to fetch interests');
         
         const data = await res.json();
