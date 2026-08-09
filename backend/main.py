@@ -165,14 +165,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 
 # 3. Mount Security CORS Middleware
-if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[origin for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+cors_origins = [str(origin).rstrip("/") for origin in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
+default_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://tech-news-alpha-eosin.vercel.app",
+]
+for default_origin in default_origins:
+    if default_origin not in cors_origins:
+        cors_origins.append(default_origin)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 4. Mount Production Logging & Correlation Middleware
 app.add_middleware(MaintenanceModeMiddleware)
