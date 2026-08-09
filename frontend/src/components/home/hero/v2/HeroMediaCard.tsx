@@ -119,7 +119,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
                       alt=""
                       fill
                       quality={50}
-                      priority={isActive || index <= 3}
+                      priority={false}
                       aria-hidden="true"
                       className="object-cover scale-125 blur-2xl opacity-75 transition-transform duration-700 group-hover:scale-135 group-hover:saturate-[1.08]"
                     />
@@ -135,7 +135,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
                       fill
                       sizes="(max-width: 768px) 290px, 340px"
                       quality={90}
-                      priority={isActive || index <= 3}
+                      priority={isActive || index === 0}
                       onError={() => setImgSrc("")}
                       className="object-cover object-center w-full h-full drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)] transition-all duration-700 group-hover:scale-[1.04]"
                     />

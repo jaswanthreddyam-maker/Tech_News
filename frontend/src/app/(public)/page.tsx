@@ -9,7 +9,7 @@ import {
   Newsletter,
   StoryEvolution,
 } from "@/components/homepage";
-import { HeroCarousel } from "@/components/home/hero/HeroCarousel";
+import { HeroCarouselServer } from "@/components/home/hero/HeroCarouselServer";
 import { HeroCarouselSkeleton } from "@/components/home/hero/HeroCarouselSkeleton";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 import { ResumeReading } from "@/components/reading/ResumeReading";
@@ -71,11 +71,6 @@ const jsonLd = {
 };
 
 export default function HomePage() {
-  const items: any[] = [];
-  const editorPicks: any[] = [];
-  const latest: any[] = [];
-  const aiInsights: any[] = [];
-
   return (
     <HomepageScene>
       <h1 className="sr-only">Tech News Today</h1>
@@ -90,12 +85,7 @@ export default function HomePage() {
           fallback={<Skeleton className="w-full h-[500px]" />}
         >
           <Suspense fallback={<HeroCarouselSkeleton />}>
-            <HeroCarousel
-              items={items}
-              editorPicks={editorPicks}
-              latest={latest}
-              aiInsights={aiInsights}
-            />
+            <HeroCarouselServer />
           </Suspense>
         </SectionErrorBoundary>
       </Container>
