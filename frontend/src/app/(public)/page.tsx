@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getArticles } from "@/lib/api/articles";
+import { getTrendingArticles } from "@/lib/api/articles";
 import {
   HomepageScene,
   BreakingNews,
@@ -70,7 +70,21 @@ const jsonLd = {
   ],
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Fetch trending articles server-side so the Hero's LCP <img> exists in SSR HTML.
+  // This eliminates the 10+ second LCP resource delay caused by the client-only
+  // useTrending() → API → HeroMediaCard mount waterfall.
+  // The same data is reused by HeroLcpPreloader, so this costs zero extra API calls.
+  let heroItems: ReturnType<typeof mapArticlesToFeatured> = [];
+  try {
+    const res = await getTrendingArticles();
+    const rawArticles = Array.isArray(res) ? res : (res as any)?.data || [];
+    heroItems = mapArticlesToFeatured(rawArticles);
+  } catch {
+    // Fall back silently — HeroCarousel will client-fetch on its own
+    heroItems = [];
+  }
+
   return (
     <HomepageScene>
       <h1 className="sr-only">Tech News Today</h1>
@@ -79,17 +93,17 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* Invisible Server Preloader for LCP Image */}
+      {/* Invisible Server Preloader for LCP Image — emits <link rel="preload"> */}
       <Suspense fallback={null}>
         <HeroLcpPreloader />
       </Suspense>
 
-      {/* Hero Spatial Stage Object */}
+      {/* Hero Spatial Stage Object — initialItems from SSR so LCP <img> is in initial HTML */}
       <Container size="wide" className={`mt-2 ${SPACING.SECTION_GAP_XL}`}>
         <SectionErrorBoundary
           fallback={<Skeleton className="w-full h-[500px]" />}
         >
-          <HeroCarousel />
+          <HeroCarousel initialItems={heroItems} />
         </SectionErrorBoundary>
       </Container>
 
