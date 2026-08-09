@@ -163,8 +163,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(MaintenanceModeMiddleware)
 
-# 3. Mount Security CORS Middleware
+# Mount Security CORS Middleware LAST so it executes FIRST on all requests & error responses
 cors_origins = [str(origin).rstrip("/") for origin in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
 default_origins = [
     "http://localhost:3000",
@@ -178,15 +180,11 @@ for default_origin in default_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 4. Mount Production Logging & Correlation Middleware
-app.add_middleware(MaintenanceModeMiddleware)
-app.add_middleware(LoggingMiddleware)
 
 # 5. Mount Static Uploads Folder
 import os
