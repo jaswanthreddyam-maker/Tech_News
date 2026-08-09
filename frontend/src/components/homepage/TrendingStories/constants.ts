@@ -3,7 +3,7 @@ export const TRENDING_LAYOUT = {
   FEATURE_COLS: 5,
   COMPACT_COLS: 7,
   THUMBNAIL_SIZE: 80,
-  MAX_COMPACT: 9,
+  MAX_COMPACT: 6,
 } as const;
 
 export const CAMERA_CONFIG = {
