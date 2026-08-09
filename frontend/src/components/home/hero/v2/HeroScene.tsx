@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { m, useScroll, useTransform } from "framer-motion";
 import { HeroSceneProps } from "./types";
 import { HeroSceneProvider } from "./HeroSceneProvider";
@@ -21,8 +21,31 @@ export function HeroScene(props: HeroSceneProps) {
   });
   const opacity = useTransform(scrollYProgress, [0.5, 1], [1, 0]);
 
-  // The early return has been removed to allow the 3D ring to mount immediately
-  // with skeleton items passed from HeroCarousel while data is fetching.
+  // Synchronize Hero fade-in with the 3D ring arrival (1 second after welcome overlay completes)
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const isWelcomeOverlayActive =
+      typeof window !== "undefined" &&
+      sessionStorage.getItem("welcome-played") !== "1" &&
+      document.querySelector('[role="dialog"][aria-label*="Welcome"]') !== null;
+
+    if (isWelcomeOverlayActive) {
+      const handleOverlayComplete = () => {
+        // Wait 1 second for the welcome screen to fade out before revealing the Hero
+        setTimeout(() => setIsReady(true), 1000);
+      };
+      window.addEventListener("welcome-overlay-complete", handleOverlayComplete);
+      const fallbackTimer = setTimeout(() => setIsReady(true), 5500);
+
+      return () => {
+        window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
+        clearTimeout(fallbackTimer);
+      };
+    } else {
+      setIsReady(true);
+    }
+  }, []);
 
   return (
     <HeroSceneProvider {...props}>
@@ -33,6 +56,14 @@ export function HeroScene(props: HeroSceneProps) {
         aria-label="Featured AI Newsroom Stage"
         className="relative w-full overflow-visible bg-black min-h-[580px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-4 group/hero-stage select-none"
       >
+        {/* Black overlay that fades out to create a cinematic "fade in" of the Hero scene */}
+        <m.div
+          initial={{ opacity: 1 }}
+          animate={{ opacity: isReady ? 0 : 1 }}
+          transition={{ duration: 1.0, ease: "easeInOut" }}
+          className="absolute inset-0 bg-black z-50 pointer-events-none"
+        />
+
         <HeroStageBackground />
         <HeroAtmosphere />
 
