@@ -44,7 +44,7 @@ export function HeroScene(props: HeroSceneProps) {
           </div>
 
           {/* Right 3D Ring */}
-          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-2 lg:order-2 overflow-visible h-[420px] sm:h-[460px] lg:h-[480px] -mt-24 sm:-mt-24 lg:mt-0 lg:-translate-y-[30px]">
+          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-2 lg:order-2 overflow-visible h-[420px] sm:h-[460px] lg:h-[480px] -mt-48 sm:-mt-48 lg:mt-0 lg:-translate-y-[30px]">
             <div className="relative w-full h-full flex items-center justify-center overflow-visible">
               <Hero3DRing />
             </div>
