@@ -43,10 +43,7 @@ async def list_articles(
         return PaginatedResponse(
             correlation_id=correlation_id_ctx.get() or "system",
             data=cards_data[:limit],
-            total=len(cards_data),
-            page=1,
-            page_size=limit,
-            has_next=False,
+            pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
         )
 
     correlation_id = correlation_id_ctx.get() or "system"
@@ -76,10 +73,7 @@ async def list_articles(
                 return PaginatedResponse(
                     correlation_id=correlation_id,
                     data=cards_data[:limit],
-                    total=len(cards_data),
-                    page=1,
-                    page_size=limit,
-                    has_next=False,
+                    pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
                 )
             cached = await asyncio.wait_for(redis.get(cache_key), timeout=REDIS_OP_TIMEOUT)
     except Exception as e:
