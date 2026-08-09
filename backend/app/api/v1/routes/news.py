@@ -12,8 +12,11 @@ from app.schemas.responses import PaginatedResponse, PaginationMetadata
 
 router = APIRouter()
 
+from fastapi import Response, Query, Depends
+
 @router.get("", response_model=PaginatedResponse[ArticleCard])
 async def list_articles(
+    response: Response,
     category: str | None = Query(None, description="Topic filter slug"),
     cursor: str | None = Query(None, description="Cursor for pagination"),
     limit: int = Query(10, ge=1, le=100),
@@ -22,6 +25,8 @@ async def list_articles(
     """
     Fetch articles from ArticleReadModel using the versioned Redis ranking cache.
     """
+    import time
+    t0 = time.time()
     correlation_id = correlation_id_ctx.get() or "system"
 
     from app.core.redis import get_redis_client
@@ -45,6 +50,7 @@ async def list_articles(
         from app.core.redis import mark_redis_failed
         mark_redis_failed()
         logger.warning(f"Redis cache read failed (proceeding without cache): {e}")
+    t_redis = time.time() - t0
 
     ranked_ids = []
     cache_meta = {}
@@ -221,26 +227,42 @@ async def list_articles(
     # Paginate by slicing
     articles = articles[:limit]
 
+    # Batch fetch topics and entities for all articles in 2 single queries (eliminates N+1 loop delay)
+    art_ids = [art.id for art in articles]
+    topics_by_art: dict[str, list[str]] = {}
+    entities_by_art: dict[str, list[str]] = {}
+
+    if art_ids:
+        from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
+        # 1. Batch topics
+        t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
+        t_res = await db.execute(t_stmt)
+        for row in t_res.all():
+            topics_by_art.setdefault(str(row[0]), []).append(row[1])
+
+        # 2. Batch entities
+        e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
+            EntityNode, EntityNode.id == ArticleEntityLink.entity_id
+        ).where(ArticleEntityLink.article_id.in_(art_ids))
+        e_res = await db.execute(e_stmt)
+        for row in e_res.all():
+            art_id_str = str(row[0])
+            if len(entities_by_art.get(art_id_str, [])) < 3:
+                entities_by_art.setdefault(art_id_str, []).append(row[1])
 
     articles_list = []
     for art in articles:
-        # Fetch topics for the card
-        topic_stmt = select(ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id == art.id)
-        topic_res = await db.execute(topic_stmt)
-        topics = topic_res.scalars().all()
-
-        # Fetch entities for the card
-        entity_stmt = select(EntityNode.canonical_name).join(
-            ArticleEntityLink, EntityNode.id == ArticleEntityLink.entity_id
-        ).where(ArticleEntityLink.article_id == art.id).limit(3)
-        entity_res = await db.execute(entity_stmt)
-        entities = entity_res.scalars().all()
+        topics = topics_by_art.get(str(art.id), [])
+        entities = entities_by_art.get(str(art.id), [])
 
         articles_list.append(ArticleCard.from_model(
             art,
             topics=topics,
             entities=entities
         ))
+
+    t_total = time.time() - t0
+    response.headers["Server-Timing"] = f"redis;dur={t_redis*1000:.1f}, total;dur={t_total*1000:.1f}"
 
     return PaginatedResponse(
         correlation_id=correlation_id,
