@@ -53,23 +53,20 @@ worker_loop = None
 
 @worker_process_init.connect
 def init_worker_process(**kwargs):
-    global celery_engine, CeleryAsyncSessionLocal, worker_loop
+    global worker_loop
 
     # Create persistent event loop for this worker process
     worker_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(worker_loop)
 
-    # Initialize the engine bound to this worker's loop
-    celery_engine = create_async_engine(
-        settings.DATABASE_URL,
-        pool_size=1,
-        max_overflow=2,
-        pool_timeout=30,
-    )
-    CeleryAsyncSessionLocal = sessionmaker(
-        bind=celery_engine, class_=AsyncSession, expire_on_commit=False
-    )
-    logger.info("Celery worker process initialized with process-local isolated async_engine and loop.")
+    # CRITICAL FIX: Reconfigure the GLOBAL async engine for this specific worker process.
+    # Because asyncpg connections and async event loops do not survive os.fork() safely,
+    # we must completely replace the global engine in the child process to prevent
+    # connection acquisition deadlocks and 5-second pool timeouts.
+    from app.core.database import configure_database_pool
+    configure_database_pool(pool_size=1, max_overflow=2)
+    
+    logger.info("Celery worker process initialized and global DB pool safely re-created (1+2).")
 
 def run_in_worker_loop(coro):
     """Helper to safely run coroutines using the persistent worker loop, or fallback to a new one."""
@@ -81,10 +78,8 @@ def run_in_worker_loop(coro):
         return asyncio.run(coro)
 
 def get_celery_session():
-    """Returns the worker-local session maker, or global if not in a worker."""
-    global CeleryAsyncSessionLocal
-    if CeleryAsyncSessionLocal:
-        return CeleryAsyncSessionLocal()
+    """Returns the globally configured async session maker."""
+    from app.core.database import AsyncSessionLocal
     return AsyncSessionLocal()
 
 celery_app.conf.update(
