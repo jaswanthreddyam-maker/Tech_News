@@ -1,7 +1,7 @@
-import { MetadataRoute } from 'next';
+import { getApiBaseUrl } from '@/lib/api/getApiBaseUrl';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://tech-news-today.vercel.app';
+const apiBaseUrl = getApiBaseUrl().replace(/\/+$/, '').replace(/\/api\/v1$/, '');
 
 // The max size per sitemap supported by search engines is 50,000 URLs.
 // We chunk articles by 10,000 to be safe.

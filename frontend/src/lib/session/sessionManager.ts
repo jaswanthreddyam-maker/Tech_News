@@ -1,8 +1,6 @@
 import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
-const API_BASE_URL = typeof window !== "undefined"
-  ? getApiBaseUrl()
-  : (process.env.INTERNAL_API_URL || "http://localhost:8000/api/v1");
+const API_BASE_URL = getApiBaseUrl();
 
 // In-memory access token storage (never stored in localStorage)
 let accessToken: string | null = null;
