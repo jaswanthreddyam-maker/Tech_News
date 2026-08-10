@@ -136,23 +136,23 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
 
     score_sql = text("""
         WITH target_entities AS (
-            SELECT entity_id FROM tnt_article_entities WHERE article_id = :art_id
+            SELECT entity_id FROM tnt_article_entities WHERE article_id = CAST(:art_id AS VARCHAR)
         ),
         target_topics AS (
-            SELECT topic_name FROM tnt_article_topics WHERE article_id = :art_id
+            SELECT topic_name FROM tnt_article_topics WHERE article_id = CAST(:art_id AS VARCHAR)
         ),
         entity_scores AS (
             SELECT article_id, COUNT(*) * 5 as e_score 
             FROM tnt_article_entities 
             WHERE entity_id IN (SELECT entity_id FROM target_entities)
-            AND article_id != :art_id
+            AND article_id != CAST(:art_id AS VARCHAR)
             GROUP BY article_id
         ),
         topic_scores AS (
             SELECT article_id, COUNT(*) * 3 as t_score 
             FROM tnt_article_topics 
             WHERE topic_name IN (SELECT topic_name FROM target_topics)
-            AND article_id != :art_id
+            AND article_id != CAST(:art_id AS VARCHAR)
             GROUP BY article_id
         ),
         combined AS (
@@ -168,7 +168,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         ORDER BY total_score DESC 
         LIMIT 5
     """)
-    rel_art_res = await db.execute(score_sql, {"art_id": art.id})
+    rel_art_res = await db.execute(score_sql, {"art_id": str(art.id)})
     rel_rows = rel_art_res.fetchall()
 
     for row in rel_rows:
