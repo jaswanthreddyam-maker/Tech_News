@@ -14,6 +14,11 @@ export function WelcomeOverlay({ children }: WelcomeOverlayProps) {
 
   useEffect(() => {
     try {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      if (isMobile) {
+        setHasPlayed(true);
+        return;
+      }
       setHasPlayed(sessionStorage.getItem("welcome-played") === "1");
     } catch {
       setHasPlayed(false);

@@ -232,9 +232,10 @@ export function Hero3DRing() {
       }
     };
 
-    // Synchronize arrival start with WelcomeOverlay if overlay is active on initial paint
+    // Synchronize arrival start with WelcomeOverlay if overlay is active on initial paint (desktop only)
     const isWelcomeOverlayActive =
       typeof window !== "undefined" &&
+      !window.matchMedia("(max-width: 767px)").matches &&
       sessionStorage.getItem("welcome-played") !== "1";
 
     if (isWelcomeOverlayActive) {
