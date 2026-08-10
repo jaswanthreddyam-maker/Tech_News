@@ -166,16 +166,6 @@ if isinstance(settings.BACKEND_CORS_ORIGINS, list):
             if clean_o not in cors_origins:
                 cors_origins.append(clean_o)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"^https://tech-news-[a-z0-9-]*\.vercel\.app$",
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-)
-
-
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -189,9 +179,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(LoggingMiddleware)
 app.add_middleware(MaintenanceModeMiddleware)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 5. Mount Static Uploads Folder
 import os
