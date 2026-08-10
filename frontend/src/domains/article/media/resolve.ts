@@ -10,7 +10,21 @@ export function resolve(dto: BackendArticleDTO | null | undefined): ResolvedMedi
     return { url: null, source: "fallback" };
   }
 
-  // Priority 1: hero_image
+  // Priority 1: thumbnail_url (Public HTTPS CDN URL)
+  if (dto.thumbnail_url && (dto.thumbnail_url.startsWith("http://") || dto.thumbnail_url.startsWith("https://"))) {
+    if (!isFailed(dto.thumbnail_url)) {
+      return { url: dto.thumbnail_url, source: "thumbnail_url" };
+    }
+  }
+
+  // Priority 2: image_url (Public HTTPS CDN URL)
+  if (dto.image_url && (dto.image_url.startsWith("http://") || dto.image_url.startsWith("https://"))) {
+    if (!isFailed(dto.image_url)) {
+      return { url: dto.image_url, source: "image_url" };
+    }
+  }
+
+  // Priority 3: hero_image
   if (dto.hero_image) {
     const norm = normalizeUploadPath(dto.hero_image);
     if (norm && !isFailed(norm)) {
@@ -18,19 +32,11 @@ export function resolve(dto: BackendArticleDTO | null | undefined): ResolvedMedi
     }
   }
 
-  // Priority 2: thumbnail_local
+  // Priority 4: thumbnail_local (Container local file path)
   if (dto.thumbnail_local) {
     const norm = normalizeUploadPath(dto.thumbnail_local);
     if (norm && !isFailed(norm)) {
       return { url: norm, source: "thumbnail_local" };
-    }
-  }
-
-  // Priority 3: thumbnail_url
-  if (dto.thumbnail_url) {
-    const norm = normalizeUploadPath(dto.thumbnail_url);
-    if (norm && !isFailed(norm)) {
-      return { url: norm, source: "thumbnail_url" };
     }
   }
 

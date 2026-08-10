@@ -22,10 +22,16 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
   const { arrivalFinished: contextArrivalFinished, setActiveIndex, setInteractionMode, setFocusedCardId, onPrimaryAction } = useHeroScene();
   const arrivalFinished = propArrivalFinished ?? contextArrivalFinished;
   const getHeroImg = (art: FeaturedArticle) => {
-    if ((art as any).thumbnail_url) return (art as any).thumbnail_url;
-    if (art.thumbnail && art.thumbnail.startsWith("http")) return art.thumbnail;
-    if ((art as any).image_url) return (art as any).image_url;
-    if (art.thumbnail) return art.thumbnail;
+    const tUrl = (art as any).thumbnail_url;
+    if (tUrl && (tUrl.startsWith("http://") || tUrl.startsWith("https://"))) return tUrl;
+
+    if (art.thumbnail && (art.thumbnail.startsWith("http://") || art.thumbnail.startsWith("https://"))) return art.thumbnail;
+
+    const iUrl = (art as any).image_url;
+    if (iUrl && (iUrl.startsWith("http://") || iUrl.startsWith("https://"))) return iUrl;
+
+    if (art.thumbnail && !art.thumbnail.startsWith("/app/uploads/")) return art.thumbnail;
+
     if ((art as any).thumbnail_local) {
       const l = (art as any).thumbnail_local;
       if (l.startsWith('/app/uploads/')) return l.replace('/app/uploads/', '/api/v1/uploads/');
