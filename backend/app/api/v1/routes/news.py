@@ -57,8 +57,8 @@ async def list_articles(
     logger = logging.getLogger("tech_news.routes.news")
 
     cached = None
-    cache_key_full = "editorial:v1:homepage_cards_full_json"
-    cache_key = "editorial:v1:homepage_ranked_ids"
+    cache_key_full = "editorial:v2:homepage_cards_full_json"
+    cache_key = "editorial:v2:homepage_ranked_ids"
     REDIS_OP_TIMEOUT = 1.0
 
     try:
