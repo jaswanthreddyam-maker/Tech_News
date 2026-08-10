@@ -142,15 +142,6 @@ export default function WelcomeOverlayClient({
     const timers = STAGES.map(({ state, delay }) =>
       setTimeout(() => dispatch({ type: "SET_STAGE", stage: state }), delay)
     );
-
-    // Trigger 3D ring arrival start 500ms (0.5s) before overlay reveal completes
-    const arrivalTimer = setTimeout(() => {
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("welcome-overlay-complete"));
-      }
-    }, Math.max(0, AUTO_REVEAL_AT - 500));
-    timers.push(arrivalTimer);
-
     timers.push(setTimeout(() => doCompleteRef.current(), AUTO_REVEAL_AT));
 
     return () => {
