@@ -73,6 +73,7 @@ export function Hero3DRing() {
     radius,
     anglePerItem,
     itemCount,
+    interactionMode,
     setInteractionMode,
     setActiveIndex,
     setRotation,
@@ -271,12 +272,35 @@ export function Hero3DRing() {
     }
   }, [items?.length]);
 
-  // Persistent Ring Assembly Transform (Disabled during arrival sequence)
+  // Continuous Museum Exhibit Turntable Rotation Engine
+  const ambientRotationRef = useRef<number>(0);
+
   useEffect(() => {
-    if (!ringRef.current || isArrivingRef.current) return;
-    const netRotation = rotation + dragOffsetAngle;
-    ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netRotation}deg)`;
-  }, [rotation, dragOffsetAngle]);
+    if (!localArrivalFinished) return;
+
+    let ambientRafId: number;
+    let lastTime = performance.now();
+
+    const animateAmbient = (now: number) => {
+      const dt = Math.min(0.033, (now - lastTime) / 1000);
+      lastTime = now;
+
+      // 4.5 degrees per second -> slow, cinematic, museum-exhibit spin
+      if (!isDragging && interactionMode === "idle") {
+        ambientRotationRef.current += 4.5 * dt;
+      }
+
+      if (ringRef.current && !isArrivingRef.current) {
+        const netRotation = rotationRef.current + dragOffsetRef.current - ambientRotationRef.current;
+        ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netRotation}deg)`;
+      }
+
+      ambientRafId = requestAnimationFrame(animateAmbient);
+    };
+
+    ambientRafId = requestAnimationFrame(animateAmbient);
+    return () => cancelAnimationFrame(ambientRafId);
+  }, [localArrivalFinished, isDragging, interactionMode]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
