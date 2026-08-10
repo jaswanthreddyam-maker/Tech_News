@@ -134,17 +134,17 @@ class HomepageBuilder:
 
         # Re-fetch full objects to avoid lazy-loading N+1 queries during serialization/logging
         if final_articles:
-            final_ids = [art.id for art in final_articles]
+            final_ids = [str(art.id) for art in final_articles]
             full_stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(final_ids))
             full_res = await db.execute(full_stmt)
-            full_articles_map = {art.id: art for art in full_res.scalars().all()}
+            full_articles_map = {str(art.id): art for art in full_res.scalars().all()}
             
             # Maintain original sorted order and references
             final_articles = [full_articles_map[aid] for aid in final_ids if aid in full_articles_map]
             
             # Update selected_items with the fully loaded article objects
             for item in selected_items:
-                art_id = item["article"].id
+                art_id = str(item["article"].id)
                 if art_id in full_articles_map:
                     item["article"] = full_articles_map[art_id]
 
@@ -156,7 +156,7 @@ class HomepageBuilder:
             # Create a lookup map for decisions reasons
             decision_map = {}
             for art, code, details in decisions:
-                decision_map[art.id] = (code, details)
+                decision_map[str(art.id)] = (code, details)
 
             try:
                 for idx, item in enumerate(selected_items):

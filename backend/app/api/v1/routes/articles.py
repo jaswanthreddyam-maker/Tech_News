@@ -209,7 +209,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
     if not ranked_ids:
         from app.editorial.homepage_builder import HomepageBuilder
         global_articles = await HomepageBuilder.build_homepage(db, category_filter=None)
-        ranked_ids = [a.id for a in global_articles]
+        ranked_ids = [str(a.id) for a in global_articles]
 
         try:
             import asyncio
@@ -225,23 +225,25 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         except Exception:
             pass
 
+    ranked_ids_str = [str(x) for x in ranked_ids]
     position = -1
     navigation = None
-    if art.id in ranked_ids:
-        position = ranked_ids.index(art.id)
+    art_id_str = str(art.id)
+    if art_id_str in ranked_ids_str:
+        position = ranked_ids_str.index(art_id_str)
         prev_art = None
         next_art = None
 
         if position > 0:
-            prev_id = ranked_ids[position - 1]
+            prev_id = str(ranked_ids_str[position - 1])
             prev_stmt = select(ArticleReadModel).where(ArticleReadModel.id == prev_id)
             prev_res = await db.execute(prev_stmt)
             prev_model = prev_res.scalars().first()
             if prev_model:
                 prev_art = ArticleCard.from_model(prev_model)
 
-        if position < len(ranked_ids) - 1:
-            next_id = ranked_ids[position + 1]
+        if position < len(ranked_ids_str) - 1:
+            next_id = str(ranked_ids_str[position + 1])
             next_stmt = select(ArticleReadModel).where(ArticleReadModel.id == next_id)
             next_res = await db.execute(next_stmt)
             next_model = next_res.scalars().first()
