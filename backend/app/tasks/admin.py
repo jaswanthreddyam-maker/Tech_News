@@ -11,7 +11,7 @@ from app.db.session import SessionLocal
 from app.models.article import RawArticle
 from app.models.source import Source
 from app.services.ingestion.extraction_service import ExtractionService
-from app.services.ingestion.filter import evaluate_adaptive_quality, check_pre_ai_ingestion_eligibility
+from app.services.ingestion.filter import evaluate_adaptive_quality, evaluate_relevance
 from app.services.ingestion.utils import compress_content
 from app.editorial.policy import PolicyLoader
 
@@ -103,8 +103,8 @@ async def _replay_article_async(raw_article_id: int) -> bool:
             is_relevant = True
             relevance_reason = ""
         else:
-            is_relevant, relevance_reason = check_pre_ai_ingestion_eligibility(
-                title=title_source, content=clean_body, source_credibility=source.credibility_score, source_category=source.category
+            is_relevant, relevance_reason = evaluate_relevance(
+                title=title_source, content=clean_body, source_category=source.category
             )
 
         is_eligible = is_eligible_quality and is_relevant
@@ -183,7 +183,10 @@ def replay_filtered_articles(article_ids: Optional[List[int]] = None, filter_rea
             if article_ids:
                 stmt = stmt.where(RawArticle.id.in_(article_ids))
             if filter_reason:
-                stmt = stmt.where(RawArticle.filter_reason == filter_reason)
+                if filter_reason == "UNKNOWN":
+                    stmt = stmt.where(RawArticle.filter_reason.is_(None))
+                else:
+                    stmt = stmt.where(RawArticle.filter_reason == filter_reason)
                 
             # Limit batch size to 50 for safety
             stmt = stmt.limit(50)
