@@ -22,21 +22,22 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
   const { arrivalFinished: contextArrivalFinished, setActiveIndex, setInteractionMode, setFocusedCardId, onPrimaryAction } = useHeroScene();
   const arrivalFinished = propArrivalFinished ?? contextArrivalFinished;
   const getHeroImg = (art: FeaturedArticle) => {
-    const tUrl = (art as any).thumbnail_url;
-    if (tUrl && (tUrl.startsWith("http://") || tUrl.startsWith("https://"))) return tUrl;
+    const isVal = (u?: string | null) => u && typeof u === "string" && (u.startsWith("http://") || u.startsWith("https://")) && !u.includes("example.com");
 
-    if (art.thumbnail && (art.thumbnail.startsWith("http://") || art.thumbnail.startsWith("https://"))) return art.thumbnail;
+    const tUrl = (art as any).thumbnail_url;
+    if (isVal(tUrl)) return tUrl;
+
+    if (isVal(art.thumbnail)) return art.thumbnail;
 
     const iUrl = (art as any).image_url;
-    if (iUrl && (iUrl.startsWith("http://") || iUrl.startsWith("https://"))) return iUrl;
-
-    if (art.thumbnail && !art.thumbnail.startsWith("/app/uploads/")) return art.thumbnail;
+    if (isVal(iUrl)) return iUrl;
 
     if ((art as any).thumbnail_local) {
       const l = (art as any).thumbnail_local;
-      if (l.startsWith('/app/uploads/')) return l.replace('/app/uploads/', '/api/v1/uploads/');
-      return l;
+      if (typeof l === "string" && l.startsWith('/app/uploads/')) return l.replace('/app/uploads/', '/api/v1/uploads/');
+      if (isVal(l)) return l;
     }
+
     return "";
   };
 
@@ -154,7 +155,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
                       sizes="(max-width: 768px) 290px, 340px"
                       quality={90}
                       priority={isActive || index === 0}
-                      onError={() => setImgSrc("https://images.unsplash.com/photo-1677442136019-21780efad99a?auto=format&fit=crop&w=1200&q=80")}
+                      onError={() => setImgSrc("")}
                       className="object-cover object-center w-full h-full drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)] transition-all duration-700 group-hover:scale-[1.04]"
                     />
                     {/* Shaded Division Seam Gradient at Bottom of Thumbnail */}
