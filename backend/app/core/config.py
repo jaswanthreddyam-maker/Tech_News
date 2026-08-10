@@ -67,6 +67,15 @@ class Settings(BaseSettings):
     # PostgreSQL Exclusive (No SQLite Fallback allowed)
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres_secure_pass@db:5432/tech_news_today"
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        return v
+
     # Observability and Health Configurations
     BACKEND_HEALTH_URL: str = "http://backend:8000/api/v1/health/live"
 
