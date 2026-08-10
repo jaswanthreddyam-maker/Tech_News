@@ -31,6 +31,9 @@ export function HeroCarousel({
   const clientFeatured = mapArticlesToFeatured(rawClientArticles);
   
   const isLoading = initialItems.length === 0 && trendingQuery.isLoading;
+  const isError = initialItems.length === 0 && trendingQuery.isError;
+  const isEmpty = initialItems.length === 0 && !trendingQuery.isLoading && clientFeatured.length === 0;
+
   const skeletonItems = Array.from({ length: 12 }).map((_, i) => ({
     id: `skeleton-${i}`,
     title: "",
@@ -50,6 +53,24 @@ export function HeroCarousel({
   if (!mounted) {
     // Avoid hydration mismatch on initial render, but don't block layout
     return <HeroCarouselSkeleton />;
+  }
+
+  if (isError) {
+    return (
+      <div className="w-full h-64 flex flex-col items-center justify-center rounded-xl border border-destructive/20 bg-destructive/5 text-destructive p-6 font-mono text-sm">
+        <p className="font-semibold">Failed to load editorial state</p>
+        <p className="text-xs text-muted-foreground mt-1">The newsroom API could not be reached or returned an error.</p>
+      </div>
+    );
+  }
+
+  if (isEmpty && !isLoading) {
+    return (
+      <div className="w-full h-64 flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] text-muted-foreground p-6 font-mono text-sm">
+        <p className="font-semibold text-foreground">No stories available right now.</p>
+        <p className="text-xs text-muted-foreground mt-1">Autonomous newsroom ingestion is actively discovering emerging tech news.</p>
+      </div>
+    );
   }
 
   return (

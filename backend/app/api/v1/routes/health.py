@@ -373,19 +373,22 @@ async def get_cqrs_health(response: Response, db: AsyncSession = Depends(get_db)
             projection_success_rate = round((read_count / processed_count) * 100, 2)
             projection_success_rate = min(100.0, projection_success_rate)  # Cap at 100%
 
+        editorial_projection_empty = read_count == 0
+
         # Strict health evaluation based on architectural requirements
         status_text = "healthy"
-        if projection_lag > 0 and projection_lag <= 5:
+        if editorial_projection_empty:
             status_text = "degraded"
-            response.status_code = status.HTTP_206_PARTIAL_CONTENT
+        elif projection_lag > 0 and projection_lag <= 5:
+            status_text = "degraded"
         elif projection_lag > 5 or missing_impact > 0 or missing_summary > 0 or missing_thumbnails > 0:
             status_text = "unhealthy"
-            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
         return StandardResponse(
             correlation_id=correlation_id,
             data={
                 "status": status_text,
+                "editorial_projection_empty": editorial_projection_empty,
                 "projection_version": "v2",
                 "event_contract": "ArticlePublished:v2",
                 "processed_articles": processed_count,

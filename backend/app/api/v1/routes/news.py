@@ -122,15 +122,18 @@ async def list_articles(
         if not is_stale_state:
             # Invariant 3: Single SQL IN query to resolve all IDs at once (Guardrail #3)
             str_ranked_ids = [str(aid) for aid in ranked_ids]
-            stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(str_ranked_ids))
-            res = await db.execute(stmt)
-            articles_map = {str(art.id): art for art in res.scalars().all()}
-            
-            if set(articles_map.keys()) != set(str_ranked_ids):
-                logger.warning(f"Partial ID resolution in Redis cache: requested {len(str_ranked_ids)}, found {len(articles_map)}. Invalidating.")
-                is_stale_state = True
+            if str_ranked_ids:
+                stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(str_ranked_ids))
+                res = await db.execute(stmt)
+                articles_map = {str(art.id): art for art in res.scalars().all()}
+                
+                if set(articles_map.keys()) != set(str_ranked_ids):
+                    logger.warning(f"Partial ID resolution in Redis cache: requested {len(str_ranked_ids)}, found {len(articles_map)}. Invalidating.")
+                    is_stale_state = True
+                else:
+                    articles = [articles_map[aid] for aid in str_ranked_ids if aid in articles_map]
             else:
-                articles = [articles_map[aid] for aid in str_ranked_ids if aid in articles_map]
+                is_stale_state = True
 
     # Path 2: Check latest HomepageProjection CQRS read model
     if not articles and not is_stale_state:

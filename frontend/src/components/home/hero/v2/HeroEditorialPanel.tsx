@@ -33,7 +33,7 @@ export function HeroEditorialPanel() {
   const { activeArticle, activeIndex, arrivalFinished, interactionMode, setInteractionMode, onPrimaryAction } = useHeroScene();
 
   if (!activeArticle) {
-    return <div className="h-64 flex items-center text-muted-foreground font-mono text-sm">Loading editorial state...</div>;
+    return <div className="h-64 flex items-center text-muted-foreground font-mono text-sm">No stories available right now.</div>;
   }
 
   const isCardHovered = interactionMode === "hover";
