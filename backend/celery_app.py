@@ -88,6 +88,7 @@ def get_celery_session():
     return AsyncSessionLocal()
 
 celery_app.conf.update(
+    worker_concurrency=2,
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",

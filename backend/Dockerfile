@@ -42,6 +42,10 @@ ENV PYTHONPATH=/app \
 # Expose default HTTP port
 EXPOSE 8080 8000
 
+# Create a non-root user and change ownership of the app directory
+RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
+USER appuser
+
 # Default command for Railway FastAPI service (overridden by worker/beat service start commands)
 CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 2"]
 
