@@ -634,6 +634,16 @@ async def get_db_truth(db: AsyncSession = Depends(get_db)):
     )
     dead_letter_dist = {str(k): v for k, v in dead_letter_res.all()}
     
+    try:
+        filter_reason_res = await db.execute(
+            select(getattr(RawArticle, "filter_reason", RawArticle.error_log), func.count(RawArticle.id))
+            .where(RawArticle.status == "filtered")
+            .group_by(getattr(RawArticle, "filter_reason", RawArticle.error_log))
+        )
+        filter_reasons = {str(k): v for k, v in filter_reason_res.all()}
+    except Exception as e:
+        filter_reasons = {"error": str(e)}
+
     # 2. ProcessedArticle counts
     processed_total = await db.scalar(select(func.count(ProcessedArticle.id)))
     
@@ -644,6 +654,7 @@ async def get_db_truth(db: AsyncSession = Depends(get_db)):
         "raw_total": raw_total,
         "raw_status_dist": raw_status_dist,
         "dead_letter_dist": dead_letter_dist,
+        "filter_reasons": filter_reasons,
         "processed_total": processed_total,
         "read_total": read_total
     }
