@@ -41,6 +41,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to register signal handlers during lifespan setup: {e}")
 
+    # Run database migrations automatically in production
+    try:
+        import alembic.config
+        import os
+        logger.info("Running database migrations (alembic upgrade head)...")
+        # Ensure we're in the right directory or pass the config explicitly
+        alembic_args = ["-c", os.path.join(os.path.dirname(__file__), "alembic.ini"), "upgrade", "head"]
+        alembic.config.main(argv=alembic_args)
+        logger.info("Database migrations applied successfully.")
+    except Exception as e:
+        logger.error(f"Failed to run database migrations: {e}")
+
     # Verify strict PostgreSQL connection
     db_ok = await verify_database_connection(max_retries=5, initial_delay=1.0)
     if not db_ok:
