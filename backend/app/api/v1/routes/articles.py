@@ -46,35 +46,40 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
     if not art:
         raise HTTPException(status_code=404, detail="Article not found")
 
+    art_dict = {k: v for k, v in art.__dict__.items() if not k.startswith("_")}
+    art_id = str(art_dict.get("id"))
+    art_slug = str(art_dict.get("slug") or art_id)
+    art_content = str(art_dict.get("content") or "")
+
     # Fetch clean_html and hero_image from ProcessedArticle if available
-    clean_html = art.content
+    clean_html = art_content
     hero_image = None
-    if art.id and art.id.isdigit():
+    if art_id and art_id.isdigit():
         try:
-            proc_id = int(art.id)
+            proc_id = int(art_id)
             from app.models.article import ProcessedArticle
             proc_stmt = select(ProcessedArticle).where(ProcessedArticle.id == proc_id)
             proc_res = await db.execute(proc_stmt)
             proc_art = proc_res.scalars().first()
             if proc_art:
-                clean_html = proc_art.content or art.content
+                clean_html = proc_art.content or art_content
                 hero_image = proc_art.hero_image
         except Exception:
             pass
 
     article_base = ArticleBase(
-        id=art.id,
-        title=art.title,
-        url=art.url,
-        slug=art.slug or art.id,
-        summary=art.summary,
-        source=art.source,
-        reading_time=art.reading_time,
-        published_at=art.published_at,
-        thumbnail_url=art.thumbnail_url,
-        thumbnail_local=art.thumbnail_local,
-        key_takeaways=art.key_takeaways or None,
-        alt_text=art.__dict__.get("alt_text", None)
+        id=art_id,
+        title=art_dict.get("title", ""),
+        url=art_dict.get("url", ""),
+        slug=art_slug,
+        summary=art_dict.get("summary", ""),
+        source=art_dict.get("source", ""),
+        reading_time=art_dict.get("reading_time", 3),
+        published_at=art_dict.get("published_at"),
+        thumbnail_url=art_dict.get("thumbnail_url"),
+        thumbnail_local=art_dict.get("thumbnail_local"),
+        key_takeaways=art_dict.get("key_takeaways"),
+        alt_text=art_dict.get("alt_text")
     )
 
     # 2. Build Knowledge Panel
@@ -272,12 +277,13 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
     cutoff_hours = getattr(settings, "EDITORIAL_WINDOW_HOURS", 24)
     decay_model = getattr(settings, "FRESHNESS_DECAY_MODEL", "curved")
 
-    pub_at = art.published_at
+    pub_at = art_dict.get("published_at")
     if pub_at and pub_at.tzinfo is None:
         pub_at = pub_at.replace(tzinfo=timezone.utc)
 
     mult = calculate_freshness_multiplier(pub_at, decay_model=decay_model, window_hours=cutoff_hours, now=now)
-    imp_score = float(art.final_score) if art.final_score is not None else 0.0
+    final_sc = art_dict.get("final_score")
+    imp_score = float(final_sc) if final_sc is not None else 0.0
     eff_score = imp_score * mult
 
     scoring_debug = {
@@ -291,10 +297,10 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
 
     response_data = ArticleResponse(
         article=article_base,
-        content=art.content,
+        content=art_content,
         clean_html=clean_html,
         hero_image=hero_image,
-        images=getattr(art, "images", None) or [],
+        images=art_dict.get("images") or [],
         knowledge=knowledge,
         related=related,
         navigation=navigation,
