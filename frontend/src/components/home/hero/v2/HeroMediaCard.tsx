@@ -139,6 +139,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
                       quality={50}
                       priority={false}
                       aria-hidden="true"
+                      onError={() => setImgSrc("")}
                       className="object-cover scale-125 blur-2xl opacity-75 transition-transform duration-700 group-hover:scale-135 group-hover:saturate-[1.08]"
                     />
                     {/* Dark Gradient Overlay for Contrast */}
