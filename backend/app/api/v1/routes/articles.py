@@ -36,20 +36,52 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
     """
     correlation_id = correlation_id_ctx.get() or "system"
 
-    # 1. Fetch ArticleReadModel by exact slug, ID, or url
-    stmt = select(ArticleReadModel).where(
+    # 1. Fetch ArticleReadModel columns directly as primitive tuples (completely immune to ORM lazy loading)
+    stmt = select(
+        ArticleReadModel.id,
+        ArticleReadModel.title,
+        ArticleReadModel.url,
+        ArticleReadModel.slug,
+        ArticleReadModel.summary,
+        ArticleReadModel.content,
+        ArticleReadModel.source,
+        ArticleReadModel.reading_time,
+        ArticleReadModel.published_at,
+        ArticleReadModel.thumbnail_url,
+        ArticleReadModel.thumbnail_local,
+        ArticleReadModel.key_takeaways,
+        ArticleReadModel.final_score
+    ).where(
         (ArticleReadModel.slug == id) | (ArticleReadModel.id == id) | (ArticleReadModel.url == id)
     )
     result = await db.execute(stmt)
-    art = result.scalars().first()
+    row = result.first()
 
-    if not art:
+    if not row:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    art_dict = {k: v for k, v in art.__dict__.items() if not k.startswith("_")}
-    art_id = str(art_dict.get("id"))
-    art_slug = str(art_dict.get("slug") or art_id)
-    art_content = str(art_dict.get("content") or "")
+    art_id = str(row.id)
+    art_slug = str(row.slug or art_id)
+    art_content = str(row.content or "")
+    art_published_at = row.published_at
+    art_final_score = row.final_score
+
+    art_dict = {
+        "id": art_id,
+        "title": row.title or "",
+        "url": row.url or "",
+        "slug": art_slug,
+        "summary": row.summary or "",
+        "source": row.source or "",
+        "reading_time": row.reading_time or 3,
+        "published_at": art_published_at,
+        "thumbnail_url": row.thumbnail_url,
+        "thumbnail_local": row.thumbnail_local,
+        "key_takeaways": row.key_takeaways,
+        "alt_text": None,
+        "final_score": art_final_score,
+        "content": art_content
+    }
 
     # Fetch clean_html and hero_image from ProcessedArticle if available
     clean_html = art_content
@@ -58,28 +90,28 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         try:
             proc_id = int(art_id)
             from app.models.article import ProcessedArticle
-            proc_stmt = select(ProcessedArticle).where(ProcessedArticle.id == proc_id)
+            proc_stmt = select(ProcessedArticle.content, ProcessedArticle.hero_image).where(ProcessedArticle.id == proc_id)
             proc_res = await db.execute(proc_stmt)
-            proc_art = proc_res.scalars().first()
-            if proc_art:
-                clean_html = proc_art.content or art_content
-                hero_image = proc_art.hero_image
+            proc_row = proc_res.first()
+            if proc_row:
+                clean_html = proc_row.content or art_content
+                hero_image = proc_row.hero_image
         except Exception:
             pass
 
     article_base = ArticleBase(
         id=art_id,
-        title=art_dict.get("title", ""),
-        url=art_dict.get("url", ""),
+        title=art_dict["title"],
+        url=art_dict["url"],
         slug=art_slug,
-        summary=art_dict.get("summary", ""),
-        source=art_dict.get("source", ""),
-        reading_time=art_dict.get("reading_time", 3),
-        published_at=art_dict.get("published_at"),
-        thumbnail_url=art_dict.get("thumbnail_url"),
-        thumbnail_local=art_dict.get("thumbnail_local"),
-        key_takeaways=art_dict.get("key_takeaways"),
-        alt_text=art_dict.get("alt_text")
+        summary=art_dict["summary"],
+        source=art_dict["source"],
+        reading_time=art_dict["reading_time"],
+        published_at=art_dict["published_at"],
+        thumbnail_url=art_dict["thumbnail_url"],
+        thumbnail_local=art_dict["thumbnail_local"],
+        key_takeaways=art_dict["key_takeaways"],
+        alt_text=art_dict["alt_text"]
     )
 
     # 2. Build Knowledge Panel
