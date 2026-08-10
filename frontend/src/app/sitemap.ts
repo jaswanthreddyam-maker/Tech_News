@@ -1,3 +1,4 @@
+import { MetadataRoute } from 'next';
 import { getApiBaseUrl } from '@/lib/api/getApiBaseUrl';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://tech-news-today.vercel.app';
