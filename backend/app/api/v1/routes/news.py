@@ -323,22 +323,28 @@ async def purge_news_cache(db: AsyncSession = Depends(get_db)):
     """
     from app.core.redis import get_redis_client
     from app.editorial.homepage_builder import HomepageBuilder
-    from app.models.projection import HomepageProjection
+    from app.models.projection import HomepageProjection, CategoryDeskProjection
     from sqlalchemy import delete
 
+    _in_memory_homepage_cache["cards"] = None
+    _in_memory_homepage_cache["expires_at"] = 0.0
+
     await db.execute(delete(HomepageProjection))
+    await db.execute(delete(CategoryDeskProjection))
     await db.commit()
 
     try:
         redis = get_redis_client()
         if redis:
-            await redis.delete("editorial:v1:homepage_ranked_ids")
-            await redis.delete("homepage:v1:curated_projection")
+            keys = await redis.keys("editorial:*")
+            if keys:
+                await redis.delete(*keys)
     except Exception:
         pass
 
-    articles = await HomepageBuilder.build_homepage(db)
-    return {"status": "success", "message": f"Cache purged. Homepage rebuilt with {len(articles)} articles."}
+    articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
+    await HomepageBuilder.build_and_persist_category_desks(db)
+    return {"status": "success", "message": f"Cache purged. Homepage rebuilt with {len(articles)} articles and category desks updated."}
 
 
 import html
