@@ -232,8 +232,11 @@ export function Hero3DRing() {
       }
     };
 
-    // Immediate arrival start on page load
-    const isWelcomeOverlayActive = false;
+    // Synchronize arrival start with WelcomeOverlay on desktop viewports (>= 768px)
+    const isWelcomeOverlayActive =
+      typeof window !== "undefined" &&
+      !window.matchMedia("(max-width: 767px)").matches &&
+      sessionStorage.getItem("welcome-played") !== "1";
 
     if (isWelcomeOverlayActive) {
       // Set initial state paused in deep space while Welcome Overlay plays
