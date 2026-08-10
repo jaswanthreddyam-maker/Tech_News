@@ -79,106 +79,112 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
 
     # 2. Build Knowledge Panel
     knowledge = ArticleKnowledgePanel()
+    try:
+        # Entities
+        ent_stmt = select(EntityNode, ArticleEntityLink.confidence).join(
+            ArticleEntityLink, EntityNode.id == ArticleEntityLink.entity_id
+        ).where(ArticleEntityLink.article_id == str(art.id))
+        ent_res = await db.execute(ent_stmt)
+        for ent, conf in ent_res.all():
+            knowledge.entities.append(KnowledgeEntity(
+                id=ent.id, name=ent.canonical_name, type=ent.entity_type, confidence=float(conf or 1.0)
+            ))
 
-    # Entities
-    ent_stmt = select(EntityNode, ArticleEntityLink.confidence).join(
-        ArticleEntityLink, EntityNode.id == ArticleEntityLink.entity_id
-    ).where(ArticleEntityLink.article_id == art.id)
-    ent_res = await db.execute(ent_stmt)
-    for ent, conf in ent_res.all():
-        knowledge.entities.append(KnowledgeEntity(
-            id=ent.id, name=ent.canonical_name, type=ent.entity_type, confidence=float(conf or 1.0)
-        ))
+        # Topics
+        top_stmt = select(TopicNode, ArticleTopicLink.confidence).join(
+            ArticleTopicLink, TopicNode.name == ArticleTopicLink.topic_name
+        ).where(ArticleTopicLink.article_id == str(art.id))
+        top_res = await db.execute(top_stmt)
+        for top, conf in top_res.all():
+            knowledge.topics.append(KnowledgeTopic(
+                name=top.name, confidence=float(conf or 1.0)
+            ))
 
-    # Topics
-    top_stmt = select(TopicNode, ArticleTopicLink.confidence).join(
-        ArticleTopicLink, TopicNode.name == ArticleTopicLink.topic_name
-    ).where(ArticleTopicLink.article_id == art.id)
-    top_res = await db.execute(top_stmt)
-    for top, conf in top_res.all():
-        knowledge.topics.append(KnowledgeTopic(
-            name=top.name, confidence=float(conf or 1.0)
-        ))
+        # Timeline
+        time_stmt = select(TimelineEventNode).where(TimelineEventNode.article_id == str(art.id))
+        time_res = await db.execute(time_stmt)
+        for t in time_res.scalars().all():
+            knowledge.timeline.append(KnowledgeTimelineEvent(
+                event_type=t.event_type,
+                date=t.date,
+                description=t.description,
+                entities=t.entities or [],
+                confidence=(t.confidence or 1.0)
+            ))
 
-    # Timeline
-    time_stmt = select(TimelineEventNode).where(TimelineEventNode.article_id == art.id)
-    time_res = await db.execute(time_stmt)
-    for t in time_res.scalars().all():
-        knowledge.timeline.append(KnowledgeTimelineEvent(
-            event_type=t.event_type,
-            date=t.date,
-            description=t.description,
-            entities=t.entities or [],
-            confidence=(t.confidence or 1.0)
-        ))
+        # Relationships
+        rel_stmt = select(RelationshipEdge, EntityNode).join(
+            EntityNode, RelationshipEdge.target_id == EntityNode.id
+        ).where(RelationshipEdge.article_id == str(art.id))
+        rel_res = await db.execute(rel_stmt)
+        for rel, tgt in rel_res.all():
+            src_stmt = select(EntityNode.canonical_name).where(EntityNode.id == rel.source_id)
+            src_res = await db.execute(src_stmt)
+            src_name = src_res.scalar() or rel.source_id
 
-    # Relationships
-    rel_stmt = select(RelationshipEdge, EntityNode).join(
-        EntityNode, RelationshipEdge.target_id == EntityNode.id
-    ).where(RelationshipEdge.article_id == art.id)
-    rel_res = await db.execute(rel_stmt)
-    for rel, tgt in rel_res.all():
-        # Also need source name
-        src_stmt = select(EntityNode.canonical_name).where(EntityNode.id == rel.source_id)
-        src_res = await db.execute(src_stmt)
-        src_name = src_res.scalar() or rel.source_id
-
-        knowledge.relationships.append(KnowledgeRelationship(
-            source_id=rel.source_id,
-            source_name=src_name,
-            predicate=rel.predicate,
-            target_id=rel.target_id,
-            target_name=tgt.canonical_name,
-            confidence=float(rel.confidence or 1.0)
-        ))
+            knowledge.relationships.append(KnowledgeRelationship(
+                source_id=rel.source_id,
+                source_name=src_name,
+                predicate=rel.predicate,
+                target_id=rel.target_id,
+                target_name=tgt.canonical_name,
+                confidence=float(rel.confidence or 1.0)
+            ))
+    except Exception as exc:
+        import logging
+        logging.getLogger("tech_news.routes.articles").warning(f"Knowledge panel query failed for article {art.id}: {exc}")
+        await db.rollback()
 
     # 3. Calculate Related Articles using Weighted Semantic Score
     related = ArticleRelated()
+    try:
+        score_sql = text("""
+            WITH target_entities AS (
+                SELECT entity_id FROM tnt_article_entities WHERE article_id = CAST(:art_id AS VARCHAR)
+            ),
+            target_topics AS (
+                SELECT topic_name FROM tnt_article_topics WHERE article_id = CAST(:art_id AS VARCHAR)
+            ),
+            entity_scores AS (
+                SELECT article_id, COUNT(*) * 5 as e_score 
+                FROM tnt_article_entities 
+                WHERE entity_id IN (SELECT entity_id FROM target_entities)
+                AND article_id != CAST(:art_id AS VARCHAR)
+                GROUP BY article_id
+            ),
+            topic_scores AS (
+                SELECT article_id, COUNT(*) * 3 as t_score 
+                FROM tnt_article_topics 
+                WHERE topic_name IN (SELECT topic_name FROM target_topics)
+                AND article_id != CAST(:art_id AS VARCHAR)
+                GROUP BY article_id
+            ),
+            combined AS (
+                SELECT 
+                    COALESCE(e.article_id, t.article_id) as rel_article_id,
+                    COALESCE(e.e_score, 0) + COALESCE(t.t_score, 0) as total_score
+                FROM entity_scores e
+                FULL OUTER JOIN topic_scores t ON e.article_id = t.article_id
+            )
+            SELECT rel_article_id, total_score 
+            FROM combined 
+            WHERE total_score > 0
+            ORDER BY total_score DESC 
+            LIMIT 5
+        """)
+        rel_art_res = await db.execute(score_sql, {"art_id": str(art.id)})
+        rel_rows = rel_art_res.fetchall()
 
-    score_sql = text("""
-        WITH target_entities AS (
-            SELECT entity_id FROM tnt_article_entities WHERE article_id = CAST(:art_id AS VARCHAR)
-        ),
-        target_topics AS (
-            SELECT topic_name FROM tnt_article_topics WHERE article_id = CAST(:art_id AS VARCHAR)
-        ),
-        entity_scores AS (
-            SELECT article_id, COUNT(*) * 5 as e_score 
-            FROM tnt_article_entities 
-            WHERE entity_id IN (SELECT entity_id FROM target_entities)
-            AND article_id != CAST(:art_id AS VARCHAR)
-            GROUP BY article_id
-        ),
-        topic_scores AS (
-            SELECT article_id, COUNT(*) * 3 as t_score 
-            FROM tnt_article_topics 
-            WHERE topic_name IN (SELECT topic_name FROM target_topics)
-            AND article_id != CAST(:art_id AS VARCHAR)
-            GROUP BY article_id
-        ),
-        combined AS (
-            SELECT 
-                COALESCE(e.article_id, t.article_id) as rel_article_id,
-                COALESCE(e.e_score, 0) + COALESCE(t.t_score, 0) as total_score
-            FROM entity_scores e
-            FULL OUTER JOIN topic_scores t ON e.article_id = t.article_id
-        )
-        SELECT rel_article_id, total_score 
-        FROM combined 
-        WHERE total_score > 0
-        ORDER BY total_score DESC 
-        LIMIT 5
-    """)
-    rel_art_res = await db.execute(score_sql, {"art_id": str(art.id)})
-    rel_rows = rel_art_res.fetchall()
-
-    for row in rel_rows:
-        rel_id = row.rel_article_id
-        # fetch article details
-        ra_stmt = select(ArticleReadModel).where(ArticleReadModel.id == rel_id).where(ArticleReadModel.is_test_data == False)
-        ra = (await db.execute(ra_stmt)).scalars().first()
-        if ra:
-            related.articles.append(ArticleCard.from_model(ra))
+        for row in rel_rows:
+            rel_id = str(row.rel_article_id)
+            ra_stmt = select(ArticleReadModel).where(ArticleReadModel.id == rel_id).where(ArticleReadModel.is_test_data == False)
+            ra = (await db.execute(ra_stmt)).scalars().first()
+            if ra:
+                related.articles.append(ArticleCard.from_model(ra))
+    except Exception as exc:
+        import logging
+        logging.getLogger("tech_news.routes.articles").warning(f"Related articles query failed for article {art.id}: {exc}")
+        await db.rollback()
 
     related.entities = knowledge.entities
     related.topics = knowledge.topics
