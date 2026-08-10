@@ -232,11 +232,8 @@ export function Hero3DRing() {
       }
     };
 
-    // Synchronize arrival start with WelcomeOverlay if overlay is active on initial paint (desktop only)
-    const isWelcomeOverlayActive =
-      typeof window !== "undefined" &&
-      !window.matchMedia("(max-width: 767px)").matches &&
-      sessionStorage.getItem("welcome-played") !== "1";
+    // Immediate arrival start on page load
+    const isWelcomeOverlayActive = false;
 
     if (isWelcomeOverlayActive) {
       // Set initial state paused in deep space while Welcome Overlay plays
