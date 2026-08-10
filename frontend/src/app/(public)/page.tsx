@@ -70,7 +70,17 @@ const jsonLd = {
   ],
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  let initialItems: any[] = [];
+  try {
+    const raw = await getArticles({ limit: 10, sort_by: "trending" });
+    const rawArticles = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+    initialItems = mapArticlesToFeatured(rawArticles);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Failed server-side fetch of homepage articles:", err);
+  }
+
   return (
     <HomepageScene>
       <h1 className="sr-only">Tech News Today</h1>
@@ -89,7 +99,7 @@ export default function HomePage() {
         <SectionErrorBoundary
           fallback={<Skeleton className="w-full h-[500px]" />}
         >
-          <HeroCarousel />
+          <HeroCarousel items={initialItems} />
         </SectionErrorBoundary>
       </Container>
 

@@ -60,6 +60,12 @@ export function HeroCarousel({
       <div className="w-full h-64 flex flex-col items-center justify-center rounded-xl border border-destructive/20 bg-destructive/5 text-destructive p-6 font-mono text-sm">
         <p className="font-semibold">Failed to load editorial state</p>
         <p className="text-xs text-muted-foreground mt-1">The newsroom API could not be reached or returned an error.</p>
+        <button
+          onClick={() => trendingQuery.refetch()}
+          className="mt-4 px-4 py-2 text-xs rounded-md bg-white/10 hover:bg-white/20 text-white font-mono transition-colors"
+        >
+          Retry Connection
+        </button>
       </div>
     );
   }

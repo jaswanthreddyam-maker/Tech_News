@@ -315,11 +315,14 @@ class HomepageBuilder:
         from app.models.article import ProcessedArticle, Category
         from app.models.projection import CategoryDeskProjection
 
+        from sqlalchemy import func
+        cat_slug_expr = func.coalesce(Category.slug, func.lower(func.replace(ArticleReadModel.category, ' ', '-'))).label("cat_slug")
+
         # Fetch articles and their category slug
         stmt = (
-            select(ArticleReadModel, Category.slug)
-            .join(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
-            .join(Category, ProcessedArticle.category_id == Category.id)
+            select(ArticleReadModel, cat_slug_expr)
+            .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+            .outerjoin(Category, ProcessedArticle.category_id == Category.id)
             .where(
                 and_(
                     ArticleReadModel.is_test_data == False,
@@ -341,9 +344,9 @@ class HomepageBuilder:
 
             is_fallback = True
             stmt_fb = (
-                select(ArticleReadModel, Category.slug)
-                .join(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
-                .join(Category, ProcessedArticle.category_id == Category.id)
+                select(ArticleReadModel, cat_slug_expr)
+                .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                .outerjoin(Category, ProcessedArticle.category_id == Category.id)
                 .where(
                     and_(
                         ArticleReadModel.is_test_data == False,
@@ -366,7 +369,15 @@ class HomepageBuilder:
 
         # Group candidates by category slug
         candidates_by_cat = {}
-        for art, cat_slug in rows:
+        for art, raw_slug in rows:
+            cat_slug = raw_slug or "technology"
+            if cat_slug in ("ai", "artificial_intelligence"):
+                cat_slug = "artificial-intelligence"
+            elif cat_slug in ("software", "apps", "tech", "web"):
+                cat_slug = "technology"
+            elif cat_slug in ("hardware-&-devices", "devices"):
+                cat_slug = "hardware"
+
             pub_at = art.published_at
             if pub_at.tzinfo is None:
                 pub_at = pub_at.replace(tzinfo=timezone.utc)
