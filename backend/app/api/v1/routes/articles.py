@@ -74,7 +74,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         thumbnail_url=art.thumbnail_url,
         thumbnail_local=art.thumbnail_local,
         key_takeaways=art.key_takeaways or None,
-        alt_text=getattr(art, "alt_text", None)
+        alt_text=art.__dict__.get("alt_text", None)
     )
 
     # 2. Build Knowledge Panel

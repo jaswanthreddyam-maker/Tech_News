@@ -34,24 +34,29 @@ class ArticleCard(ArticleBase):
 
     @classmethod
     def from_model(cls, model, topics: list[str] | None = None, entities: list[str] | None = None) -> "ArticleCard":
-        model_slug = getattr(model, "slug", None)
-        if model_slug and model_slug.startswith("http"):
+        mdict = getattr(model, "__dict__", {})
+        model_slug = mdict.get("slug") or getattr(model, "slug", None)
+        if model_slug and str(model_slug).startswith("http"):
             model_slug = None
-        resolved_slug = model_slug or (model.url if model.url and not model.url.startswith("http") else model.id)
+        url = mdict.get("url") or getattr(model, "url", None)
+        art_id = mdict.get("id") or getattr(model, "id", None)
+        resolved_slug = model_slug or (url if url and not str(url).startswith("http") else art_id)
+        
+        thumbnail_local = mdict.get("thumbnail_local")
         return cls(
-            id=model.id,
-            title=model.title,
-            url=model.url,
-            slug=resolved_slug,
-            summary=model.summary,
-            source=model.source,
-            reading_time=model.reading_time,
-            published_at=model.published_at,
-            thumbnail_url=model.thumbnail_url,
-            thumbnail_local=model.thumbnail_local,
-            thumbnail_status=getattr(model, "thumbnail_status", "downloaded" if model.thumbnail_local else "pending"),
-            key_takeaways=getattr(model, "key_takeaways", None),
-            alt_text=getattr(model, "alt_text", None),
+            id=str(art_id),
+            title=mdict.get("title") or getattr(model, "title", ""),
+            url=mdict.get("url") or getattr(model, "url", ""),
+            slug=str(resolved_slug),
+            summary=mdict.get("summary") or getattr(model, "summary", ""),
+            source=mdict.get("source") or getattr(model, "source", ""),
+            reading_time=mdict.get("reading_time") or getattr(model, "reading_time", 3),
+            published_at=mdict.get("published_at") or getattr(model, "published_at", None),
+            thumbnail_url=mdict.get("thumbnail_url"),
+            thumbnail_local=thumbnail_local,
+            thumbnail_status=mdict.get("thumbnail_status", "downloaded" if thumbnail_local else "pending"),
+            key_takeaways=mdict.get("key_takeaways"),
+            alt_text=mdict.get("alt_text"),
             topics=topics or [],
             entities=entities or []
         )
