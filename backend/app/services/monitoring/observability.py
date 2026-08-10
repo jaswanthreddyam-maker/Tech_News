@@ -92,7 +92,9 @@ async def run_infrastructure_health_checks(pipe=None):
     # Define service status scores
     status_multipliers = {
         HealthStatus.ONLINE: 1.0,
+        HealthStatus.DELAYED: 0.85,
         HealthStatus.DEGRADED: 0.5,
+        HealthStatus.ERROR: 0.2,
         HealthStatus.OFFLINE: 0.0,
         HealthStatus.UNKNOWN: 0.0,
     }
