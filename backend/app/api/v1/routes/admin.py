@@ -575,6 +575,45 @@ async def trigger_admin_source_crawl(
     )
 
 
+@router.post("/ingestion/run-all", response_model=StandardResponse[dict])
+async def trigger_full_ingestion_pipeline(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("editor", "admin", "super_admin")),
+):
+    """
+    Trigger full canonical ingestion, trend prioritization, and AI processing pipeline.
+    """
+    correlation_id = correlation_id_ctx.get() or "system"
+    logger.info(f"Admin: Full ingestion pipeline trigger requested by user {current_user.email}...")
+
+    from celery_app import run_scheduled_scrapers_task, run_trend_prioritization_and_ai_queue_task
+
+    ingest_task = run_scheduled_scrapers_task.delay()
+    prio_task = run_trend_prioritization_and_ai_queue_task.delay()
+
+    ip = request.client.host if request and request.client else "unknown"
+    await log_audit(
+        db=db,
+        user_id=current_user.id,
+        action="TRIGGER_FULL_INGESTION",
+        resource="pipeline",
+        metadata={"ingest_task_id": ingest_task.id, "prio_task_id": prio_task.id},
+        ip_address=ip,
+    )
+    await db.commit()
+
+    return StandardResponse(
+        correlation_id=correlation_id,
+        data={
+            "status": "accepted",
+            "ingest_task_id": ingest_task.id,
+            "prio_task_id": prio_task.id,
+            "message": "Full canonical ingestion and prioritization pipeline dispatched. Processing in background.",
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # 3. Editorial & Article Moderation
 # ---------------------------------------------------------------------------
