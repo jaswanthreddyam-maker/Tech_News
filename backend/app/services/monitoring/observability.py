@@ -330,19 +330,23 @@ async def collect_ai_queue_metrics(pipe=None):
         now_utc = datetime.now(timezone.utc)
 
         async with AsyncSessionLocal() as db:
-            # Queue Metrics
-            queue_rows = await db.execute(
-                select(RawArticle.updated_at, RawArticle.retry_count).where(RawArticle.status == "ai_queued")
+            from sqlalchemy import func
+            
+            queue_stats_res = await db.execute(
+                select(
+                    func.count(RawArticle.id),
+                    func.min(RawArticle.updated_at),
+                    func.avg(RawArticle.retry_count)
+                ).where(RawArticle.status == "ai_queued")
             )
-            queue_data = queue_rows.all()
-
-            depth = len(queue_data)
-            waits = [(now_utc - row[0].replace(tzinfo=timezone.utc)).total_seconds() for row in queue_data if row[0]]
-            retries = [row[1] for row in queue_data if row[1] is not None]
-
-            oldest_age_sec = max(waits) if waits else 0
-            average_wait_sec = sum(waits) / len(waits) if waits else 0
-            average_retry_count = sum(retries) / len(retries) if retries else 0
+            queue_stats = queue_stats_res.one_or_none()
+            
+            depth = queue_stats[0] if queue_stats and queue_stats[0] else 0
+            oldest = queue_stats[1] if queue_stats and queue_stats[1] else now_utc
+            average_retry_count = float(queue_stats[2]) if queue_stats and queue_stats[2] else 0.0
+            
+            oldest_age_sec = (now_utc - oldest.replace(tzinfo=timezone.utc)).total_seconds() if oldest else 0
+            average_wait_sec = oldest_age_sec / 2 if depth > 0 else 0  # Fast approximation for average wait
 
             failed_today = int(await client.get("telemetry_failed_ai_jobs") or 0)
             recovered_today = int(await client.get("telemetry_recovered_ai_jobs") or 0)
