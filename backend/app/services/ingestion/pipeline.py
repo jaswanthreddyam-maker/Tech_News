@@ -20,6 +20,7 @@ from app.services.ingestion.filter import (
     evaluate_adaptive_quality,
 )
 from app.editorial.policy import PolicyLoader
+from app.services.ingestion.acquisition_policy import ContentAcquisitionPolicy
 from app.services.ingestion.persistence_service import PersistenceService
 from app.services.ingestion.processor import (
     calculate_reading_time,
@@ -205,39 +206,52 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                         res = await db.execute(select(RawArticle).where(RawArticle.id == matched_id))
                         existing_article = res.scalars().first()
 
-                    # 3. HTML Extraction Strategy (Boilerplate-free extraction & scoring)
-                    logger.info(f"Pipeline: Invoking ExtractionService for: {normalized_url}")
-                    html_t0 = time.time()
-                    has_content, extracted = await extraction_service.extract_content(
-                        normalized_url, parser_config=parser_profile, source_name=source.name
+                    # 3. Content Acquisition Policy v2 (Deterministic selection & provenance)
+                    acquisition_policy = ContentAcquisitionPolicy(
+                        rss_substantive_threshold=policy.get("rss_substantive_threshold", 100),
+                        canonical_substantive_threshold=policy.get("canonical_substantive_threshold", 150)
                     )
-                    html_duration = round((time.time() - html_t0) * 1000.0, 2)
+                    source_policy_cfg = {
+                        "allow_weak_rss_fallback": source.name in allowed_rss_fallback_sources,
+                        "rss_substantive_threshold": getattr(source, "rss_substantive_threshold", 100),
+                        "canonical_substantive_threshold": getattr(source, "canonical_substantive_threshold", 150),
+                    }
 
-                    raw_html = (
-                        extracted.get("raw_html")
-                        or item.get("raw_html")
-                        or ""
-                    )
+                    rss_words = len((rss_summary or "").split())
+                    html_duration = 0.0
+                    extraction_res = None
 
-                    rss_fallback_used = False
-                    if has_content:
-                        clean_body = extracted["clean_text"]
-                        content_score = extracted.get("content_score", 50.0)
-                        density_score = extracted.get("density_score", 0.5)
-                        word_count = extracted.get("word_count", len(clean_body.split()))
-                        title_source = extracted.get("title") or raw_title
+                    if rss_words >= acquisition_policy.rss_substantive_threshold:
+                        # Substantive RSS bypasses canonical HTTP fetch
+                        acquisition_decision = acquisition_policy.evaluate(
+                            rss_title=raw_title,
+                            rss_text=rss_summary,
+                            extraction_result=None,
+                            source_policy=source_policy_cfg,
+                        )
+                        raw_html = item.get("raw_html") or rss_summary
                     else:
-                        # Fallback to RSS summary if HTML crawl fails or is too sparse
-                        clean_body = rss_summary
-                        content_score = 30.0
-                        density_score = 0.50
-                        word_count = len(rss_summary.split())
-                        title_source = raw_title
-                        rss_fallback_used = True
-                        logger.warning("Pipeline: HTML extraction failed/insufficient. Falling back to RSS summary.")
+                        # Weak RSS triggers canonical extraction via ExtractionService
+                        logger.info(f"Pipeline: RSS text non-substantive ({rss_words} words). Invoking ExtractionService for: {normalized_url}")
+                        html_t0 = time.time()
+                        extraction_res = await extraction_service.extract_content(
+                            normalized_url, parser_config=parser_profile, source_name=source.name
+                        )
+                        html_duration = round((time.time() - html_t0) * 1000.0, 2)
+                        raw_html = extraction_res.raw_html or item.get("raw_html") or rss_summary
+                        acquisition_decision = acquisition_policy.evaluate(
+                            rss_title=raw_title,
+                            rss_text=rss_summary,
+                            extraction_result=extraction_res,
+                            source_policy=source_policy_cfg,
+                        )
 
-                    if not raw_html:
-                        raw_html = rss_summary
+                    clean_body = acquisition_decision.selected_content
+                    title_source = acquisition_decision.selected_title or raw_title
+                    word_count = acquisition_decision.word_count
+                    content_score = extraction_res.content_score if extraction_res and extraction_res.content_score > 0 else (50.0 if acquisition_decision.decision == "RSS_SELECTED" else 30.0)
+                    density_score = extraction_res.density_score if extraction_res and extraction_res.density_score > 0 else 0.5
+                    rss_fallback_used = acquisition_decision.decision == "RSS_FALLBACK_SELECTED"
 
                     # 4. Adaptive Content Quality Pipeline & Extraction Confidence Scoring
                     meta_dict = {
@@ -254,30 +268,33 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                         title=title_source, content=clean_body, raw_html=raw_html, meta_dict=meta_dict
                     )
 
-                    is_eligible_quality = quality_res["eligible"]
-                    confidence_rating = quality_res.get("confidence", 0.0)
-
-                    # Re-run relevance filter to verify tech topic keywords
-                    if quality_res.get("is_degraded", False):
-                        is_relevant = True
-                    else:
-                        is_relevant = check_pre_ai_ingestion_eligibility(
-                            title=title_source,
-                            content=clean_body,
-                            source_credibility=source.credibility_score,
-                            source_category=source.category,
-                        )
-
-                    is_eligible = is_eligible_quality and is_relevant
-
-                    # Formal Ingestion State Machine transitions
-                    if is_eligible:
-                        status_state = "fetched"
-                    else:
+                    if acquisition_decision.decision == "REJECTED":
+                        is_eligible_quality = False
+                        is_relevant = False
+                        is_eligible = False
                         status_state = "filtered"
+                        quality_res = {"eligible": False, "confidence": 0.0, "is_degraded": True, "reason": acquisition_decision.fallback_reason or "CANONICAL_EXTRACTION_REJECTED"}
                         logger.info(
-                            f"Pipeline: Article '{title_source[:50]}' rejected by quality pipeline (eligible_quality={is_eligible_quality}, relevant={is_relevant}). Reason: {quality_res.get('reason', 'Failed relevance check')}"
+                            f"Pipeline: Article '{raw_title[:50]}' REJECTED by ContentAcquisitionPolicy. Reason: {acquisition_decision.fallback_reason}"
                         )
+                    else:
+                        quality_res = evaluate_adaptive_quality(
+                            title=title_source, content=clean_body, raw_html=raw_html, meta_dict=meta_dict
+                        )
+                        is_eligible_quality = quality_res["eligible"]
+                        confidence_rating = quality_res.get("confidence", 0.0)
+
+                        if quality_res.get("is_degraded", False):
+                            is_relevant = True
+                        else:
+                            is_relevant = check_pre_ai_ingestion_eligibility(
+                                title=title_source,
+                                content=clean_body,
+                                source_credibility=source.credibility_score,
+                                source_category=source.category,
+                            )
+                        is_eligible = is_eligible_quality and is_relevant
+                        status_state = "fetched" if is_eligible else "filtered"
 
                     # 5. Raw HTML Storage Strategy & Compression (zlib Level 9)
                     compressed_payload = compress_content(raw_html)
@@ -318,7 +335,7 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                     if not existing_article and is_degraded:
                         metrics["degraded_fallback_count"] += 1
 
-                    # Metadata Separation (JSON serialized block)
+                    # Metadata Separation & Provenance Persistence (JSON serialized block)
                     meta_payload = {
                         "content_type": "text/html",
                         "response_time_ms": html_duration,
@@ -326,9 +343,16 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                         "density_score": density_score,
                         "word_count": word_count,
                         "extracted_at": current_time.isoformat(),
-                        "parser": "HTMLAgent",
+                        "parser": "ContentAcquisitionPolicy_v2",
                         "rss_fallback": rss_fallback_used,
-                        "extraction_confidence": confidence_rating,
+                        "content_source": acquisition_decision.content_source,
+                        "acquisition_decision": acquisition_decision.decision,
+                        "rss_word_count": acquisition_decision.rss_word_count,
+                        "canonical_word_count": acquisition_decision.canonical_word_count,
+                        "canonical_extraction_status": acquisition_decision.canonical_extraction_status,
+                        "fallback_reason": acquisition_decision.fallback_reason,
+                        "content_revision": 1,
+                        "extraction_confidence": quality_res.get("confidence", 0.0),
                         "quality_metrics": {
                             "paragraph_count": quality_res.get("paragraph_count", 0),
                             "unique_ratio": quality_res.get("unique_ratio", 0.0),
@@ -336,7 +360,6 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                             "reason": quality_res.get("reason", ""),
                             "is_degraded": is_degraded,
                         },
-                        "content_source": "RSS_FALLBACK" if is_degraded else ("RSS" if rss_fallback_used else "HTML"),
                         "quality_state": "DEGRADED" if is_degraded else "NORMAL",
                         "needs_html_refresh": needs_html_refresh,
                     }
@@ -880,6 +903,20 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
     existing_read = read_res.scalars().first()
 
     tags_list = proc_art.primary_topics or []
+
+    incoming_revision = getattr(proc_art, "content_revision", 1) or 1
+    existing_meta = {}
+    if existing_read and getattr(existing_read, "article_metadata", None):
+        try:
+            existing_meta = json.loads(existing_read.article_metadata) if isinstance(existing_read.article_metadata, str) else (existing_read.article_metadata or {})
+        except Exception:
+            pass
+
+    existing_revision = existing_meta.get("content_revision", 1)
+
+    if existing_read and incoming_revision < existing_revision:
+        logger.info(f"Pipeline: Skipping stale projection update for article ID {proc_art.id} (incoming_rev={incoming_revision} <= existing_rev={existing_revision})")
+        return proc_art
 
     if existing_read:
         existing_read.title = proc_art.title

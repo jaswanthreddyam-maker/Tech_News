@@ -46,6 +46,8 @@ class BaseAgent:
                 )
                 if attempt == max_retries:
                     self.logger.error(f"Agent {self.name}: Maximum HTTP retries reached for {url}")
+                    if isinstance(e, httpx.HTTPStatusError):
+                        raise e
                     return None
                 await asyncio.sleep(delay)
                 delay *= 2

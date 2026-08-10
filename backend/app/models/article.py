@@ -161,6 +161,8 @@ class ProcessedArticle(Base):
     editorial_version: Mapped[str] = mapped_column(String(50), nullable=True)
     enrichment_status: Mapped[str] = mapped_column(String(50), default="pending", server_default="pending")
     completed_enrichment_stages: Mapped[list] = mapped_column(JSON, default=list, server_default='[]')
+    article_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    content_revision: Mapped[int] = mapped_column(Integer, default=1, server_default='1')
 
     embedding_status: Mapped[str] = mapped_column(String(50), default="pending", index=True)
     
