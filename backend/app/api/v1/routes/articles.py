@@ -207,9 +207,11 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
             pass
 
     if not ranked_ids:
-        from app.editorial.homepage_builder import HomepageBuilder
-        global_articles = await HomepageBuilder.build_homepage(db, category_filter=None)
-        ranked_ids = [str(a.id) for a in global_articles]
+        stmt_ids = select(ArticleReadModel.id).where(
+            ArticleReadModel.is_test_data == False
+        ).order_by(ArticleReadModel.published_at.desc()).limit(30)
+        ids_res = await db.execute(stmt_ids)
+        ranked_ids = [str(i) for i in ids_res.scalars().all()]
 
         try:
             import asyncio
