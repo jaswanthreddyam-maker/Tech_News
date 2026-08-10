@@ -4,6 +4,9 @@ export interface FeaturedArticle {
   title: string;
   summary: string;
   thumbnail?: string | null;
+  thumbnail_url?: string | null;
+  thumbnail_local?: string | null;
+  image_url?: string | null;
   source: string;
   publishedAt: string;
   readTime: number;

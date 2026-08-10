@@ -22,7 +22,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
   const { arrivalFinished: contextArrivalFinished, setActiveIndex, setInteractionMode, setFocusedCardId, onPrimaryAction } = useHeroScene();
   const arrivalFinished = propArrivalFinished ?? contextArrivalFinished;
   const getHeroImg = (art: FeaturedArticle) => {
-    if (art.thumbnail_url) return art.thumbnail_url;
+    if ((art as any).thumbnail_url) return (art as any).thumbnail_url;
     if (art.thumbnail && art.thumbnail.startsWith("http")) return art.thumbnail;
     if ((art as any).image_url) return (art as any).image_url;
     if (art.thumbnail) return art.thumbnail;
