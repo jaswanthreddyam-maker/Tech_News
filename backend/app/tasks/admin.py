@@ -17,12 +17,12 @@ from app.editorial.policy import PolicyLoader
 
 logger = logging.getLogger("tech_news.tasks.admin")
 
-async def _replay_article_async(raw_article_id: int) -> bool:
+async def _replay_article_async(raw_article_id: int, session_maker) -> bool:
     """
     Re-runs the canonical acquisition and relevance pipeline for a single filtered RawArticle.
     If it passes, it updates the record and triggers editorial processing.
     """
-    async with SessionLocal() as db:
+    async with session_maker() as db:
         stmt = select(RawArticle, Source).join(Source).where(RawArticle.id == raw_article_id)
         res = await db.execute(stmt)
         row = res.first()
@@ -177,8 +177,20 @@ def replay_filtered_articles(article_ids: Optional[List[int]] = None, filter_rea
     Celery task to deterministically replay filtered articles.
     Re-runs canonical extraction and relevance evaluation.
     """
+    from celery_app import CeleryAsyncSessionLocal, worker_loop
+    import asyncio
+    
+    if CeleryAsyncSessionLocal is None:
+        # Fallback for synchronous test execution outside the worker
+        from app.core.database import AsyncSessionLocal
+        db_factory = AsyncSessionLocal
+        loop = asyncio.get_event_loop()
+    else:
+        db_factory = CeleryAsyncSessionLocal
+        loop = worker_loop
+
     async def _run():
-        async with SessionLocal() as db:
+        async with db_factory() as db:
             stmt = select(RawArticle.id).where(RawArticle.status == "filtered")
             if article_ids:
                 stmt = stmt.where(RawArticle.id.in_(article_ids))
@@ -195,8 +207,6 @@ def replay_filtered_articles(article_ids: Optional[List[int]] = None, filter_rea
             
         logger.info(f"Replay task found {len(ids)} articles to replay.")
         for aid in ids:
-            await _replay_article_async(aid)
+            await _replay_article_async(aid, db_factory)
 
-    # Convert async to sync for Celery execution
-    import asyncio
-    asyncio.run(_run())
+    loop.run_until_complete(_run())
