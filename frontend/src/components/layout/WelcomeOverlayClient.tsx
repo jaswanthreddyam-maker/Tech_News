@@ -37,11 +37,11 @@ function overlayReducer(state: OverlayState, action: OverlayAction): OverlayStat
 
 const STAGES: { state: OverlayState; delay: number }[] = [
   { state: "stage1", delay: 0 },
-  { state: "stage2", delay: 400 },
-  { state: "stage3", delay: 900 },
+  { state: "stage2", delay: 900 },
+  { state: "stage3", delay: 1800 },
 ];
 
-const AUTO_REVEAL_AT = 3000;
+const AUTO_REVEAL_AT = 4300;
 
 const BLUR_VARIANTS = {
   enter: { opacity: 0, scale: 0.97, y: 12 },
@@ -212,7 +212,7 @@ export default function WelcomeOverlayClient({
   const activeStageNumber = stageNumberMap[activeStage];
 
   const variants = reducedMotion ? FADE_VARIANTS : BLUR_VARIANTS;
-  const wordDuration = reducedMotion ? 0.25 : 0.35;
+  const wordDuration = reducedMotion ? 0.25 : 0.5;
 
   return (
     <AnimatePresence onExitComplete={handleExitComplete}>
