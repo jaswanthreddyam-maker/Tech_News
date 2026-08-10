@@ -65,12 +65,7 @@ export function HeroSceneProvider({
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("idle");
   const [playbackState, setPlaybackState] = useState<PlaybackState>("playing");
   const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
-  const [arrivalFinished, setArrivalFinished] = useState<boolean>(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem("welcome-played") === "1") {
-      return true;
-    }
-    return false;
-  });
+  const [arrivalFinished, setArrivalFinished] = useState<boolean>(false);
 
   const activeArticle = useMemo(() => (itemCount > 0 ? items.at(activeIndex) || null : null), [items, activeIndex, itemCount]);
 
