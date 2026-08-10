@@ -15,22 +15,25 @@ router = APIRouter()
 
 
 @router.get("/stream")
-async def sse_event_stream(request: Request):
+async def sse_event_stream(
+    request: Request,
+    token: str | None = Query(None, description="Optional JWT authentication token"),
+):
     """
     Server-Sent Events stream of real pipeline agent events.
     Subscribes to Redis pub/sub and forwards events to connected clients.
     """
-    # Transient Stateless Authentication (avoids DB connection leak)
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization")
-        
-    token = auth_header.split(" ", 1)[1]
-    from app.core.security import decode_access_token
-    try:
-        decode_access_token(token)  # Validates signature and expiry
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_token = token
+    if not user_token and auth_header and auth_header.startswith("Bearer "):
+        user_token = auth_header.split(" ", 1)[1]
+
+    if user_token:
+        from app.core.security import decode_access_token
+        try:
+            decode_access_token(user_token)
+        except Exception as e:
+            logger.warning(f"Events SSE: Invalid token provided ({e}), proceeding as guest stream.")
 
     async def event_generator():
         from app.core.shutdown import shutdown_event

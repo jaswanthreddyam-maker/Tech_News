@@ -262,7 +262,10 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                         is_relevant = True
                     else:
                         is_relevant = check_pre_ai_ingestion_eligibility(
-                            title=title_source, content=clean_body, source_credibility=source.credibility_score
+                            title=title_source,
+                            content=clean_body,
+                            source_credibility=source.credibility_score,
+                            source_category=source.category,
                         )
 
                     is_eligible = is_eligible_quality and is_relevant

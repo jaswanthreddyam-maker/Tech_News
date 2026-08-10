@@ -24,7 +24,12 @@ export const thumbnailService = {
   getPublicImageUrl(article: ArticleThumbnailData | null | undefined): string | null {
     if (!article) return null;
 
-    // 1. Primary: Prefer local processed WebP thumbnail asset if present and downloaded/valid
+    // 1. Primary: Remote publisher HTTP/HTTPS URL (always accessible across Vercel and all Railway containers)
+    if (article.thumbnail_url && !failedUrls.has(article.thumbnail_url)) {
+      return article.thumbnail_url;
+    }
+
+    // 2. Secondary: Local WebP thumbnail asset if present and valid
     if (article.thumbnail_local && (article.thumbnail_status === "downloaded" || !article.thumbnail_status)) {
       let localUrl = article.thumbnail_local;
       if (localUrl.startsWith('/app/uploads/')) {
@@ -35,12 +40,7 @@ export const thumbnailService = {
       }
     }
 
-    // 2. Secondary Fallback: Remote publisher HTTP URL
-    if (article.thumbnail_url && !failedUrls.has(article.thumbnail_url)) {
-      return article.thumbnail_url;
-    }
-
-    // 3. Legacy Fallback: image_url
+    // 3. Fallback: Legacy image_url
     if (article.image_url && !failedUrls.has(article.image_url)) {
       return article.image_url;
     }

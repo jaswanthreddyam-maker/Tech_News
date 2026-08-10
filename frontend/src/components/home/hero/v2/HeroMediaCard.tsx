@@ -21,8 +21,18 @@ interface HeroMediaCardProps {
 export function HeroMediaCard({ article, index, isActive, arrivalFinished: propArrivalFinished, style, className = "" }: HeroMediaCardProps) {
   const { arrivalFinished: contextArrivalFinished, setActiveIndex, setInteractionMode, setFocusedCardId, onPrimaryAction } = useHeroScene();
   const arrivalFinished = propArrivalFinished ?? contextArrivalFinished;
-  const getHeroImg = (art: FeaturedArticle) => 
-    art.thumbnail || (art as any).thumbnail_local || (art as any).image_url || (art as any).image || (art as any).thumbnail_url || "";
+  const getHeroImg = (art: FeaturedArticle) => {
+    if (art.thumbnail_url) return art.thumbnail_url;
+    if (art.thumbnail && art.thumbnail.startsWith("http")) return art.thumbnail;
+    if ((art as any).image_url) return (art as any).image_url;
+    if (art.thumbnail) return art.thumbnail;
+    if ((art as any).thumbnail_local) {
+      let l = (art as any).thumbnail_local;
+      if (l.startsWith('/app/uploads/')) return l.replace('/app/uploads/', '/api/v1/uploads/');
+      return l;
+    }
+    return "";
+  };
 
   const [imgSrc, setImgSrc] = React.useState(getHeroImg(article));
 
@@ -118,6 +128,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
                       src={imgSrc}
                       alt=""
                       fill
+                      unoptimized={true}
                       quality={50}
                       priority={false}
                       aria-hidden="true"
@@ -133,6 +144,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
                       src={imgSrc}
                       alt={article.title}
                       fill
+                      unoptimized={true}
                       sizes="(max-width: 768px) 290px, 340px"
                       quality={90}
                       priority={isActive || index === 0}

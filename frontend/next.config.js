@@ -6,6 +6,7 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react', 'date-fns'],
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'http',
