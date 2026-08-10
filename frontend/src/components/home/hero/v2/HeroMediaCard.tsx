@@ -27,7 +27,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
     if ((art as any).image_url) return (art as any).image_url;
     if (art.thumbnail) return art.thumbnail;
     if ((art as any).thumbnail_local) {
-      let l = (art as any).thumbnail_local;
+      const l = (art as any).thumbnail_local;
       if (l.startsWith('/app/uploads/')) return l.replace('/app/uploads/', '/api/v1/uploads/');
       return l;
     }
