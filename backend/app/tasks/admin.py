@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from celery_app import celery_app
 from sqlalchemy import select
-from app.db.session import SessionLocal
+from app.core.database import AsyncSessionLocal as SessionLocal
 from app.models.article import RawArticle
 from app.models.source import Source
 from app.services.ingestion.extraction_service import ExtractionService
