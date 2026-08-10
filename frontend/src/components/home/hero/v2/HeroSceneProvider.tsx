@@ -24,6 +24,7 @@ export function HeroSceneProvider({
   latest = [],
   aiInsights = [],
   initialIndex = 0,
+  isInView = true,
   onSlideChange,
   onPrimaryAction,
   onInsightClick,
@@ -109,9 +110,15 @@ export function HeroSceneProvider({
     }, PLAYBACK_CONFIG.TRANSITION_DURATION_MS);
   }, [itemCount, anglePerItem, setActiveIndex]);
 
-  // Autoplay loop: total ring cycle ms -> advances smoothly every (35000 / N) ms
+  // Autoplay loop: total ring cycle ms -> advances smoothly ONLY when user has entered section and arrival animation is finished
   useEffect(() => {
-    if (itemCount <= 1 || interactionMode !== "idle" || playbackState !== "playing") {
+    if (
+      itemCount <= 1 ||
+      interactionMode !== "idle" ||
+      playbackState !== "playing" ||
+      !arrivalFinished ||
+      !isInView
+    ) {
       return;
     }
 
@@ -124,7 +131,7 @@ export function HeroSceneProvider({
     }, stepInterval);
 
     return () => clearInterval(timer);
-  }, [itemCount, interactionMode, playbackState, nextSlide]);
+  }, [itemCount, interactionMode, playbackState, arrivalFinished, isInView, nextSlide]);
 
   // Pause playback automatically when interaction mode shifts away from idle
   useEffect(() => {

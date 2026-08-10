@@ -15,6 +15,7 @@ export interface HeroSceneState {
   playbackState: PlaybackState;
   focusedCardId: string | null;
   arrivalFinished: boolean;
+  isInView?: boolean;
 }
 
 export interface HeroSceneActions {
@@ -42,6 +43,7 @@ export interface HeroSceneProps {
   latest: FeaturedArticle[];
   aiInsights: FeaturedArticle[];
   initialIndex?: number;
+  isInView?: boolean;
   onSlideChange?: (index: number) => void;
   onPrimaryAction?: (article: FeaturedArticle) => void;
   onInsightClick?: (article: FeaturedArticle) => void;

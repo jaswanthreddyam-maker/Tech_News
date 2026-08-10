@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { m, useScroll, useTransform } from "framer-motion";
 import { HeroSceneProps } from "./types";
 import { HeroSceneProvider } from "./HeroSceneProvider";
@@ -15,17 +15,31 @@ import { HeroTransparentControls } from "./HeroTransparentControls";
  */
 export function HeroScene(props: HeroSceneProps) {
   const sectionRef = useRef<HTMLElement>(null);
+  const [isInView, setIsInView] = useState(false);
+
+  useEffect(() => {
+    if (!sectionRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInView(entry.isIntersecting && entry.intersectionRatio >= 0.35);
+      },
+      {
+        threshold: [0, 0.2, 0.35, 0.5, 0.75, 1.0],
+      }
+    );
+
+    observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start start", "end start"],
   });
   const opacity = useTransform(scrollYProgress, [0.5, 1], [1, 0]);
 
-  // The early return has been removed to allow the 3D ring to mount immediately
-  // with skeleton items passed from HeroCarousel while data is fetching.
-
   return (
-    <HeroSceneProvider {...props}>
+    <HeroSceneProvider {...props} isInView={isInView}>
       <m.section
         ref={sectionRef}
         style={{ opacity }}
