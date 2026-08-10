@@ -49,17 +49,18 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
     # Fetch clean_html and hero_image from ProcessedArticle if available
     clean_html = art.content
     hero_image = None
-    try:
-        proc_id = int(art.id)
-        from app.models.article import ProcessedArticle
-        proc_stmt = select(ProcessedArticle).where(ProcessedArticle.id == proc_id)
-        proc_res = await db.execute(proc_stmt)
-        proc_art = proc_res.scalars().first()
-        if proc_art:
-            clean_html = proc_art.content or art.content
-            hero_image = proc_art.hero_image
-    except Exception:
-        await db.rollback()
+    if art.id and art.id.isdigit():
+        try:
+            proc_id = int(art.id)
+            from app.models.article import ProcessedArticle
+            proc_stmt = select(ProcessedArticle).where(ProcessedArticle.id == proc_id)
+            proc_res = await db.execute(proc_stmt)
+            proc_art = proc_res.scalars().first()
+            if proc_art:
+                clean_html = proc_art.content or art.content
+                hero_image = proc_art.hero_image
+        except Exception:
+            pass
 
     article_base = ArticleBase(
         id=art.id,
