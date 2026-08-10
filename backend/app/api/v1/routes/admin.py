@@ -613,6 +613,17 @@ async def trigger_full_ingestion_pipeline(
         },
     )
 
+@router.post("/diagnostic/run-migrations")
+async def run_migrations(current_user: User = Depends(require_role("super_admin"))):
+    try:
+        import alembic.config
+        import os
+        alembic_args = ["-c", os.path.join(os.getcwd(), "alembic.ini"), "upgrade", "head"]
+        alembic.config.main(argv=alembic_args)
+        return {"status": "success", "message": "Migrations ran successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @router.get("/diagnostic/db-truth")
 async def get_db_truth(db: AsyncSession = Depends(get_db)):
     """
