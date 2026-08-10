@@ -127,7 +127,7 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError):
     correlation_id = correlation_id_ctx.get() or "system"
     logger.error(f"Database transaction failure: {exc!s}", exc_info=True)
     error_details = ErrorDetails(
-        code="DATABASE_ERROR", message="A secure database transaction encountered an operational exception."
+        code="DATABASE_ERROR", message=f"A secure database transaction encountered an operational exception: {exc!s}"
     )
     response_content = ErrorResponse(correlation_id=correlation_id, error=error_details)
     return JSONResponse(
