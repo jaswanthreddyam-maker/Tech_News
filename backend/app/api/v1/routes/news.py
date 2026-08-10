@@ -25,6 +25,7 @@ async def list_articles(
     response: Response,
     category: str | None = Query(None, description="Topic filter slug"),
     cursor: str | None = Query(None, description="Cursor for pagination"),
+    sort_by: str | None = Query(None, description="Sort ordering"),
     limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
