@@ -613,6 +613,41 @@ async def trigger_full_ingestion_pipeline(
         },
     )
 
+@router.get("/diagnostic/db-truth")
+async def get_db_truth(db: AsyncSession = Depends(get_db)):
+    """
+    Forensic diagnostic endpoint to get exact counts and status distribution.
+    """
+    from app.models.article import RawArticle, ProcessedArticle, ArticleReadModel
+    from sqlalchemy import func, select
+    
+    # 1. RawArticle counts
+    raw_total = await db.scalar(select(func.count(RawArticle.id)))
+    
+    raw_status_res = await db.execute(select(RawArticle.status, func.count(RawArticle.id)).group_by(RawArticle.status))
+    raw_status_dist = {str(k): v for k, v in raw_status_res.all()}
+    
+    dead_letter_res = await db.execute(
+        select(RawArticle.dead_letter_reason, func.count(RawArticle.id))
+        .where(RawArticle.dead_letter_reason.isnot(None))
+        .group_by(RawArticle.dead_letter_reason)
+    )
+    dead_letter_dist = {str(k): v for k, v in dead_letter_res.all()}
+    
+    # 2. ProcessedArticle counts
+    processed_total = await db.scalar(select(func.count(ProcessedArticle.id)))
+    
+    # 3. ArticleReadModel counts
+    read_total = await db.scalar(select(func.count(ArticleReadModel.id)))
+    
+    return {
+        "raw_total": raw_total,
+        "raw_status_dist": raw_status_dist,
+        "dead_letter_dist": dead_letter_dist,
+        "processed_total": processed_total,
+        "read_total": read_total
+    }
+
 
 # ---------------------------------------------------------------------------
 # 3. Editorial & Article Moderation
