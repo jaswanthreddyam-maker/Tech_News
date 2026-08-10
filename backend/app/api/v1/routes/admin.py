@@ -659,6 +659,35 @@ async def get_db_truth(db: AsyncSession = Depends(get_db)):
         "read_total": read_total
     }
 
+@router.get("/diagnostic/filtered-samples")
+async def get_filtered_samples(limit: int = 5, db: AsyncSession = Depends(get_db)):
+    """
+    Forensic endpoint to dump sample filtered RawArticles for Phase 0 extraction debugging.
+    """
+    from app.models.article import RawArticle
+    from sqlalchemy import select
+    
+    res = await db.execute(
+        select(RawArticle)
+        .where(RawArticle.status == "filtered")
+        .limit(limit)
+    )
+    articles = res.scalars().all()
+    
+    return {
+        "samples": [
+            {
+                "id": a.id,
+                "url": a.url,
+                "source_id": a.source_id,
+                "error_log": a.error_log,
+                "dead_letter_reason": a.dead_letter_reason,
+                "article_metadata": a.article_metadata,
+            }
+            for a in articles
+        ]
+    }
+
 
 # ---------------------------------------------------------------------------
 # 3. Editorial & Article Moderation
