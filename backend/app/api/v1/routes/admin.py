@@ -615,12 +615,19 @@ async def trigger_full_ingestion_pipeline(
 
 @router.post("/diagnostic/run-migrations")
 async def run_migrations(current_user: User = Depends(require_role("super_admin"))):
+    import subprocess
+    import os
     try:
-        import alembic.config
-        import os
-        alembic_args = ["-c", os.path.join(os.getcwd(), "alembic.ini"), "upgrade", "head"]
-        alembic.config.main(argv=alembic_args)
-        return {"status": "success", "message": "Migrations ran successfully"}
+        # Run alembic in a separate process to avoid asyncio.run() conflict
+        result = subprocess.run(
+            ["alembic", "-c", os.path.join(os.getcwd(), "alembic.ini"), "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return {"status": "success", "message": result.stdout}
+    except subprocess.CalledProcessError as e:
+        return {"status": "error", "message": f"Command failed with exit code {e.returncode}. stderr: {e.stderr}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
