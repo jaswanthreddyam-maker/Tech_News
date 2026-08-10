@@ -120,7 +120,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         # Entities
         ent_stmt = select(EntityNode, ArticleEntityLink.confidence).join(
             ArticleEntityLink, EntityNode.id == ArticleEntityLink.entity_id
-        ).where(ArticleEntityLink.article_id == str(art.id))
+        ).where(ArticleEntityLink.article_id == art_id)
         ent_res = await db.execute(ent_stmt)
         for ent, conf in ent_res.all():
             knowledge.entities.append(KnowledgeEntity(
@@ -130,7 +130,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         # Topics
         top_stmt = select(TopicNode, ArticleTopicLink.confidence).join(
             ArticleTopicLink, TopicNode.name == ArticleTopicLink.topic_name
-        ).where(ArticleTopicLink.article_id == str(art.id))
+        ).where(ArticleTopicLink.article_id == art_id)
         top_res = await db.execute(top_stmt)
         for top, conf in top_res.all():
             knowledge.topics.append(KnowledgeTopic(
@@ -138,7 +138,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
             ))
 
         # Timeline
-        time_stmt = select(TimelineEventNode).where(TimelineEventNode.article_id == str(art.id))
+        time_stmt = select(TimelineEventNode).where(TimelineEventNode.article_id == art_id)
         time_res = await db.execute(time_stmt)
         for t in time_res.scalars().all():
             knowledge.timeline.append(KnowledgeTimelineEvent(
@@ -152,7 +152,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         # Relationships
         rel_stmt = select(RelationshipEdge, EntityNode).join(
             EntityNode, RelationshipEdge.target_id == EntityNode.id
-        ).where(RelationshipEdge.article_id == str(art.id))
+        ).where(RelationshipEdge.article_id == art_id)
         rel_res = await db.execute(rel_stmt)
         for rel, tgt in rel_res.all():
             src_stmt = select(EntityNode.canonical_name).where(EntityNode.id == rel.source_id)
@@ -169,7 +169,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
             ))
     except Exception as exc:
         import logging
-        logging.getLogger("tech_news.routes.articles").warning(f"Knowledge panel query failed for article {art.id}: {exc}")
+        logging.getLogger("tech_news.routes.articles").warning(f"Knowledge panel query failed for article {art_id}: {exc}")
         await db.rollback()
 
     # 3. Calculate Related Articles using Weighted Semantic Score
@@ -209,7 +209,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
             ORDER BY total_score DESC 
             LIMIT 5
         """)
-        rel_art_res = await db.execute(score_sql, {"art_id": str(art.id)})
+        rel_art_res = await db.execute(score_sql, {"art_id": art_id})
         rel_rows = rel_art_res.fetchall()
 
         for row in rel_rows:
@@ -220,7 +220,7 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
                 related.articles.append(ArticleCard.from_model(ra))
     except Exception as exc:
         import logging
-        logging.getLogger("tech_news.routes.articles").warning(f"Related articles query failed for article {art.id}: {exc}")
+        logging.getLogger("tech_news.routes.articles").warning(f"Related articles query failed for article {art_id}: {exc}")
         await db.rollback()
 
     related.entities = knowledge.entities
