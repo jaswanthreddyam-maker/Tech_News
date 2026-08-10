@@ -17,6 +17,10 @@ from app.models.tnt_knowledge import ArticleEntityLink, EntityNode, ArticleTopic
 
 logger = logging.getLogger("tech_news.celery")
 
+# Explicitly configure default DB pool for Celery Beat (and worker parent processes)
+from app.core.database import configure_database_pool
+configure_database_pool(pool_size=1, max_overflow=0)
+
 # Core Celery Queue Initializer
 celery_app = Celery(
     "tech_news_tasks",
@@ -58,8 +62,8 @@ def init_worker_process(**kwargs):
     # Initialize the engine bound to this worker's loop
     celery_engine = create_async_engine(
         settings.DATABASE_URL,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=1,
+        max_overflow=2,
         pool_timeout=30,
     )
     CeleryAsyncSessionLocal = sessionmaker(

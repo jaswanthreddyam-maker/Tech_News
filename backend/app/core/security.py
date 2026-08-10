@@ -190,12 +190,12 @@ async def _load_user_permissions(db: AsyncSession, user_id: int, role_id: int | 
 
 async def get_current_user(
     request: Request,
-    db: AsyncSession = Depends(get_db),
 ) -> User:
     """
     Extract Bearer token from Authorization header, decode JWT,
     and load the corresponding User from the database.
     Raises 401 if token is missing, invalid, or user does not exist.
+    Uses a transient DB connection to avoid leaking sessions in StreamingResponses.
     """
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -225,9 +225,11 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    stmt = select(User).options(selectinload(User.role)).where(User.id == user_id)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        stmt = select(User).options(selectinload(User.role)).where(User.id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
 
     if user is None:
         raise HTTPException(
@@ -247,11 +249,10 @@ async def get_current_user(
 
 async def get_current_user_optional(
     request: Request,
-    db: AsyncSession = Depends(get_db),
 ) -> User | None:
     """
     Extract Bearer token and return User if valid, otherwise return None.
-    Does not raise exceptions for missing or invalid tokens.
+    Uses a transient DB connection to avoid leaking sessions in StreamingResponses.
     """
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -272,9 +273,11 @@ async def get_current_user_optional(
     except (ValueError, TypeError):
         return None
 
-    stmt = select(User).options(selectinload(User.role)).where(User.id == user_id)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        stmt = select(User).options(selectinload(User.role)).where(User.id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
 
     if user is None or user.status != "active":
         return None

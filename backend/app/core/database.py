@@ -56,14 +56,14 @@ engine_kwargs = {
 
 if is_testing:
     engine_kwargs["poolclass"] = NullPool
-else:
+# Default fallback (e.g. for CLI or Beat) is highly restricted
+if not is_testing:
     engine_kwargs.update({
-        "pool_size": int(os.getenv("DATABASE_POOL_SIZE", "2")),
-        "max_overflow": int(os.getenv("DATABASE_MAX_OVERFLOW", "3")),
+        "pool_size": 1,
+        "max_overflow": 0,
         "pool_timeout": 15.0,
         "pool_recycle": 1800,
     })
-
 
 async_engine = create_async_engine(
     settings.DATABASE_URL,
@@ -73,6 +73,22 @@ async_engine = create_async_engine(
 AsyncSessionLocal = sessionmaker(
     bind=async_engine, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False
 )
+
+def configure_database_pool(pool_size: int, max_overflow: int):
+    """Explicitly reconfigure the connection pool for the current process."""
+    global async_engine
+    if is_testing:
+        return
+        
+    engine_kwargs.update({
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
+    })
+    
+    new_engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+    async_engine = new_engine
+    AsyncSessionLocal.configure(bind=new_engine)
+    logger.info(f"Database connection pool configured with pool_size={pool_size}, max_overflow={max_overflow}")
 
 
 # Dynamic Dependency Injection for API routes

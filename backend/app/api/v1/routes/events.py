@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.core.event_bus import EVENT_CHANNEL
@@ -15,11 +15,22 @@ router = APIRouter()
 
 
 @router.get("/stream")
-async def sse_event_stream(current_user: User | None = Depends(get_current_user_optional)):
+async def sse_event_stream(request: Request):
     """
     Server-Sent Events stream of real pipeline agent events.
     Subscribes to Redis pub/sub and forwards events to connected clients.
     """
+    # Transient Stateless Authentication (avoids DB connection leak)
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization")
+        
+    token = auth_header.split(" ", 1)[1]
+    from app.core.security import decode_access_token
+    try:
+        decode_access_token(token)  # Validates signature and expiry
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     async def event_generator():
         from app.core.shutdown import shutdown_event
