@@ -157,8 +157,17 @@ async def _replay_article_async(raw_article_id: int, session_maker) -> bool:
             raw_art.status = "fetched"
             logger.info(f"Replay: Article {raw_article_id} PASSED checks. Enqueueing processing.")
         else:
-            raw_art.status = "filtered"
-            logger.info(f"Replay: Article {raw_article_id} FAILED checks. Reason: {filter_reason}")
+            raw_art.retry_count = raw_art.retry_count + 1
+            raw_art.last_retry_at = current_time
+            
+            if raw_art.retry_count >= 3:
+                raw_art.status = "dead_letter"
+                raw_art.dead_letter_reason = filter_reason
+                raw_art.dead_letter_at = current_time
+                logger.warning(f"Replay: Article {raw_article_id} failed 3 times. Moving to dead-letter state.")
+            else:
+                raw_art.status = "filtered"
+                logger.info(f"Replay: Article {raw_article_id} FAILED checks. Reason: {filter_reason}. Retry {raw_art.retry_count}/3")
 
         await db.commit()
 
@@ -206,6 +215,43 @@ def replay_filtered_articles(article_ids: Optional[List[int]] = None, filter_rea
             ids = res.scalars().all()
             
         logger.info(f"Replay task found {len(ids)} articles to replay.")
+        for aid in ids:
+            await _replay_article_async(aid, db_factory)
+
+    loop.run_until_complete(_run())
+
+
+@celery_app.task(name="tasks.recovery.autonomous_ingestion_recovery")
+def autonomous_ingestion_recovery():
+    """
+    Autonomous recovery loop to automatically detect retryable pipeline starvation
+    and retry eligible filtered records using exponential backoff.
+    """
+    from celery_app import CeleryAsyncSessionLocal, worker_loop
+    import asyncio
+    from datetime import datetime, timezone, timedelta
+    
+    if CeleryAsyncSessionLocal is None:
+        from app.core.database import AsyncSessionLocal
+        db_factory = AsyncSessionLocal
+        loop = asyncio.get_event_loop()
+    else:
+        db_factory = CeleryAsyncSessionLocal
+        loop = worker_loop
+
+    async def _run():
+        async with db_factory() as db:
+            current_time = datetime.now(timezone.utc)
+            
+            stmt = select(RawArticle.id).where(
+                RawArticle.status == "filtered",
+                RawArticle.retry_count < 3
+            ).limit(20)
+            
+            res = await db.execute(stmt)
+            ids = res.scalars().all()
+            
+        logger.info(f"Autonomous Recovery: Found {len(ids)} filtered articles to retry.")
         for aid in ids:
             await _replay_article_async(aid, db_factory)
 

@@ -34,11 +34,7 @@ export default function SignupPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (mounted && user) {
-      if (canAccessAdmin(user)) {
-        router.push("/admin");
-      } else {
-        router.push("/");
-      }
+      router.push("/");
     }
   }, [mounted, user, router]);
 

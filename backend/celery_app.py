@@ -123,6 +123,11 @@ celery_app.conf.beat_schedule = {
         "schedule": 900.0,  # Every 15 minutes
         "options": {"queue": "ingestion"},
     },
+    "autonomous-ingestion-recovery": {
+        "task": "tasks.recovery.autonomous_ingestion_recovery",
+        "schedule": 3600.0,  # Every hour
+        "options": {"queue": "ingestion"},
+    },
     "auto-publish-scheduled-drafts": {
         "task": "check_and_publish_scheduled_drafts_task",
         "schedule": 60.0,

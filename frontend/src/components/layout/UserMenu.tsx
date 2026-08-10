@@ -14,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { canAccessAdmin } from "@/lib/auth/permissions";
 import { SettingsDialog } from "@/components/layout/SettingsDialog";
 import { LogOut, Settings, Shield, User as UserIcon } from "lucide-react";
 
@@ -65,8 +64,6 @@ export function UserMenu() {
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "U";
 
-  const isAdmin = canAccessAdmin(user);
-
   return (
     <>
       <DropdownMenu>
@@ -87,14 +84,6 @@ export function UserMenu() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {isAdmin && (
-            <DropdownMenuItem asChild>
-              <Link href="/admin" className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
-                <Shield className="h-4 w-4" />
-                Admin Dashboard
-              </Link>
-            </DropdownMenuItem>
-          )}
           <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
             <Settings className="h-4 w-4" />
             Settings & Theme

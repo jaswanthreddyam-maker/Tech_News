@@ -41,23 +41,12 @@ export default function LoginPage() {
     setMounted(true);
   }, []);
 
-  const redirectByRole = useCallback(
-    (u: User | null) => {
-      if (canAccessAdmin(u)) {
-        router.push("/admin");
-      } else {
-        router.push("/");
-      }
-    },
-    [router]
-  );
-
   // If already authenticated, redirect
   useEffect(() => {
     if (mounted && user) {
-      redirectByRole(user);
+      router.push("/");
     }
-  }, [mounted, user, redirectByRole]);
+  }, [mounted, user, router]);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -75,7 +64,7 @@ export default function LoginPage() {
       });
 
       loginUser(data.user, data.access_token);
-      redirectByRole(data.user);
+      router.push("/");
     } catch (err: any) {
       if (err instanceof APIClientError) {
         if (err.status === 401) {
@@ -104,7 +93,7 @@ export default function LoginPage() {
         body: JSON.stringify({ credential: credentialResponse.credential }),
       });
       loginUser(data.user, data.access_token);
-      redirectByRole(data.user);
+      router.push("/");
     } catch (err: any) {
       setError(err.message || "Google authentication failed.");
     } finally {
