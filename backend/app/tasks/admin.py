@@ -33,7 +33,7 @@ async def _replay_article_async(raw_article_id: int, session_maker) -> bool:
         raw_art, source = row
         
         # Ensure idempotent
-        if raw_art.status not in ("filtered", "discovered"):
+        if raw_art.status not in ("filtered", "discovered", "recovering"):
             logger.info(f"Replay: Skipping RawArticle {raw_article_id} because status is {raw_art.status}")
             return False
 
@@ -172,10 +172,8 @@ async def _replay_article_async(raw_article_id: int, session_maker) -> bool:
         await db.commit()
 
         if is_eligible:
-            # Re-enter the canonical pipeline AI processing step
-            from app.services.ingestion.pipeline import process_raw_article_to_editorial
-            await process_raw_article_to_editorial(db, raw_article_id)
-            await db.commit()
+            # Re-enter the canonical AI processing queue
+            celery_app.send_task("tasks.ai.process_raw_article", args=[raw_article_id])
             return True
             
         return False
@@ -230,6 +228,7 @@ def autonomous_ingestion_recovery():
     from celery_app import CeleryAsyncSessionLocal, worker_loop
     import asyncio
     from datetime import datetime, timezone, timedelta
+    from sqlalchemy import or_, and_, update
     
     if CeleryAsyncSessionLocal is None:
         from app.core.database import AsyncSessionLocal
@@ -243,15 +242,32 @@ def autonomous_ingestion_recovery():
         async with db_factory() as db:
             current_time = datetime.now(timezone.utc)
             
-            stmt = select(RawArticle.id).where(
+            # Use OR clause to simulate exponential backoff: 1h, 4h, 16h
+            backoff_condition = or_(
+                RawArticle.last_retry_at.is_(None),
+                and_(RawArticle.retry_count == 1, RawArticle.last_retry_at <= current_time - timedelta(hours=1)),
+                and_(RawArticle.retry_count == 2, RawArticle.last_retry_at <= current_time - timedelta(hours=4))
+            )
+            
+            stmt = select(RawArticle).where(
                 RawArticle.status == "filtered",
-                RawArticle.retry_count < 3
-            ).limit(20)
+                RawArticle.retry_count < 3,
+                backoff_condition
+            ).limit(20).with_for_update(skip_locked=True)
             
             res = await db.execute(stmt)
-            ids = res.scalars().all()
+            articles = res.scalars().all()
+            ids = [a.id for a in articles]
             
-        logger.info(f"Autonomous Recovery: Found {len(ids)} filtered articles to retry.")
+            if ids:
+                # Claim the records transactionally
+                for a in articles:
+                    a.status = "recovering"
+                await db.commit()
+            
+        logger.info(f"Autonomous Recovery: Claimed {len(ids)} filtered articles for retry.")
+        
+        # Now process the claimed articles
         for aid in ids:
             await _replay_article_async(aid, db_factory)
 
