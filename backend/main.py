@@ -149,7 +149,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled server exception: {exc!s}", exc_info=True)
     error_details = ErrorDetails(
         code="INTERNAL_SERVER_ERROR",
-        message="An unexpected server error occurred. Please contact the technical administrator.",
+        message=f"An unexpected server error occurred. {str(exc)}",
     )
     response_content = ErrorResponse(correlation_id=correlation_id, error=error_details)
     return JSONResponse(
