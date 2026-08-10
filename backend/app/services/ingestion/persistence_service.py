@@ -28,6 +28,7 @@ class PersistenceService:
         clean_text: str,
         metadata_dict: Dict[str, Any],
         status: str = "scraped",
+        filter_reason: Optional[str] = None,
         pipeline_version: str = "1.0.0",
         parser_version: str = "1.0.0",
     ) -> RawArticle:
@@ -51,7 +52,7 @@ class PersistenceService:
             clean_text=clean_text,
             article_metadata=json.dumps(metadata_dict),
             status=status,
-
+            filter_reason=filter_reason,
             parser_version=parser_version,
         )
         self.db.add(raw_article)

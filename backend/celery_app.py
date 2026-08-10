@@ -31,6 +31,7 @@ celery_app = Celery(
         "app.tasks.recovery_tasks",
         "app.tasks.root_cause_tasks",
         "app.tasks.telemetry_tasks",
+        "app.tasks.admin",
     ]
 )
 

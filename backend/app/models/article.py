@@ -75,6 +75,7 @@ class RawArticle(Base):
     error_log: Mapped[str] = mapped_column(Text, nullable=True)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     html_refetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    filter_reason: Mapped[str] = mapped_column(String(255), nullable=True)
     dead_letter_reason: Mapped[str] = mapped_column(Text, nullable=True)
     dead_letter_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

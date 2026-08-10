@@ -36,6 +36,7 @@ import app.models.workspace
 import app.core.events.models
 import app.newsletter.models
 import app.briefing.models
+import app.models.ingestion
 
 
 # Import models for Alembic autogenerate support

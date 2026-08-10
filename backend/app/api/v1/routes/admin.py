@@ -1800,3 +1800,35 @@ async def toggle_emergency_switch(
             + ".",
         },
     )
+
+class ReplayRequest(BaseModel):
+    article_ids: list[int] | None = Field(None, description="List of RawArticle IDs to replay")
+    filter_reason: str | None = Field(None, description="Filter reason to replay (e.g. RELEVANCE_FAILED_KEYWORD_DENSITY)")
+
+@router.post("/diagnostic/replay", response_model=StandardResponse)
+async def trigger_article_replay(
+    request: ReplayRequest,
+    current_user: User = Depends(require_role("admin", "super_admin")),
+):
+    """
+    Trigger background Celery task to replay filtered articles.
+    """
+    correlation_id = correlation_id_ctx.get() or "system"
+    from app.tasks.admin import replay_filtered_articles
+    
+    # Enqueue celery task
+    replay_filtered_articles.delay(
+        article_ids=request.article_ids,
+        filter_reason=request.filter_reason
+    )
+    
+    logger.info(f"Admin {current_user.email} triggered article replay for ids={request.article_ids} reason={request.filter_reason}")
+    
+    return StandardResponse(
+        correlation_id=correlation_id,
+        data={
+            "message": "Replay task enqueued successfully.",
+            "enqueued_ids": request.article_ids,
+            "enqueued_reason": request.filter_reason
+        }
+    )

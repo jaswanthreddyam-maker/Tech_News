@@ -52,6 +52,9 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
     """
     logger.info("Pipeline: Initializing real-time hardened ingestion cycle...")
 
+    cycle_start_time = time.perf_counter()
+    cycle_start_dt = datetime.now(timezone.utc)
+    
     # 1. Fetch enabled crawling sources from the PostgreSQL SourceRegistry
     stmt = select(Source).where(Source.enabled == True)
     result = await db.execute(stmt)
@@ -474,6 +477,33 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
 
 
     logger.info(f"Pipeline: Hardened Ingestion complete. Metrics: {metrics}")
+
+    # Save IngestionCycleMetrics
+    cycle_duration = time.perf_counter() - cycle_start_time
+    from app.models.ingestion import IngestionCycleMetrics
+    
+    cycle_metrics = IngestionCycleMetrics(
+        started_at=cycle_start_dt,
+        completed_at=datetime.now(timezone.utc),
+        sources_scanned=metrics["sources_scanned"],
+        sources_crawled=metrics["sources_crawled"],
+        articles_discovered=metrics["articles_discovered"],
+        articles_saved=metrics["articles_saved"],
+        duplicates_skipped=metrics["duplicates_skipped"],
+        filtered_skipped=metrics["filtered_skipped"],
+        failed_crawls=metrics["failed_crawls"],
+        duration_seconds=cycle_duration,
+        status="completed" if metrics["failed_crawls"] == 0 else "completed_with_errors"
+    )
+    
+    # Check for Depletion (active discovery but zero ingestion)
+    if metrics["articles_discovered"] > 0 and metrics["articles_saved"] == 0:
+        logger.warning(f"INGESTION_SAVE_FAILURE: Discovered {metrics['articles_discovered']} articles but saved 0! Relevance gates might be too strict.")
+        await publish_event("PIPELINE-ALERT", "INGESTION_SAVE_FAILURE: Cycle yielded 0 articles despite active discovery.", "warn")
+        cycle_metrics.status = "ingestion_save_failure"
+        
+    db.add(cycle_metrics)
+    await db.commit()
 
     # Guardrail #2: State-change-aware batch cache invalidation ONLY if new articles were saved/published
     if metrics["articles_saved"] > 0:
@@ -1027,12 +1057,24 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
             quality_res = evaluate_adaptive_quality(
                 title=title_source, content=clean_body, raw_html=raw_html, meta_dict=meta_dict
             )
-            is_relevant = check_pre_ai_ingestion_eligibility(
-                title=title_source, content=clean_body, source_credibility=source.credibility_score
+            is_relevant, relevance_reason = check_pre_ai_ingestion_eligibility(
+                title=title_source, content=clean_body, source_credibility=source.credibility_score, source_category=source.category
             )
 
             is_eligible = quality_res["eligible"] and is_relevant
             status_state = "fetched" if is_eligible else "filtered"
+
+            filter_reason = None
+            if not is_eligible:
+                if not quality_res["eligible"]:
+                    if quality_res.get("reason", "").startswith("Insufficient content length"):
+                        filter_reason = "RSS_CONTENT_TOO_SHORT"
+                    elif quality_res.get("reason", "").startswith("Truncated"):
+                        filter_reason = "CANONICAL_EXTRACTION_EMPTY"
+                    else:
+                        filter_reason = "LOW_INFORMATION_DENSITY"
+                else:
+                    filter_reason = relevance_reason
 
             compressed_payload = compress_content(raw_html)
             meta_payload = {
@@ -1056,6 +1098,7 @@ async def crawl_single_source_pipeline(db: AsyncSession, source_id: int) -> dict
                 clean_text=clean_body,
                 metadata_dict=meta_payload,
                 status=status_state,
+                filter_reason=filter_reason
             )
 
             if is_eligible:

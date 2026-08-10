@@ -182,10 +182,11 @@ def compute_title_similarity(title1: str, title2: str) -> float:
     return score
 
 
-def evaluate_relevance(title: str, content: str) -> bool:
+def evaluate_relevance(title: str, content: str, source_category: str) -> tuple[bool, str]:
     """
     Perform pre-AI keyword relevance matching.
     Checks for high density of tech topics and filters out spam/non-relevant streams.
+    Returns (is_relevant, reason).
     """
     combined_text = f"{title} {content}".lower()
 
@@ -193,21 +194,27 @@ def evaluate_relevance(title: str, content: str) -> bool:
     for spam_pattern in SPAM_KEYWORDS:
         if re.search(spam_pattern, combined_text):
             logger.info(f"Relevance Filter: Rejected due to spam match '{spam_pattern}'")
-            return False
+            return False, "SPAM_RATIO_HIGH"
 
-    # 2. Count technical keyword mentions
+    # 2. Determine required matches based on source trust
+    is_trusted = source_category in ("official", "editorial")
+    required_matches = 1 if is_trusted else 2
+
+    # 3. Count technical keyword mentions
     match_count = 0
+    matches_found = []
     for tech_pattern in TECH_KEYWORDS:
         if re.search(tech_pattern, combined_text):
             match_count += 1
-            if match_count >= 2:  # Require at least 2 distinct technical topic matches to pass filter
-                return True
+            matches_found.append(tech_pattern)
+            if match_count >= required_matches:
+                return True, ""
 
-    # 3. Fail if too low relevance count
+    # 4. Fail if too low relevance count
     logger.info(
-        f"Relevance Filter: Rejected article '{title}' - failed tech keyword matching density (matches: {match_count})"
+        f"Relevance Filter: Rejected article '{title}' - failed tech keyword matching density (matches: {match_count} < {required_matches})"
     )
-    return False
+    return False, "RELEVANCE_KEYWORD_DENSITY"
 
 
 def evaluate_adaptive_quality(title: str, content: str, raw_html: str, meta_dict: dict) -> dict[str, Any]:
@@ -323,26 +330,27 @@ def evaluate_adaptive_quality(title: str, content: str, raw_html: str, meta_dict
 
 
 def check_pre_ai_ingestion_eligibility(
-    title: str, content: str, source_credibility: int, min_credibility_threshold: int = 40
-) -> bool:
+    title: str, content: str, source_credibility: int, source_category: str, min_credibility_threshold: int = 40
+) -> tuple[bool, str]:
     """
     Unified validation routine checking article quality before queueing for AI summarization.
+    Returns (is_eligible, filter_reason).
     """
     # 1. Skip if source is untrusted or disabled
     if source_credibility < min_credibility_threshold:
         logger.warning(
             f"Ingestion Eligibility: Rejected due to low source credibility ({source_credibility} < {min_credibility_threshold})"
         )
-        return False
+        return False, "SOURCE_POLICY_REJECTED"
 
     # 2. Check minimal title and content length
     if not title or len(title) < 10:
         logger.warning("Ingestion Eligibility: Rejected due to empty or too short title.")
-        return False
+        return False, "LOW_INFORMATION_DENSITY"
 
     if not content or len(content) < 100:
         logger.warning("Ingestion Eligibility: Rejected due to insufficient article body density.")
-        return False
+        return False, "LOW_INFORMATION_DENSITY"
 
     # 3. Check tech content relevance
-    return evaluate_relevance(title, content)
+    return evaluate_relevance(title, content, source_category)
