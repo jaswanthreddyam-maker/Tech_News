@@ -10,7 +10,7 @@ export function SkipHint() {
       transition={{ delay: 0.5, duration: 0.4, ease: "easeOut" }}
       style={{
         position: "absolute",
-        bottom: "4%",
+        bottom: "clamp(12px, 2.5vh, 20px)",
         fontFamily: "var(--font-sans, system-ui, sans-serif)",
         fontSize: "0.75rem",
         fontWeight: 400,

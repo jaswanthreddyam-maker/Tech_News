@@ -258,8 +258,10 @@ export default function WelcomeOverlayClient({
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              minHeight: "140px",
+              minHeight: "clamp(100px, 18vw, 140px)",
               width: "100%",
+              paddingInline: "16px",
+              boxSizing: "border-box",
             }}
           >
             <AnimatePresence>
@@ -279,13 +281,14 @@ export default function WelcomeOverlayClient({
                       flexDirection: "column",
                       alignItems: "center",
                       willChange: "transform, opacity, filter",
+                      maxWidth: "calc(100vw - 32px)",
                     }}
                   >
                     <h1
                       style={{
                         fontSize: word.isBrand
-                          ? "clamp(3rem, 7.5vw, 5rem)"
-                          : "clamp(2.5rem, 6vw, 4.2rem)",
+                          ? "clamp(1.75rem, 8vw, 5rem)"
+                          : "clamp(1.6rem, 7vw, 4.2rem)",
                         fontWeight: word.isBrand ? 700 : 500,
                         letterSpacing: word.isBrand ? "-0.02em" : "0.02em",
                         margin: 0,
@@ -293,6 +296,8 @@ export default function WelcomeOverlayClient({
                         textShadow:
                           "0 0 40px color-mix(in srgb, var(--accent) 20%, transparent)",
                         lineHeight: 1.1,
+                        whiteSpace: "nowrap",
+                        textAlign: "center",
                       }}
                     >
                       {word.text}

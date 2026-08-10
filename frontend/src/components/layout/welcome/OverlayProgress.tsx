@@ -11,7 +11,7 @@ export function OverlayProgress({ activeStageNumber }: OverlayProgressProps) {
         display: "flex",
         gap: "10px",
         position: "absolute",
-        bottom: "7%",
+        bottom: "clamp(36px, 6vh, 48px)",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 10,

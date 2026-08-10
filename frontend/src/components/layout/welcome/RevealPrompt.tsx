@@ -12,7 +12,7 @@ export function RevealPrompt() {
       transition={{ duration: 0.8, ease: EASE_OUT, delay: 1.0 }}
       style={{
         position: "absolute",
-        bottom: "15%",
+        bottom: "clamp(80px, 14vh, 120px)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
