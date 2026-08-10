@@ -238,6 +238,10 @@ export function Hero3DRing() {
       sessionStorage.getItem("welcome-played") !== "1";
 
     if (isWelcomeOverlayActive) {
+      // Set initial state paused in deep space while Welcome Overlay plays
+      if (arrivalRef.current) arrivalRef.current.style.transform = `translateZ(${START_Z}px) scale(${INITIAL_SCALE})`;
+      if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
+
       let isStarted = false;
       const startArrival = () => {
         if (isStarted) return;
@@ -251,11 +255,9 @@ export function Hero3DRing() {
       };
 
       window.addEventListener("welcome-overlay-complete", handleOverlayComplete);
-      const fallbackTimer = setTimeout(startArrival, 5000);
 
       return () => {
         window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
-        clearTimeout(fallbackTimer);
         if (rafId) cancelAnimationFrame(rafId);
         if (settleRafId) cancelAnimationFrame(settleRafId);
       };

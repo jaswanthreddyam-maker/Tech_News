@@ -44,7 +44,7 @@ export function WelcomeOverlay({ children }: WelcomeOverlayProps) {
           onComplete={handleComplete}
         />
       )}
-      {hasPlayed === true && children}
+      {children}
     </>
   );
 }
