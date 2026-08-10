@@ -154,7 +154,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
                       sizes="(max-width: 768px) 290px, 340px"
                       quality={90}
                       priority={isActive || index === 0}
-                      onError={() => setImgSrc("")}
+                      onError={() => setImgSrc("https://images.unsplash.com/photo-1677442136019-21780efad99a?auto=format&fit=crop&w=1200&q=80")}
                       className="object-cover object-center w-full h-full drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)] transition-all duration-700 group-hover:scale-[1.04]"
                     />
                     {/* Shaded Division Seam Gradient at Bottom of Thumbnail */}
