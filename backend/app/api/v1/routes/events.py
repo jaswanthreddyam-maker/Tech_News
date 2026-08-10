@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.core.event_bus import EVENT_CHANNEL
