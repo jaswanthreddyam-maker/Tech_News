@@ -108,7 +108,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
         className={`relative w-full h-full flex flex-col bg-black rounded-2xl overflow-hidden border transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${
           isActive
             ? "border-white/45 ring-1 ring-white/30 shadow-[0_25px_50px_-10px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.15),inset_0_1px_1px_rgba(255,255,255,0.5)] hover:border-white/70 hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.95),0_0_40px_rgba(255,255,255,0.25)] hover:-translate-y-[4px]"
-            : "border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_15px_30px_rgba(0,0,0,0.8)] opacity-85 grayscale-[10%] hover:opacity-100 hover:grayscale-0 hover:border-white/45 hover:shadow-[0_0_28px_rgba(255,255,255,0.2)]"
+            : "border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_15px_30px_rgba(0,0,0,0.8)] opacity-100 grayscale-[10%] hover:opacity-100 hover:grayscale-0 hover:border-white/45 hover:shadow-[0_0_28px_rgba(255,255,255,0.2)]"
         }`}
         style={{
           transformStyle: "preserve-3d",

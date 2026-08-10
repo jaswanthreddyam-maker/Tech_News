@@ -420,10 +420,7 @@ export function Hero3DRing() {
               const currentNetAngle = normalizeAngle(itemAngle + sceneRotation);
               const shortestAngleFromFront = Math.min(currentNetAngle, 360 - currentNetAngle);
 
-              const depthOpacity =
-                shortestAngleFromFront > RING_CONFIG.OPACITY_START
-                  ? Math.max(0.2, 1 - (shortestAngleFromFront - 90) * 0.008)
-                  : 1;
+              const depthOpacity = 1;
 
               const cardPointerEvents: React.CSSProperties["pointerEvents"] =
                 shortestAngleFromFront > RING_CONFIG.POINTER_CUTOFF ? "none" : "auto";
