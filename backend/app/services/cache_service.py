@@ -16,10 +16,16 @@ class CacheService:
         Invalidates homepage projection cache keys in Redis.
         """
         try:
+            from app.api.v1.routes.news import _in_memory_homepage_cache
+            _in_memory_homepage_cache["cards"] = None
+            _in_memory_homepage_cache["expires_at"] = 0.0
+
             redis = get_redis_client()
             if redis:
-                await redis.delete("editorial:v1:homepage_ranked_ids")
-                logger.info(f"CacheService: Successfully invalidated homepage cache ('editorial:v1:homepage_ranked_ids'), Reason: {reason}")
+                keys = await redis.keys("editorial:*")
+                if keys:
+                    await redis.delete(*keys)
+                logger.info(f"CacheService: Successfully invalidated homepage cache, Reason: {reason}")
                 return True
             return False
         except Exception as e:

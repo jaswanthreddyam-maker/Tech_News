@@ -36,7 +36,7 @@ async def list_articles(
     now_ts = time.time()
 
     # Fast Path 0: Process-level in-memory cache (1ms response, completely immune to DB/Redis latency)
-    if not category and not cursor and _in_memory_homepage_cache["cards"] and now_ts < _in_memory_homepage_cache["expires_at"]:
+    if not category and not cursor and not sort_by and _in_memory_homepage_cache.get("cards") and now_ts < _in_memory_homepage_cache.get("expires_at", 0):
         cards_data = _in_memory_homepage_cache["cards"]
         t_total = time.time() - t0
         response.headers["Server-Timing"] = f"mem_hit;dur={t_total*1000:.1f}"
