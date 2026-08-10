@@ -97,20 +97,21 @@ async def run_infrastructure_health_checks(pipe=None):
         HealthStatus.UNKNOWN: 0.0,
     }
 
-    service_weights = {"postgres": 30, "redis": 20, "worker": 15, "beat": 10, "queue": 10, "backend": 10}
+    raw_weights = {"postgres": 30, "redis": 20, "worker": 15, "beat": 10, "queue": 10, "backend": 10}
+    total_weight = sum(raw_weights.values())
 
     weighted_score = 0.0
 
     for snapshot in snapshots:
-        weight = service_weights.get(snapshot.service, 0)
+        weight = raw_weights.get(snapshot.service, 0)
         multiplier = status_multipliers.get(snapshot.status, 0.0)
         weighted_score += weight * multiplier
 
     # Add queue status weight
     queue_multiplier = status_multipliers.get(queue_status, 1.0)
-    weighted_score += service_weights["queue"] * queue_multiplier
+    weighted_score += raw_weights["queue"] * queue_multiplier
 
-    final_score = round(weighted_score)
+    final_score = round((weighted_score / total_weight) * 100)
     final_grade = calculate_health_grade(final_score)
 
     # Cache the computed health score and status inside the infrastructure status
@@ -346,7 +347,7 @@ async def collect_ai_queue_metrics(pipe=None):
             average_retry_count = float(queue_stats[2]) if queue_stats and queue_stats[2] else 0.0
             
             oldest_age_sec = (now_utc - oldest.replace(tzinfo=timezone.utc)).total_seconds() if oldest else 0
-            average_wait_sec = oldest_age_sec / 2 if depth > 0 else 0  # Fast approximation for average wait
+            estimated_average_wait_sec = oldest_age_sec / 2 if depth > 0 else 0  # Fast approximation for average wait
 
             failed_today = int(await client.get("telemetry_failed_ai_jobs") or 0)
             recovered_today = int(await client.get("telemetry_recovered_ai_jobs") or 0)
@@ -354,7 +355,7 @@ async def collect_ai_queue_metrics(pipe=None):
             queue_metrics = {
                 "depth": depth,
                 "oldest_age_sec": oldest_age_sec,
-                "average_wait_sec": average_wait_sec,
+                "estimated_average_wait_sec": estimated_average_wait_sec,
                 "average_retry_count": average_retry_count,
                 "failed_today": failed_today,
                 "recovered_today": recovered_today,
