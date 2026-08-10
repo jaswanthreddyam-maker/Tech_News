@@ -239,37 +239,41 @@ async def get_article(id: str, db: AsyncSession = Depends(get_db)):
         except Exception:
             pass
 
-    ranked_ids_str = [str(x) for x in ranked_ids]
-    position = -1
     navigation = None
-    art_id_str = str(art.id)
-    if art_id_str in ranked_ids_str:
-        position = ranked_ids_str.index(art_id_str)
-        prev_art = None
-        next_art = None
+    try:
+        ranked_ids_str = [str(x) for x in ranked_ids]
+        if art_id in ranked_ids_str:
+            position = ranked_ids_str.index(art_id)
+            prev_art = None
+            next_art = None
 
-        if position > 0:
-            prev_id = str(ranked_ids_str[position - 1])
-            prev_stmt = select(ArticleReadModel).where(ArticleReadModel.id == prev_id)
-            prev_res = await db.execute(prev_stmt)
-            prev_model = prev_res.scalars().first()
-            if prev_model:
-                prev_art = ArticleCard.from_model(prev_model)
+            if position > 0:
+                prev_id = str(ranked_ids_str[position - 1])
+                prev_stmt = select(ArticleReadModel).where(ArticleReadModel.id == prev_id)
+                prev_res = await db.execute(prev_stmt)
+                prev_model = prev_res.scalars().first()
+                if prev_model:
+                    prev_art = ArticleCard.from_model(prev_model)
 
-        if position < len(ranked_ids_str) - 1:
-            next_id = str(ranked_ids_str[position + 1])
-            next_stmt = select(ArticleReadModel).where(ArticleReadModel.id == next_id)
-            next_res = await db.execute(next_stmt)
-            next_model = next_res.scalars().first()
-            if next_model:
-                next_art = ArticleCard.from_model(next_model)
+            if position < len(ranked_ids_str) - 1:
+                next_id = str(ranked_ids_str[position + 1])
+                next_stmt = select(ArticleReadModel).where(ArticleReadModel.id == next_id)
+                next_res = await db.execute(next_stmt)
+                next_model = next_res.scalars().first()
+                if next_model:
+                    next_art = ArticleCard.from_model(next_model)
 
-        navigation = NavigationInfo(
-            previous=prev_art,
-            next=next_art,
-            position=position + 1,
-            total=len(ranked_ids)
-        )
+            navigation = NavigationInfo(
+                previous=prev_art,
+                next=next_art,
+                position=position + 1,
+                total=len(ranked_ids)
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger("tech_news.routes.articles").warning(f"Navigation computation failed for article {art_id}: {exc}")
+        await db.rollback()
+        navigation = None
 
     # 5. Build Scoring Debug Info
     from app.editorial.freshness import calculate_freshness_multiplier
