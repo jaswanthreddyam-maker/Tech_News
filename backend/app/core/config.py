@@ -5,11 +5,21 @@ from pydantic import BeforeValidator, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def assemble_cors_origins(v: str | list[str]) -> list[str] | str:
-    if isinstance(v, str) and not v.startswith("["):
-        return [i.strip() for i in v.split(",")]
-    elif isinstance(v, (list, str)):
-        return v
+def assemble_cors_origins(v: str | list[str]) -> list[str]:
+    if not v:
+        return []
+    if isinstance(v, str):
+        if v.startswith("[") and v.endswith("]"):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [item.strip().rstrip("/") for item in parsed if isinstance(item, str) and item.strip()]
+            except Exception:
+                pass
+        return [item.strip().rstrip("/") for item in v.split(",") if item.strip()]
+    elif isinstance(v, list):
+        return [item.strip().rstrip("/") for item in v if isinstance(item, str) and item.strip()]
+    return []
 import os
 from dotenv import load_dotenv
 

@@ -145,30 +145,40 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
-# 2.5 Mount Security Headers Middleware
+# 2.5 Mount Security Headers and CORS Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "https://tech-news-alpha-eosin.vercel.app",
+]
+if isinstance(settings.BACKEND_CORS_ORIGINS, list):
+    for o in settings.BACKEND_CORS_ORIGINS:
+        if isinstance(o, str) and o.strip():
+            clean_o = o.strip().rstrip("/")
+            if clean_o not in cors_origins:
+                cors_origins.append(clean_o)
 
-class DynamicCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        origin = request.headers.get("origin")
-        
-        if request.method == "OPTIONS":
-            response = Response(status_code=204)
-            if origin:
-                response.headers["Access-Control-Allow-Origin"] = origin
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-                response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Correlation-ID, X-Anonymous-ID, X-Admin-Token, Cache-Control"
-            return response
-
-        response = await call_next(request)
-        if origin:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Correlation-ID, X-Anonymous-ID, X-Admin-Token, Cache-Control"
-        return response
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https://tech-news-[a-z0-9-]*\.vercel\.app$",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Correlation-ID",
+        "X-Anonymous-ID",
+        "X-Admin-Token",
+        "Cache-Control",
+        "Accept",
+        "Origin",
+    ],
+)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -184,7 +194,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-app.add_middleware(DynamicCORSMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(MaintenanceModeMiddleware)
