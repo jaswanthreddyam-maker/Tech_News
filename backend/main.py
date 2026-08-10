@@ -168,16 +168,7 @@ app.add_middleware(
     allow_origin_regex=r"^https://tech-news-[a-z0-9-]*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=[
-        "Content-Type",
-        "Authorization",
-        "X-Correlation-ID",
-        "X-Anonymous-ID",
-        "X-Admin-Token",
-        "Cache-Control",
-        "Accept",
-        "Origin",
-    ],
+    allow_headers=["*"],
 )
 
 
