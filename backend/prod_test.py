@@ -76,25 +76,37 @@ def main():
         print("No filtered articles found in production DB! Exiting.")
         sys.exit(1)
 
-    print("\n--- 3. Replay ONLY the affected filtered records ---")
-    payload = {"article_ids": filtered_ids}
+    print("\n--- 3. Replay EXACTLY ONE affected filtered record ---")
+    target_id = filtered_ids[0]
+    target_url = next(d["url"] for d in data if d["id"] == target_id)
+    payload = {"article_ids": [target_id]}
     resp = requests.post(f"{BASE_URL}/api/v1/admin/diagnostic/replay", headers=headers, json=payload)
-    print(f"Replay response: {resp.status_code} {resp.text}")
+    print(f"Replay response for ID {target_id}: {resp.status_code} {resp.text}")
+    print(f"Tracking RawArticle ID: {target_id}")
+    print(f"Tracking URL: {target_url}")
 
     print("\n--- 4/5/6/7/8 Wait and Capture Funnel Counts ---")
     print("Polling API for news (waiting for celery worker)...")
     
+    found_in_news = False
     for i in range(15):
         time.sleep(3)
         resp = requests.get(f"{BASE_URL}/api/v1/news?limit=10")
         if resp.status_code == 200:
             news = resp.json()
             if news.get("data") and len(news["data"]) > 0:
-                print(f"Success: /api/v1/news returned {len(news['data'])} articles!")
-                break
+                urls = [a.get("url") for a in news["data"]]
+                if target_url in urls:
+                    print(f"SUCCESS: target_url {target_url} found in /api/v1/news!")
+                    found_in_news = True
+                    break
         print("Waiting for celery processing...")
     else:
-        print("Timeout waiting for articles.")
+        print("Timeout waiting for article to appear in news.")
+        
+    if not found_in_news:
+        print("FAILURE: Target article did not reach the frontend API!")
+        sys.exit(1)
 
     print("\n--- Verify /api/v1/news returns populated data ---")
     resp = requests.get(f"{BASE_URL}/api/v1/news?limit=20")
