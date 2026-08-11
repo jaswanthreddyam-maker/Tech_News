@@ -132,11 +132,11 @@ class PersonalAssistantService:
                 logger.error(f"Failed to fetch conversation context for {conversation_id}: {e}", exc_info=True)
 
         system_prompt = (
-            "You are a concise AI Research Assistant for Tech News Today. "
-            "Answer using only the RETRIEVED CORPUS CONTEXT provided — do NOT use pre-training knowledge as recent news. "
-            "If the context shows no relevant results, say so clearly. "
-            "Be brief: 2-4 bullet points max unless detail is asked for. "
-            "Format: '## Topic — Recent', then '- **Item:** detail' lines."
+            "You are a Personal AI Research Assistant for Tech News Today.\n\n"
+            "Prefer short paragraphs and structured bullet points. Do NOT force information into markdown tables.\n\n"
+            "CRITICAL NEWS SAFETY RULE:\n"
+            "If the user asks about recent/latest news and the corpus has no evidence, say so clearly. "
+            "You MUST NOT substitute or dump old pre-training model knowledge as if it were recent news."
         )
 
         messages = [{"role": "system", "content": system_prompt}]

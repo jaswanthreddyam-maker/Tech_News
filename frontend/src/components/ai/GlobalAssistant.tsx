@@ -198,6 +198,8 @@ export function GlobalAssistant() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+
     try {
       const response = await apiClient.fetchRaw("/assistant/query", {
         method: "POST",
@@ -207,13 +209,11 @@ export function GlobalAssistant() {
         signal: controller.signal,
       });
 
-      const reader = response.body?.getReader();
+      reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
       if (!reader) {
         setErrorMessage("Failed to read server response stream.");
-        stopStatusRotation();
-        setIsGenerating(false);
         return;
       }
 
@@ -265,7 +265,6 @@ export function GlobalAssistant() {
               );
             } catch (err) {}
           } else if (trimmed.startsWith("event: assistant_token")) {
-            // First token arrives: IMMEDIATELY stop rotating progress labels
             stopStatusRotation();
             const dataStr = trimmed.replace("event: assistant_token\ndata: ", "");
             try {
@@ -296,8 +295,7 @@ export function GlobalAssistant() {
                 )
               );
             } catch (err) {}
-            setIsGenerating(false);
-            setActiveToolLabel(null);
+            break;
           } else if (trimmed.startsWith("event: error") || trimmed.includes('"event": "error"')) {
             stopStatusRotation();
             try {
@@ -313,13 +311,11 @@ export function GlobalAssistant() {
             setMessages((prev) =>
               prev.map((msg) => (msg.status === "streaming" ? { ...msg, status: "error" } : msg))
             );
-            setIsGenerating(false);
-            setActiveToolLabel(null);
+            break;
           }
         }
       }
     } catch (e: any) {
-      stopStatusRotation();
       if (e.name !== "AbortError") {
         console.error("Assistant request error:", e);
         const msg = e?.message || "Connection lost or request timed out. Please try again.";
@@ -328,8 +324,16 @@ export function GlobalAssistant() {
           prev.map((msg) => (msg.status === "streaming" ? { ...msg, status: "error" } : msg))
         );
       }
+    } finally {
+      stopStatusRotation();
       setIsGenerating(false);
       setActiveToolLabel(null);
+      if (reader) {
+        reader.cancel().catch(() => {});
+      }
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   };
 
