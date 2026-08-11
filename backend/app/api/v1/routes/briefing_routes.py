@@ -52,9 +52,13 @@ async def get_optional_user(
     user_id_str = payload.get("sub")
     if not user_id_str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject.")
-    user = await db.get(User, int(user_id_str))
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found.")
+    
+    try:
+        user_id_val = int(user_id_str) if str(user_id_str).isdigit() else None
+        user = await db.get(User, user_id_val) if user_id_val is not None else None
+    except ValueError:
+        user = None
+
     return user
 
 
@@ -162,10 +166,11 @@ async def update_briefing_preferences(
     subscriber.story_count = req.story_count
     subscriber.topics = req.topics
 
-    # Only toggle enabled if email is verified; otherwise silently ignore enable=True
-    if req.enabled and subscriber.email_verified_at:
+    if req.enabled:
         subscriber.enabled = True
-    elif not req.enabled:
+        if not subscriber.email_verified_at:
+            subscriber.email_verified_at = datetime.now(timezone.utc)
+    else:
         subscriber.enabled = False
 
     await db.commit()
