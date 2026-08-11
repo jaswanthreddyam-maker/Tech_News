@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -365,7 +365,10 @@ async def get_rss(db: AsyncSession = Depends(get_db)):
     """
     Generate an RSS 2.0 feed from the canonical ArticleReadModel.
     """
-    stmt = select(ArticleReadModel).where(ArticleReadModel.is_test_data == False).order_by(desc(ArticleReadModel.published_at)).limit(20)
+    stmt = select(ArticleReadModel).where(
+        ArticleReadModel.is_test_data == False,
+        or_(ArticleReadModel.publication_status == None, ArticleReadModel.publication_status != "EXPIRED"),
+    ).order_by(desc(ArticleReadModel.published_at)).limit(20)
     result = await db.execute(stmt)
     articles = result.scalars().all()
 

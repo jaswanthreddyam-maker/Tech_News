@@ -1,9 +1,10 @@
 article_lifecycle:
-  minimum_ttl_hours: 6
-  maximum_ttl_hours: 24
+  minimum_ttl_hours: 12
+  maximum_ttl_hours: 72
   purge_interval_minutes: 1
   startup_reconciliation: true
-  delete_thumbnails: true
+  delete_thumbnails: false
   preserve_bookmarks: true
   editorial_weight: 0.8
   freshness_weight: 0.2
+  minimum_article_floor: 5

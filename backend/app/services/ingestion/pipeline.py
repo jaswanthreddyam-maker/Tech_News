@@ -769,6 +769,9 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         proc_art.readability_score = seo_meta["readability_score"]
 
         # Calculate updated scores
+        from app.services.ranking.news_ranking_engine import get_lifecycle_policy
+        _policy = get_lifecycle_policy()
+        _default_ttl = int(_policy.get("maximum_ttl_hours", 72))
         impact = calculate_impact_score(raw_art.title, category_name, plain_text)
         freshness = calculate_freshness_score(proc_art.published_at)
         engagement = calculate_engagement_score(raw_art.article_metadata, source_cred)
@@ -778,7 +781,7 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         proc_art.freshness_score = freshness
         proc_art.engagement_score = engagement
         proc_art.final_score = final
-        proc_art.expires_at = proc_art.published_at + timedelta(hours=24)
+        proc_art.expires_at = proc_art.published_at + timedelta(hours=_default_ttl)
         logger.info(f"Processor: Updated existing processed article record for slug: {slug}")
     else:
         # Create new processed record
@@ -808,7 +811,7 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
             readability_score=seo_meta["readability_score"],
             published_status="published",
             published_at=pub_at,
-            expires_at=pub_at + timedelta(hours=24),
+            expires_at=pub_at + timedelta(hours=_default_ttl),
             freshness_score=freshness,
             engagement_score=engagement,
             final_score=final,

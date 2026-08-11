@@ -96,9 +96,24 @@ async def test_homepage_builder_old_article_filtered(db_session, clean_db_tables
         hash="test-hash",
         is_test_data=False
     )
+    article_fresh = ArticleReadModel(
+        id="test-fresh-dummy",
+        url="https://test.com/fresh-dummy",
+        title="Fresh Article Dummy",
+        content="Content",
+        published_at=datetime.now(timezone.utc),
+        final_score=80.0,
+        published_status="published",
+        publication_status="PUBLISHED",
+        source="Test Source",
+        hash="test-hash-fresh",
+        is_test_data=False
+    )
     db_session.add(article)
+    db_session.add(article_fresh)
     await db_session.commit()
     
     results = await HomepageBuilder.build_homepage(db_session)
     assert not any(a.id == "test-old-impact" for a in results), "36-hour old article should be filtered"
+    assert any(a.id == "test-fresh-dummy" for a in results), "Fresh article should be included"
 

@@ -158,6 +158,8 @@ class ProcessedArticle(Base):
     engagement_score: Mapped[float] = mapped_column(Numeric, default=0.0)
     final_score: Mapped[float] = mapped_column(Numeric, default=0.0)
     is_test_data: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
+    is_expired: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false', index=True)
+    expired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     editorial_version: Mapped[str] = mapped_column(String(50), nullable=True)
     enrichment_status: Mapped[str] = mapped_column(String(50), default="pending", server_default="pending")
     completed_enrichment_stages: Mapped[list] = mapped_column(JSON, default=list, server_default='[]')

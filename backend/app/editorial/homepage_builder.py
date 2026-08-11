@@ -58,7 +58,10 @@ class HomepageBuilder:
             logger.info("HomepageBuilder Fallback: No candidate articles found in the EDITORIAL_WINDOW_HOURS (24h). Expanding selection to recent published non-test articles to prevent empty homepage.")
 
             stmt_fb = select(ArticleReadModel).where(
-                ArticleReadModel.is_test_data == False
+                and_(
+                    ArticleReadModel.is_test_data == False,
+                    or_(ArticleReadModel.publication_status == None, ArticleReadModel.publication_status != "EXPIRED")
+                )
             ).order_by(ArticleReadModel.published_at.desc()).limit(30).options(
                 defer(ArticleReadModel.content),
                 defer(ArticleReadModel.embedding)

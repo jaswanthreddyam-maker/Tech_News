@@ -59,12 +59,12 @@ async def lifespan(app: FastAPI):
     # Run startup reconciliation
     try:
         from app.core.database import AsyncSessionLocal
-        from app.services.ranking.news_ranking_engine import expire_and_purge_articles
+        from app.services.ranking.news_ranking_engine import expire_articles
         logger.info("Running startup article expiration reconciliation...")
         async with AsyncSessionLocal() as db:
-            metrics = await expire_and_purge_articles(db)
-            if metrics.get("purged_articles_total", 0) > 0:
-                logger.info(f"Startup reconciliation purged articles. Metrics: {metrics}")
+            metrics = await expire_articles(db)
+            if metrics.get("expired_articles_total", 0) > 0:
+                logger.info(f"Startup reconciliation expired articles. Metrics: {metrics}")
     except Exception as e:
         logger.warning(f"Startup reconciliation failed: {e}")
 

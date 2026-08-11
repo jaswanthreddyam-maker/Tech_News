@@ -60,13 +60,13 @@ def purge_expired_articles_task():
     run_in_worker_loop(_async_purge_expired_articles_task())
 
 async def _async_purge_expired_articles_task():
-    logger.info("Starting expired articles purge loop...")
-    from app.services.ranking.news_ranking_engine import expire_and_purge_articles
+    logger.info("Starting expired articles expiration loop...")
+    from app.services.ranking.news_ranking_engine import expire_articles
     from celery_app import get_celery_session
     async with get_celery_session() as db:
-        metrics = await expire_and_purge_articles(db)
-        if metrics.get("purged_articles_total", 0) > 0:
-            logger.info(f"Purge complete. Metrics: {metrics}")
+        metrics = await expire_articles(db)
+        if metrics.get("expired_articles_total", 0) > 0:
+            logger.info(f"Expiration complete. Metrics: {metrics}")
             from app.services.cache_service import CacheService
-            await CacheService.invalidate_homepage_cache(reason=f"purged_{metrics['purged_articles_total']}_expired_articles")
+            await CacheService.invalidate_homepage_cache(reason=f"expired_{metrics['expired_articles_total']}_articles")
 
