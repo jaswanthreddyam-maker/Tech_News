@@ -99,11 +99,12 @@ async def query_assistant(
         message_id=message_id,
     )
     async def guarded_stream():
-        """Wrap the generator with a keepalive heartbeat and a hard 90s timeout."""
+        """Wrap the generator with a hard 90s timeout guard."""
         import asyncio
         try:
-            async for chunk in asyncio.timeout(90, generator):
-                yield chunk
+            async with asyncio.timeout(90):
+                async for chunk in generator:
+                    yield chunk
         except TimeoutError:
             yield 'event: error\ndata: {"message": "Request timed out. Please try again."}\n\n'
         except Exception as e:
