@@ -15,9 +15,10 @@ class EmailPayload:
     subject: str
     html: str
     text: str
-    from_address: str = "Tech News Today <briefing@technewstoday.com>"
+    from_address: str = "Tech News Today <onboarding@resend.dev>"
     idempotency_key: Optional[str] = None
     tags: Optional[Dict[str, str]] = None
+
 
 @dataclass
 class EmailResult:
@@ -26,9 +27,11 @@ class EmailResult:
     provider: str
     error: Optional[str] = None
 
+
 class EmailProvider(Protocol):
     async def send(self, payload: EmailPayload) -> EmailResult:
         ...
+
 
 class MockEmailProvider:
     """
@@ -44,6 +47,7 @@ class MockEmailProvider:
             provider="MOCK",
             error=None
         )
+
 
 class ResendEmailProvider:
     """
@@ -61,12 +65,18 @@ class ResendEmailProvider:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "TechNewsToday/1.0",
         }
         if payload.idempotency_key:
             headers["Idempotency-Key"] = payload.idempotency_key
 
+        # Default to onboarding sender if custom domain is not set
+        from_sender = os.getenv("EMAIL_FROM_ADDRESS", "Tech News Today <onboarding@resend.dev>")
+        if payload.from_address and not payload.from_address.endswith("@technewstoday.com>"):
+            from_sender = payload.from_address
+
         body_data = {
-            "from": payload.from_address,
+            "from": from_sender,
             "to": [payload.to],
             "subject": payload.subject,
             "html": payload.html,
