@@ -49,6 +49,58 @@ const ROTATING_STATUS_SEQUENCE = [
   "Finalizing...",
 ];
 
+const customMarkdownComponents = {
+  h1: ({ children }: any) => (
+    <h1 className="text-base font-bold text-foreground mt-4 mb-2 border-b border-border/40 pb-1">{children}</h1>
+  ),
+  h2: ({ children }: any) => (
+    <h2 className="text-sm font-bold text-foreground mt-3.5 mb-1.5 border-b border-border/30 pb-1">{children}</h2>
+  ),
+  h3: ({ children }: any) => (
+    <h3 className="text-xs font-semibold text-foreground mt-3 mb-1">{children}</h3>
+  ),
+  p: ({ children }: any) => (
+    <p className="leading-relaxed mb-2.5 last:mb-0 text-foreground text-sm">{children}</p>
+  ),
+  ul: ({ children }: any) => (
+    <ul className="list-disc list-outside space-y-1.5 my-2.5 pl-5 text-foreground text-sm">{children}</ul>
+  ),
+  ol: ({ children }: any) => (
+    <ol className="list-decimal list-outside space-y-1.5 my-2.5 pl-5 text-foreground text-sm">{children}</ol>
+  ),
+  li: ({ children }: any) => (
+    <li className="leading-relaxed">{children}</li>
+  ),
+  strong: ({ children }: any) => (
+    <strong className="font-semibold text-foreground">{children}</strong>
+  ),
+  table: ({ children }: any) => (
+    <div className="overflow-x-auto my-3 border border-border/70 rounded-xl shadow-sm bg-card">
+      <table className="w-full text-xs text-left border-collapse">{children}</table>
+    </div>
+  ),
+  thead: ({ children }: any) => (
+    <thead className="bg-muted/60 border-b border-border/60 font-semibold text-foreground">{children}</thead>
+  ),
+  tbody: ({ children }: any) => (
+    <tbody className="divide-y divide-border/40">{children}</tbody>
+  ),
+  tr: ({ children }: any) => (
+    <tr className="hover:bg-muted/20 transition-colors">{children}</tr>
+  ),
+  th: ({ children }: any) => (
+    <th className="px-3.5 py-2.5 border-r border-border/40 last:border-r-0 font-semibold text-foreground">{children}</th>
+  ),
+  td: ({ children }: any) => (
+    <td className="px-3.5 py-2.5 border-r border-border/40 last:border-r-0 text-foreground/90">{children}</td>
+  ),
+  a: ({ href, children }: any) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-primary underline hover:text-primary/80 font-medium">
+      {children}
+    </a>
+  ),
+};
+
 export function GlobalAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -274,7 +326,7 @@ export function GlobalAssistant() {
     e.preventDefault();
     const promptToSend = query.trim();
     if (!promptToSend) return;
-    setQuery("");
+    setQuery(""); // CLEAR COMPOSER IMMEDIATELY
     await executeQuery(promptToSend);
   };
 
@@ -388,7 +440,7 @@ export function GlobalAssistant() {
                     <button
                       key={idx}
                       onClick={() => {
-                        setQuery(chip);
+                        setQuery("");
                         executeQuery(chip);
                       }}
                       className="text-xs px-3 py-2 rounded-xl bg-card border border-border/60 hover:border-primary/50 text-foreground transition-all hover:shadow-sm"
@@ -413,7 +465,9 @@ export function GlobalAssistant() {
                   <div className="space-y-3">
                     <div className="bg-card border border-border rounded-xl p-5 shadow-sm text-foreground text-sm prose prose-sm dark:prose-invert max-w-none">
                       {msg.content ? (
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown components={customMarkdownComponents}>
+                          {msg.content}
+                        </ReactMarkdown>
                       ) : (
                         <div className="flex items-center gap-2 text-muted-foreground font-mono text-xs h-5 overflow-hidden">
                           <div className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0"></div>
@@ -509,12 +563,12 @@ export function GlobalAssistant() {
                   disabled={!query.trim()}
                   whileHover={query.trim() ? { scale: MotionScales.hover } : undefined}
                   whileTap={query.trim() ? { scale: MotionScales.tap } : undefined}
-                  className={`p-2 rounded-xl transition-all flex items-center justify-center ${
+                  className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${
                     query.trim()
-                      ? "bg-primary text-white hover:bg-primary/90 shadow-md cursor-pointer"
-                      : "bg-muted-foreground/20 text-muted-foreground/40 cursor-not-allowed"
+                      ? "bg-blue-600 text-white hover:bg-blue-500 shadow-md cursor-pointer"
+                      : "bg-muted/60 text-muted-foreground/40 border border-border/50 cursor-not-allowed"
                   }`}
-                  title="Send message (Enter)"
+                  title={query.trim() ? "Send message (Enter)" : "Type a message to send"}
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />

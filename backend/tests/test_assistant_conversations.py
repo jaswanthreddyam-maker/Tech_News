@@ -430,3 +430,72 @@ async def test_assistant_tokens_stream_incrementally():
     assert "Chunk 2 " in token_events[1]
     assert "Chunk 3" in token_events[2]
 
+
+@pytest.mark.asyncio
+async def test_recent_query_without_retrieval_evidence_does_not_fabricate_current_news():
+    """Verify system prompt includes CRITICAL NEWS SAFETY RULE to prevent substituting stale training knowledge for recent news."""
+    mock_db = AsyncMock()
+    service = PersonalAssistantService(db=mock_db)
+
+    mock_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.tool_calls = None
+
+    async def mock_stream():
+        c = MagicMock()
+        c.choices = [MagicMock()]
+        c.choices[0].delta.content = "I couldn't find recent NVIDIA coverage in the Tech News Today corpus."
+        yield c
+
+    async def mock_create(**kwargs):
+        if kwargs.get("stream"):
+            return mock_stream()
+        return mock_response
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+    service.client = mock_client
+
+    events = []
+    async for event in service.stream_query("What happened with NVIDIA recently?", "user", "123"):
+        events.append(event)
+
+    system_msg = mock_client.chat.completions.create.call_args_list[0].kwargs["messages"][0]["content"]
+    assert "CRITICAL NEWS SAFETY RULE" in system_msg
+    assert "MUST NOT substitute or dump old pre-training model knowledge" in system_msg
+
+
+@pytest.mark.asyncio
+async def test_assistant_response_prefers_concise_structure():
+    """Verify system prompt instructs model to format responses concisely with short paragraphs and bullet points."""
+    mock_db = AsyncMock()
+    service = PersonalAssistantService(db=mock_db)
+
+    mock_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.tool_calls = None
+
+    async def mock_stream():
+        c = MagicMock()
+        c.choices = [MagicMock()]
+        c.choices[0].delta.content = "## Recent Developments\n- **Point 1:** Detail."
+        yield c
+
+    async def mock_create(**kwargs):
+        if kwargs.get("stream"):
+            return mock_stream()
+        return mock_response
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+    service.client = mock_client
+
+    events = []
+    async for event in service.stream_query("Summarize recent tech news", "user", "123"):
+        events.append(event)
+
+    system_msg = mock_client.chat.completions.create.call_args_list[0].kwargs["messages"][0]["content"]
+    assert "Prefer short paragraphs and structured bullet points" in system_msg
+    assert "Do NOT force information into markdown tables" in system_msg
+
+
