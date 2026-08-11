@@ -318,10 +318,6 @@ export function GlobalAssistant() {
           }
         }
       }
-            setActiveToolLabel(null);
-          }
-        }
-      }
     } catch (e: any) {
       stopStatusRotation();
       if (e.name !== "AbortError") {
