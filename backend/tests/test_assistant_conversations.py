@@ -275,3 +275,158 @@ async def test_critical_multi_turn_integration():
     assert any(m["role"] == "assistant" and "Blackwell GPU" in m["content"] for m in messages_sent)
     assert messages_sent[-1]["role"] == "user"
     assert messages_sent[-1]["content"] == "Why is that important?"
+
+
+@pytest.mark.asyncio
+async def test_simple_greeting_does_not_invoke_tools():
+    """Verify that a simple greeting ('Hi') bypasses LLM tool creation and RAG tool orchestration."""
+    mock_db = AsyncMock()
+    service = PersonalAssistantService(db=mock_db)
+
+    mock_client = AsyncMock()
+    service.client = mock_client
+
+    events = []
+    async for event in service.stream_query("Hi", "user", "123"):
+        events.append(event)
+
+    # Verify LLM tool orchestrator create method was NEVER called
+    mock_client.chat.completions.create.assert_not_called()
+    # Verify tool events were not emitted
+    assert not any("event: tool_started" in e for e in events)
+
+
+@pytest.mark.asyncio
+async def test_simple_greeting_returns_user_facing_text_only():
+    """Verify simple greeting returns clean user-facing response."""
+    mock_db = AsyncMock()
+    service = PersonalAssistantService(db=mock_db)
+
+    events = []
+    async for event in service.stream_query("Hello!", "user", "123"):
+        events.append(event)
+
+    tokens = [json.loads(e.replace("event: assistant_token\ndata: ", ""))["text"] for e in events if e.startswith("event: assistant_token")]
+    full_response = "".join(tokens)
+    assert "Hello!" in full_response or "explore today" in full_response
+    assert "orchestrator" not in full_response.lower()
+    assert "we need to greet" not in full_response.lower()
+
+
+@pytest.mark.asyncio
+async def test_internal_instruction_not_exposed_in_assistant_stream():
+    """Verify internal reasoning_content from model chunks is NEVER leaked to assistant_token."""
+    mock_db = AsyncMock()
+    service = PersonalAssistantService(db=mock_db)
+
+    # Chunk with internal reasoning_content and user-facing content
+    async def mock_stream():
+        c1 = MagicMock()
+        c1.choices = [MagicMock()]
+        c1.choices[0].delta.content = None
+        c1.choices[0].delta.reasoning_content = "INTERNAL MODEL THINKING: We need to greet the user..."
+        yield c1
+
+        c2 = MagicMock()
+        c2.choices = [MagicMock()]
+        c2.choices[0].delta.content = "NVIDIA announced new GPUs."
+        c2.choices[0].delta.reasoning_content = None
+        yield c2
+
+    mock_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.tool_calls = None
+
+    async def mock_create(**kwargs):
+        if kwargs.get("stream"):
+            return mock_stream()
+        return mock_response
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+    service.client = mock_client
+
+    events = []
+    async for event in service.stream_query("Tell me about NVIDIA", "user", "123"):
+        events.append(event)
+
+    tokens = [json.loads(e.replace("event: assistant_token\ndata: ", ""))["text"] for e in events if e.startswith("event: assistant_token")]
+    accumulated_text = "".join(tokens)
+    
+    # Assert user-facing content is present
+    assert "NVIDIA announced new GPUs." in accumulated_text
+    # Assert internal reasoning_content is NOT in the stream
+    assert "INTERNAL MODEL THINKING" not in accumulated_text
+    assert "greet the user" not in accumulated_text
+
+
+@pytest.mark.asyncio
+async def test_research_query_still_uses_orchestrator():
+    """Verify research query still invokes full LLM tool orchestrator."""
+    mock_db = AsyncMock()
+    service = PersonalAssistantService(db=mock_db)
+
+    mock_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.tool_calls = None
+
+    async def mock_stream():
+        c = MagicMock()
+        c.choices = [MagicMock()]
+        c.choices[0].delta.content = "Research findings..."
+        yield c
+
+    async def mock_create(**kwargs):
+        if kwargs.get("stream"):
+            return mock_stream()
+        return mock_response
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+    service.client = mock_client
+
+    events = []
+    async for event in service.stream_query("What happened with NVIDIA recently?", "user", "123"):
+        events.append(event)
+
+    # Assert orchestrator create method was called
+    assert mock_client.chat.completions.create.call_count >= 1
+    assert any("event: completed" in e for e in events)
+
+
+@pytest.mark.asyncio
+async def test_assistant_tokens_stream_incrementally():
+    """Verify tokens stream incrementally chunk by chunk."""
+    mock_db = AsyncMock()
+    service = PersonalAssistantService(db=mock_db)
+
+    async def mock_stream():
+        for chunk_text in ["Chunk 1 ", "Chunk 2 ", "Chunk 3"]:
+            c = MagicMock()
+            c.choices = [MagicMock()]
+            c.choices[0].delta.content = chunk_text
+            yield c
+
+    mock_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.tool_calls = None
+
+    async def mock_create(**kwargs):
+        if kwargs.get("stream"):
+            return mock_stream()
+        return mock_response
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+    service.client = mock_client
+
+    events = []
+    async for event in service.stream_query("Detailed query", "user", "123"):
+        events.append(event)
+
+    token_events = [e for e in events if e.startswith("event: assistant_token")]
+    assert len(token_events) == 3
+    assert "Chunk 1 " in token_events[0]
+    assert "Chunk 2 " in token_events[1]
+    assert "Chunk 3" in token_events[2]
+

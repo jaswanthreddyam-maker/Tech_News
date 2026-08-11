@@ -366,7 +366,7 @@ export function GlobalAssistant() {
               <div key={msg.id} className="space-y-3">
                 {msg.role === "user" ? (
                   <div className="flex justify-end">
-                    <div className="bg-primary text-white text-sm px-4 py-2.5 rounded-2xl max-w-[85%] shadow-sm">
+                    <div className="bg-blue-600 text-white font-medium text-sm px-4 py-2.5 rounded-2xl max-w-[85%] shadow-md">
                       {msg.content}
                     </div>
                   </div>

@@ -20,6 +20,18 @@ logger = logging.getLogger("tech_news.ai.assistant")
 ASSISTANT_MAX_CONTEXT_MESSAGES = 6
 
 
+GREETINGS_MAP: dict[str, str] = {
+    "hi": "Hey there! What are you researching today?",
+    "hello": "Hello! What technology or notes would you like to explore today?",
+    "hey": "Hey! How can I assist with your research today?",
+    "good morning": "Good morning! What tech news or research notes are on your mind today?",
+    "good afternoon": "Good afternoon! How can I help with your research today?",
+    "good evening": "Good evening! What would you like to research today?",
+    "thanks": "You're welcome! Let me know if you need anything else researched.",
+    "thank you": "Happy to help! Feel free to ask any follow-up questions.",
+}
+
+
 class PersonalAssistantService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -65,6 +77,39 @@ class PersonalAssistantService:
         # Emit initial session frame if session identity is provided
         if conversation_id:
             yield f"event: session\ndata: {json.dumps({'conversation_id': conversation_id, 'message_id': message_id})}\n\n"
+
+        # Deterministic lightweight path for simple conversational greetings
+        clean_query = query.strip().lower().rstrip("!.,?")
+        if clean_query in GREETINGS_MAP:
+            greeting_text = GREETINGS_MAP[clean_query]
+            # Stream tokens incrementally
+            chunks = [greeting_text[i:i + 4] for i in range(0, len(greeting_text), 4)]
+            for chunk in chunks:
+                yield f"event: assistant_token\ndata: {json.dumps({'message_id': message_id, 'text': chunk})}\n\n"
+
+            if conversation_id:
+                try:
+                    episode = ConversationEpisode(
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        message=greeting_text,
+                        metadata_json={
+                            "message_id": message_id,
+                            "sources": [],
+                            "owner_type": owner_type,
+                            "owner_id": owner_id,
+                        },
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    add_res = self.db.add(episode)
+                    if hasattr(add_res, "__await__"):
+                        await add_res
+                    await self.db.commit()
+                except Exception as e:
+                    logger.error(f"Failed to persist greeting episode for {conversation_id}: {e}", exc_info=True)
+
+            yield f"event: completed\ndata: {json.dumps({'message_id': message_id})}\n\n"
+            return
 
         # Load recent chronological conversation history from DB (oldest -> newest)
         history_messages = []
@@ -177,7 +222,9 @@ class PersonalAssistantService:
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta:
                     delta = chunk.choices[0].delta
-                    text_chunk = getattr(delta, "content", None) or getattr(delta, "reasoning_content", None)
+                    # STRICT FIX: Only user-facing content is streamed as assistant_token.
+                    # Never fallback to internal model reasoning_content.
+                    text_chunk = getattr(delta, "content", None)
                     if text_chunk:
                         full_assistant_text += text_chunk
                         yield f"event: assistant_token\ndata: {json.dumps({'message_id': message_id, 'text': text_chunk})}\n\n"
