@@ -132,20 +132,11 @@ class PersonalAssistantService:
                 logger.error(f"Failed to fetch conversation context for {conversation_id}: {e}", exc_info=True)
 
         system_prompt = (
-            "You are a Personal AI Research Assistant for Tech News Today.\n\n"
-            "CORE RESPONSIBILITIES:\n"
-            "1. Answer questions by searching personal research notes, workspace documents, daily digests, "
-            "and published global tech news using the available tools.\n"
-            "2. Be concise, objective, and scannable. Prefer short paragraphs and structured bullet points.\n"
-            "3. Structure news updates cleanly (e.g. '## NVIDIA — Recent developments', '- **Development:** ...', '- **Why it matters:** ...').\n"
-            "4. Do NOT force information into markdown tables unless structured comparison genuinely improves readability.\n\n"
-            "CRITICAL NEWS SAFETY RULE:\n"
-            "If the user asks about recent, latest, current, or breaking news (e.g. 'recently', 'latest', 'today', 'this week') "
-            "and the global Tech News corpus tool (search_global_tech_news) returns no evidence or empty results:\n"
-            "- You MUST explicitly state that no recent coverage was found in the Tech News Today corpus.\n"
-            "- Example: 'I couldn't find recent NVIDIA coverage in the Tech News Today corpus.'\n"
-            "- You MUST NOT substitute or dump old pre-training model knowledge (e.g. 2024 or older history) as if it were recent news.\n"
-            "- You may offer to search saved research notes or suggest broadening the search query."
+            "You are a concise AI Research Assistant for Tech News Today. "
+            "Answer using only the RETRIEVED CORPUS CONTEXT provided — do NOT use pre-training knowledge as recent news. "
+            "If the context shows no relevant results, say so clearly. "
+            "Be brief: 2-4 bullet points max unless detail is asked for. "
+            "Format: '## Topic — Recent', then '- **Item:** detail' lines."
         )
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -203,12 +194,26 @@ class PersonalAssistantService:
             if collected_sources:
                 yield f"event: sources\ndata: {json.dumps({'message_id': message_id, 'sources': collected_sources})}\n\n"
 
-            # Inject corpus results into the system message so the user message
-            # stays unmodified (preserves message structure expected by tests and
-            # conversation history logic).
-            messages[0]["content"] += (
-                f"\n\n[RETRIEVED CORPUS CONTEXT]\n{search_result}\n[END CONTEXT]"
-            )
+            # Inject corpus results as compact bullet list into system message.
+            # JSON format is too verbose — compact text reduces prompt tokens and TTFT.
+            if search_result and not search_result.startswith("No ") and not search_result.startswith("An error"):
+                compact_lines = []
+                for obj_str in search_result.split("\n\n"):
+                    obj_str = obj_str.strip()
+                    if obj_str.startswith("{"):
+                        try:
+                            item = json.loads(obj_str)
+                            title = item.get("title", "")
+                            snippet = item.get("snippet", "")[:100]
+                            compact_lines.append(f"- {title}: {snippet}")
+                        except Exception:
+                            pass
+                if compact_lines:
+                    messages[0]["content"] += (
+                        "\n\nCORPUS RESULTS:\n" + "\n".join(compact_lines)
+                    )
+            else:
+                messages[0]["content"] += f"\n\nCORPUS RESULTS: {search_result}"
 
         else:
             # ── ORCHESTRATION PATH (personal/mixed query) ─────────────────────
@@ -290,11 +295,18 @@ class PersonalAssistantService:
             if collected_sources:
                 yield f"event: sources\ndata: {json.dumps({'message_id': message_id, 'sources': collected_sources})}\n\n"
 
-        # Final generation stream
+        # Final generation stream — max_tokens=500 caps response length so Gemini
+        # starts outputting tokens immediately rather than planning a long response.
         full_assistant_text = ""
         try:
             stream = await asyncio.wait_for(
-                self.client.chat.completions.create(model=self.model, messages=messages, stream=True, timeout=60.0),
+                self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    stream=True,
+                    max_tokens=500,
+                    timeout=60.0,
+                ),
                 timeout=65.0,
             )
             async for chunk in stream:
