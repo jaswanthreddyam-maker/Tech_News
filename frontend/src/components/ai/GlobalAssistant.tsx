@@ -228,12 +228,26 @@ export function GlobalAssistant() {
         const events = sseBuffer.split("\n\n");
         sseBuffer = events.pop() || "";
 
-        for (const line of events) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+        for (const block of events) {
+          const trimmedBlock = block.trim();
+          if (!trimmedBlock) continue;
 
-          if (trimmed.startsWith("event: session")) {
-            const dataStr = trimmed.replace("event: session\ndata: ", "");
+          let eventType = "";
+          let dataStr = "";
+          for (const rawLine of trimmedBlock.split(/\r?\n/)) {
+            const l = rawLine.trim();
+            if (l.startsWith("event:")) {
+              eventType = l.slice(6).trim();
+            } else if (l.startsWith("data:")) {
+              dataStr = l.slice(5).trim();
+            }
+          }
+
+          if (!eventType && trimmedBlock.includes('"event": "error"')) {
+            eventType = "error";
+          }
+
+          if (eventType === "session") {
             try {
               const data = JSON.parse(dataStr);
               if (data.conversation_id) setConversationId(data.conversation_id);
@@ -243,18 +257,18 @@ export function GlobalAssistant() {
                   prev.map((msg) => (msg.id === tempAssistantMsgId ? { ...msg, id: data.message_id } : msg))
                 );
               }
-            } catch (err) {}
-          } else if (trimmed.startsWith("event: tool_started")) {
-            const dataStr = trimmed.replace("event: tool_started\ndata: ", "");
+            } catch (err) {
+              console.error("Error parsing session SSE event:", err);
+            }
+          } else if (eventType === "tool_started") {
             try {
               const data = JSON.parse(dataStr);
               const humanLabel = TOOL_TRANSLATION_MAP[data.tool] || "Searching research corpus...";
               setActiveToolLabel(humanLabel);
             } catch (err) {}
-          } else if (trimmed.startsWith("event: tool_result")) {
+          } else if (eventType === "tool_result") {
             setActiveToolLabel(null);
-          } else if (trimmed.startsWith("event: sources")) {
-            const dataStr = trimmed.replace("event: sources\ndata: ", "");
+          } else if (eventType === "sources") {
             try {
               const data = JSON.parse(dataStr);
               const targetId = data.message_id || currentAssistantId;
@@ -263,10 +277,11 @@ export function GlobalAssistant() {
                   msg.id === targetId ? { ...msg, sources: data.sources } : msg
                 )
               );
-            } catch (err) {}
-          } else if (trimmed.startsWith("event: assistant_token")) {
+            } catch (err) {
+              console.error("Error parsing sources SSE event:", err);
+            }
+          } else if (eventType === "assistant_token") {
             stopStatusRotation();
-            const dataStr = trimmed.replace("event: assistant_token\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
               const targetId = data.message_id || currentAssistantId;
@@ -276,10 +291,11 @@ export function GlobalAssistant() {
                   msg.id === targetId ? { ...msg, content: msg.content + data.text } : msg
                 )
               );
-            } catch (err) {}
-          } else if (trimmed.startsWith("event: completed")) {
+            } catch (err) {
+              console.error("Error parsing assistant_token SSE event:", err, "raw data:", dataStr);
+            }
+          } else if (eventType === "completed") {
             stopStatusRotation();
-            const dataStr = trimmed.replace("event: completed\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
               const targetId = data.message_id || currentAssistantId;
@@ -296,13 +312,10 @@ export function GlobalAssistant() {
               );
             } catch (err) {}
             break;
-          } else if (trimmed.startsWith("event: error") || trimmed.includes('"event": "error"')) {
+          } else if (eventType === "error") {
             stopStatusRotation();
             try {
-              const jsonStr = trimmed.startsWith("event: error")
-                ? trimmed.replace("event: error\ndata: ", "")
-                : trimmed.replace(/^data:\s*/, "");
-              const parsed = JSON.parse(jsonStr);
+              const parsed = JSON.parse(dataStr || trimmedBlock);
               const msg = parsed?.data?.message || parsed?.message || "Assistant encountered an error.";
               setErrorMessage(msg);
             } catch (err) {
