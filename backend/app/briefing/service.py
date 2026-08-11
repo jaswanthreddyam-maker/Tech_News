@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select, and_, delete, func
+from sqlalchemy import select, and_, delete, func, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.briefing.models import (
@@ -349,10 +349,7 @@ class DailyBriefingService:
                 .where(
                     and_(
                         DailyBriefingDelivery.edition_id == edition.id,
-                        DailyBriefingDelivery.status.in_([
-                            BriefingDeliveryStatus.SENT,
-                            BriefingDeliveryStatus.DELIVERED,
-                        ]),
+                        cast(DailyBriefingDelivery.status, String).in_(["SENT", "DELIVERED"]),
                     )
                 )
             )
