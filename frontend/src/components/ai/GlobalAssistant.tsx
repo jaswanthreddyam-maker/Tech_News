@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { m } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import { MotionScales } from "@/design-system/motion/tokens";
 import ReactMarkdown from "react-markdown";
 import { apiClient } from "@/lib/api/client";
@@ -38,6 +38,17 @@ const SUGGESTION_CHIPS = [
   "What did I save about machine learning?",
 ];
 
+const ROTATING_STATUS_SEQUENCE = [
+  "Thinking...",
+  "Researching...",
+  "Musing...",
+  "Connecting the dots...",
+  "Polishing response...",
+  "Refining the answer...",
+  "Almost there...",
+  "Finalizing...",
+];
+
 export function GlobalAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -45,12 +56,29 @@ export function GlobalAssistant() {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeToolLabel, setActiveToolLabel] = useState<string | null>(null);
+  const [statusIndex, setStatusIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const assistantScrollRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const rotationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopStatusRotation = () => {
+    if (rotationTimerRef.current) {
+      clearInterval(rotationTimerRef.current);
+      rotationTimerRef.current = null;
+    }
+  };
+
+  const startStatusRotation = () => {
+    stopStatusRotation();
+    setStatusIndex(0);
+    rotationTimerRef.current = setInterval(() => {
+      setStatusIndex((prev) => (prev + 1) % ROTATING_STATUS_SEQUENCE.length);
+    }, 5000);
+  };
 
   // Global hotkey Ctrl+K / Cmd+K
   useEffect(() => {
@@ -62,7 +90,10 @@ export function GlobalAssistant() {
       }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      stopStatusRotation();
+    };
   }, []);
 
   // Auto-scroll on new message content
@@ -70,13 +101,14 @@ export function GlobalAssistant() {
     if (assistantScrollRef.current) {
       assistantScrollRef.current.scrollTop = assistantScrollRef.current.scrollHeight;
     }
-  }, [messages, activeToolLabel]);
+  }, [messages, activeToolLabel, statusIndex]);
 
   const handleStop = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    stopStatusRotation();
     setIsGenerating(false);
     setActiveToolLabel(null);
     setMessages((prev) =>
@@ -90,6 +122,7 @@ export function GlobalAssistant() {
     setIsGenerating(true);
     setErrorMessage(null);
     setActiveToolLabel(null);
+    startStatusRotation();
 
     const tempUserMsgId = `usr_${Date.now()}`;
     const tempAssistantMsgId = `ast_${Date.now()}`;
@@ -127,6 +160,7 @@ export function GlobalAssistant() {
 
       if (!reader) {
         setErrorMessage("Failed to read server response stream.");
+        stopStatusRotation();
         setIsGenerating(false);
         return;
       }
@@ -174,6 +208,8 @@ export function GlobalAssistant() {
               );
             } catch (err) {}
           } else if (line.startsWith("event: assistant_token")) {
+            // First token arrives: IMMEDIATELY stop rotating progress labels
+            stopStatusRotation();
             const dataStr = line.replace("event: assistant_token\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
@@ -186,6 +222,7 @@ export function GlobalAssistant() {
               );
             } catch (err) {}
           } else if (line.startsWith("event: completed")) {
+            stopStatusRotation();
             const dataStr = line.replace("event: completed\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
@@ -199,6 +236,7 @@ export function GlobalAssistant() {
             setIsGenerating(false);
             setActiveToolLabel(null);
           } else if (line.startsWith("event: error") || line.includes('"event": "error"')) {
+            stopStatusRotation();
             try {
               const jsonStr = line.startsWith("event: error")
                 ? line.replace("event: error\ndata: ", "")
@@ -218,6 +256,7 @@ export function GlobalAssistant() {
         }
       }
     } catch (e: any) {
+      stopStatusRotation();
       if (e.name !== "AbortError") {
         console.error("Assistant request error:", e);
         const msg = e?.message || "Connection lost or request timed out. Please try again.";
@@ -376,9 +415,20 @@ export function GlobalAssistant() {
                       {msg.content ? (
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       ) : (
-                        <div className="flex items-center gap-2 text-muted-foreground font-mono text-xs">
+                        <div className="flex items-center gap-2 text-muted-foreground font-mono text-xs h-5 overflow-hidden">
                           <div className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0"></div>
-                          <span>Synthesizing answer...</span>
+                          <AnimatePresence mode="wait">
+                            <m.span
+                              key={activeToolLabel || ROTATING_STATUS_SEQUENCE[statusIndex]}
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -4 }}
+                              transition={{ duration: 0.2 }}
+                              className="inline-block"
+                            >
+                              {activeToolLabel || ROTATING_STATUS_SEQUENCE[statusIndex]}
+                            </m.span>
+                          </AnimatePresence>
                         </div>
                       )}
                     </div>
@@ -417,7 +467,7 @@ export function GlobalAssistant() {
               </div>
             ))}
 
-            {/* Transient Execution Indicator */}
+            {/* Transient Tool Execution Indicator */}
             {activeToolLabel && (
               <div className="flex items-center gap-2 text-xs font-mono text-primary bg-primary/5 border border-primary/20 rounded-lg p-3 animate-pulse">
                 <div className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0"></div>
