@@ -748,6 +748,10 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
 
     source_cred = source_obj.credibility_score if source_obj else 80
 
+    from app.services.ranking.news_ranking_engine import get_lifecycle_policy
+    _policy = get_lifecycle_policy()
+    _default_ttl = int(_policy.get("maximum_ttl_hours", 72))
+
     if proc_art:
         # Update existing record
         proc_art.raw_article_id = raw_art.id
@@ -769,9 +773,6 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         proc_art.readability_score = seo_meta["readability_score"]
 
         # Calculate updated scores
-        from app.services.ranking.news_ranking_engine import get_lifecycle_policy
-        _policy = get_lifecycle_policy()
-        _default_ttl = int(_policy.get("maximum_ttl_hours", 72))
         impact = calculate_impact_score(raw_art.title, category_name, plain_text)
         freshness = calculate_freshness_score(proc_art.published_at)
         engagement = calculate_engagement_score(raw_art.article_metadata, source_cred)
