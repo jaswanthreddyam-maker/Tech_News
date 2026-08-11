@@ -75,18 +75,30 @@ async def main():
     res_read = await session.execute(stmt_read)
     read_models = res_read.scalars().all()
 
-    # Map processed articles by id
-    proc_map = {a.id: a for a in articles}
+    # Map processed articles by string id to match ArticleReadModel.id
+    proc_map = {str(a.id): a for a in articles}
     for rm in read_models:
-      pa = proc_map.get(rm.id)
+      pa = proc_map.get(str(rm.id))
       if pa and pa.thumbnail_url:
         rm.thumbnail_url = pa.thumbnail_url
 
     await session.commit()
 
-    # Rebuild homepage cache
-    await HomepageBuilder.build_homepage(session)
-    logger.info("Homepage rebuilt with full thumbnails!")
+    # Rebuild & persist homepage projection with thumbnails
+    from app.core.redis import get_redis_client
+    await HomepageBuilder.build_and_persist_homepage_projection(session)
+
+    try:
+      redis = get_redis_client()
+      if redis:
+        await redis.delete("editorial:v1:homepage_ranked_ids")
+        await redis.delete("homepage:v1:curated_projection")
+        await redis.delete("editorial:v2:homepage_cards_full_json")
+        logger.info("Cleared Redis cache keys!")
+    except Exception as e:
+      logger.warning(f"Redis cache clear note: {e}")
+
+    logger.info("Homepage rebuilt and persisted with full thumbnails!")
 
 if __name__ == "__main__":
   asyncio.run(main())
