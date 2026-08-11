@@ -106,19 +106,23 @@ async def list_articles(
             is_stale_state = True
         else:
             # Invariant 2: Compare projection_id & projection_version against DB HomepageProjection
-            from app.models.projection import HomepageProjection
-            proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
-            proj_res = await db.execute(proj_stmt)
-            latest_projection = proj_res.scalars().first()
+            try:
+                from app.models.projection import HomepageProjection
+                proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
+                proj_res = await db.execute(proj_stmt)
+                latest_projection = proj_res.scalars().first()
 
-            if not latest_projection:
-                is_stale_state = True
-            else:
-                cached_proj_id = str(cache_meta.get("projection_id", ""))
-                cached_proj_ver = cache_meta.get("projection_version")
-                if cached_proj_id != str(latest_projection.id) or cached_proj_ver != latest_projection.projection_version:
-                    logger.info(f"Redis cache projection identity mismatch (cached v{cached_proj_ver}, DB v{latest_projection.projection_version}). Invalidating.")
+                if not latest_projection:
                     is_stale_state = True
+                else:
+                    cached_proj_id = str(cache_meta.get("projection_id", ""))
+                    cached_proj_ver = cache_meta.get("projection_version")
+                    if cached_proj_id != str(latest_projection.id) or cached_proj_ver != latest_projection.projection_version:
+                        logger.info(f"Redis cache projection identity mismatch (cached v{cached_proj_ver}, DB v{latest_projection.projection_version}). Invalidating.")
+                        is_stale_state = True
+            except Exception as e:
+                logger.warning(f"HomepageProjection query failed: {e}. Falling back to rebuild.")
+                is_stale_state = True
 
         if not is_stale_state:
             # Invariant 3: Single SQL IN query to resolve all IDs at once (Guardrail #3)
@@ -138,40 +142,43 @@ async def list_articles(
 
     # Path 2: Check latest HomepageProjection CQRS read model
     if not articles and not is_stale_state:
-        from app.models.projection import HomepageProjection
-        proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
-        proj_res = await db.execute(proj_stmt)
-        latest_projection = proj_res.scalars().first()
+        try:
+            from app.models.projection import HomepageProjection
+            proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
+            proj_res = await db.execute(proj_stmt)
+            latest_projection = proj_res.scalars().first()
 
-        if latest_projection and latest_projection.stories_json:
-            story_ids = [str(s["id"]) for s in latest_projection.stories_json if "id" in s]
-            if story_ids:
-                stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(story_ids))
-                res = await db.execute(stmt)
-                articles_map = {str(art.id): art for art in res.scalars().all()}
-                
-                if set(articles_map.keys()) != set(story_ids):
-                    logger.warning(f"Partial resolution in HomepageProjection v{latest_projection.projection_version}: requested {len(story_ids)}, resolved {len(articles_map)}. Triggering rebuild.")
-                    is_stale_state = True
-                else:
-                    articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
-                    ranked_ids = [str(a.id) for a in articles]
-                    try:
-                        import asyncio
-                        algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
-                        cache_payload = {
-                            "projection_id": str(latest_projection.id),
-                            "projection_version": latest_projection.projection_version,
-                            "algorithm_version": algo_ver,
-                            "generated_at": datetime.now(timezone.utc).isoformat(),
-                            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-                            "article_ids": ranked_ids
-                        }
-                        redis = get_redis_client()
-                        if redis:
-                            await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=REDIS_OP_TIMEOUT)
-                    except Exception as e:
-                        logger.warning(f"Redis cache write failed: {e}")
+            if latest_projection and latest_projection.stories_json:
+                story_ids = [str(s["id"]) for s in latest_projection.stories_json if "id" in s]
+                if story_ids:
+                    stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(story_ids))
+                    res = await db.execute(stmt)
+                    articles_map = {str(art.id): art for art in res.scalars().all()}
+                    
+                    if set(articles_map.keys()) != set(story_ids):
+                        logger.warning(f"Partial resolution in HomepageProjection v{latest_projection.projection_version}: requested {len(story_ids)}, resolved {len(articles_map)}. Triggering rebuild.")
+                        is_stale_state = True
+                    else:
+                        articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
+                        ranked_ids = [str(a.id) for a in articles]
+                        try:
+                            import asyncio
+                            algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
+                            cache_payload = {
+                                "projection_id": str(latest_projection.id),
+                                "projection_version": latest_projection.projection_version,
+                                "algorithm_version": algo_ver,
+                                "generated_at": datetime.now(timezone.utc).isoformat(),
+                                "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+                                "article_ids": ranked_ids
+                            }
+                            redis = get_redis_client()
+                            if redis:
+                                await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=REDIS_OP_TIMEOUT)
+                        except Exception as e:
+                            logger.warning(f"Redis cache write failed: {e}")
+        except Exception as e:
+            logger.warning(f"HomepageProjection Path 2 read failed: {e}. Falling back to rebuild.")
 
     # Path 3: Concurrent-safe rebuild using RedisDistributedLock with safe fallback path (Guardrail #3)
     if not articles or is_stale_state:
