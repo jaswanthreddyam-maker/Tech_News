@@ -48,12 +48,17 @@ function EmptyReadingDesk() {
   const containerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { once: true, margin: "-20% 0px" });
 
-  const scrollToTrending = () => {
-    const trendingEl = document.querySelector(".TrendingWall");
-    if (trendingEl) {
-      trendingEl.scrollIntoView({ behavior: "smooth" });
+  const scrollToLatestStories = () => {
+    const latestStoriesEl = document.getElementById("latest-stories") || document.querySelector(".LatestStoriesSection");
+    if (latestStoriesEl) {
+      latestStoriesEl.scrollIntoView({ behavior: "smooth" });
     } else {
-      window.scrollTo({ top: window.innerHeight * 0.8, behavior: "smooth" });
+      const trendingEl = document.querySelector(".TrendingWall");
+      if (trendingEl) {
+        trendingEl.scrollIntoView({ behavior: "smooth" });
+      } else {
+        window.scrollTo({ top: window.innerHeight * 0.8, behavior: "smooth" });
+      }
     }
   };
 
@@ -118,11 +123,11 @@ function EmptyReadingDesk() {
 
             {/* Primary Action Button */}
             <button
-              onClick={scrollToTrending}
+              onClick={scrollToLatestStories}
               className="group/cta inline-flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-mono font-semibold text-foreground uppercase tracking-widest transition-all duration-300 shadow-sm cursor-pointer"
             >
               <Compass className="w-3.5 h-3.5 text-primary transition-transform duration-300 group-hover/cta:rotate-45" />
-              <span>Explore Today&apos;s Stories</span>
+              <span>Explore Today&apos;s Latest Stories</span>
               <ArrowRight className="w-3.5 h-3.5 text-primary transition-transform duration-300 group-hover/cta:translate-x-1.5" />
             </button>
           </div>

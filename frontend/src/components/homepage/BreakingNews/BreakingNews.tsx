@@ -106,11 +106,12 @@ export function BreakingNews() {
 
   return (
     <m.div 
+      id="latest-stories"
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.15 }}
       transition={{ duration: 0.9, ease: EASE_CUBIC }}
-      className="w-full max-w-4xl mx-auto overflow-hidden py-8" 
+      className="LatestStoriesSection w-full max-w-4xl mx-auto overflow-hidden py-8 scroll-mt-24" 
       aria-live="polite"
     >
       {/* Section Header: Latest Stories */}
