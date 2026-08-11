@@ -51,14 +51,14 @@ async def test_executor_bounded_formatting():
         
         result = await search_global_tech_news_executor(query="NVIDIA", db=mock_db)
         
-        mock_retrieve.assert_called_once_with(query="NVIDIA", db=mock_db, limit=5)
+        mock_retrieve.assert_called_once_with(query="NVIDIA", db=mock_db, limit=3)
         assert "NVIDIA Keynote 2026" in result
         assert "https://example.com/nvidia-keynote" in result
         parsed = json.loads(result)
         assert parsed["title"] == "NVIDIA Keynote 2026"
         assert parsed["relevance_score"] == 0.95
-        # Snippet should be bounded to 353 chars (350 + "...")
-        assert len(parsed["snippet"]) <= 353
+        # Snippet should be bounded to 203 chars (200 + "...")
+        assert len(parsed["snippet"]) <= 203
         assert parsed["snippet"].endswith("...")
 
 
