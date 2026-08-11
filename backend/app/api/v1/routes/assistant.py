@@ -98,7 +98,22 @@ async def query_assistant(
         conversation_id=conv_id,
         message_id=message_id,
     )
-    return StreamingResponse(generator, media_type="text/event-stream")
+    async def guarded_stream():
+        """Wrap the generator with a keepalive heartbeat and a hard 90s timeout."""
+        import asyncio
+        try:
+            async for chunk in asyncio.timeout(90, generator):
+                yield chunk
+        except TimeoutError:
+            yield 'event: error\ndata: {"message": "Request timed out. Please try again."}\n\n'
+        except Exception as e:
+            logger.error(f"Stream generation error: {e}")
+            yield 'event: error\ndata: {"message": "Stream error. Please try again."}\n\n'
+
+    return StreamingResponse(guarded_stream(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    })
 
 
 @router.get("/conversations")

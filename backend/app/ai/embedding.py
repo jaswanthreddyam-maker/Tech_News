@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 from datetime import datetime, timezone
 
@@ -27,9 +28,13 @@ class EmbeddingService:
             raise ValueError("OpenAI client not configured for embeddings.")
 
         redis_client = get_redis_client()
-        cb = CircuitBreaker(redis_client, self.provider)
-        if not await cb.can_execute():
-            raise RuntimeError(f"Circuit breaker open for embedding provider: {self.provider}")
+        if redis_client is None:
+            # Redis unavailable — skip circuit breaker, proceed directly
+            pass
+        else:
+            cb = CircuitBreaker(redis_client, self.provider)
+            if not await cb.can_execute():
+                raise RuntimeError(f"Circuit breaker open for embedding provider: {self.provider}")
 
         try:
             from typing import Any
@@ -39,11 +44,23 @@ class EmbeddingService:
             if "text-embedding-3" in self.model:
                 kwargs["dimensions"] = self.dimensions
 
-            response = await self.client.embeddings.create(**kwargs)
-            await cb.record_success()
+            response = await asyncio.wait_for(
+                self.client.embeddings.create(**kwargs),
+                timeout=5.0,
+            )
+            redis_client2 = get_redis_client()
+            if redis_client2 is not None:
+                await CircuitBreaker(redis_client2, self.provider).record_success()
             return [data.embedding for data in response.data]
+        except asyncio.TimeoutError:
+            redis_client2 = get_redis_client()
+            if redis_client2 is not None:
+                await CircuitBreaker(redis_client2, self.provider).record_failure()
+            raise RuntimeError("Embedding API timed out after 5s")
         except Exception as e:
-            await cb.record_failure()
+            redis_client2 = get_redis_client()
+            if redis_client2 is not None:
+                await CircuitBreaker(redis_client2, self.provider).record_failure()
             raise e
 
     def compute_hash(self, title: str, content: str) -> str:

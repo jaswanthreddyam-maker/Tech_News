@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -157,12 +158,20 @@ class PersonalAssistantService:
 
         for iteration in range(max_iterations):
             try:
-                response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=tools_schema if tools_schema else None,
-                    tool_choice="auto" if tools_schema else "none",
+                response = await asyncio.wait_for(
+                    self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        tools=tools_schema if tools_schema else None,
+                        tool_choice="auto" if tools_schema else "none",
+                        timeout=30.0,
+                    ),
+                    timeout=35.0,
                 )
+            except asyncio.TimeoutError:
+                logger.error("Assistant LLM orchestration timed out after 35s")
+                yield StreamService.format_error("Request timed out. Please try again.")
+                return
             except Exception as e:
                 logger.error(f"Assistant LLM error: {e}")
                 yield StreamService.format_error("Provider error during orchestration")
@@ -227,7 +236,10 @@ class PersonalAssistantService:
         # Final generation stream
         full_assistant_text = ""
         try:
-            stream = await self.client.chat.completions.create(model=self.model, messages=messages, stream=True)
+            stream = await asyncio.wait_for(
+                self.client.chat.completions.create(model=self.model, messages=messages, stream=True, timeout=60.0),
+                timeout=65.0,
+            )
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta:
                     delta = chunk.choices[0].delta
