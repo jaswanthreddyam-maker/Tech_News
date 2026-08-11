@@ -409,14 +409,32 @@ def map_category_id(title: str, content: str, category_map: dict[str, int] | Non
     Dynamically maps articles to seeded PostgreSQL Category IDs based on keyword density and database IDs.
     """
     slug = map_category_slug(title, content, source_name)
-    if category_map and slug in category_map:
+    if not category_map:
+        return 22
+
+    # Map slug aliases to DB category keys
+    alias_map = {
+        "startups-and-business": "startups-and-business",
+        "startups": "startups-and-business",
+        "hardware-&-devices": "hardware",
+        "devices": "hardware",
+        "science-&-quantum": "science",
+        "policy-&-governance": "policy",
+        "security": "cybersecurity"
+    }
+    
+    target_slug = alias_map.get(slug, slug)
+    if target_slug in category_map:
+        return category_map[target_slug]
+    if slug in category_map:
         return category_map[slug]
-    if category_map and "cybersecurity" in category_map and slug == "security":
-        return category_map["cybersecurity"]
-    if category_map:
-        # Default to technology if available, else first item
-        return category_map.get("technology", next(iter(category_map.values())))
-    return 7
+    
+    # Safe default: General Technology (ID 22 if present, or lookup 'technology'/'general-technology')
+    for default_key in ("technology", "general-technology", "General Technology"):
+        if default_key in category_map:
+            return category_map[default_key]
+
+    return category_map.get(22, 22)
 
 
 

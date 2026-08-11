@@ -424,11 +424,8 @@ class HomepageBuilder:
         pipeline_ver = getattr(settings, "PIPELINE_VERSION", "1.0.0")
 
         # Upsert category desk projections for all allowed categories
-        all_candidates_flat = [item for sublist in candidates_by_cat.values() for item in sublist]
-        default_fallback = sorted(all_candidates_flat, key=lambda x: x["effective_score"], reverse=True) if all_candidates_flat else []
-
         for cat_slug in allowed_cats:
-            candidates = candidates_by_cat.get(cat_slug) or candidates_by_cat.get("technology") or default_fallback
+            candidates = candidates_by_cat.get(cat_slug, [])
             sorted_candidates = sorted(candidates, key=lambda x: x["effective_score"], reverse=True) if candidates else []
             top_arts = sorted_candidates[:max_per_desk]
             article_ids = [str(item["article"].id) for item in top_arts]
