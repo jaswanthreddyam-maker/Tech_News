@@ -100,10 +100,13 @@ class Settings(BaseSettings):
     REC_WEIGHT_DIVERSITY: float = 0.05
 
     # AI Configs (Provider-Agnostic Setup)
+    NVIDIA_API_KEY: str | None = None
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    NVIDIA_MODEL: str = "openai/gpt-oss-120b"
     OPENAI_API_KEY: str = "sk-placeholder-openai-api-key"
     GEMINI_API_KEY: str | None = None
     AI_PROVIDER: str = "disabled"
-    AI_PROVIDER_PRIORITY: str = "openai,anthropic,gemini"
+    AI_PROVIDER_PRIORITY: str = "nvidia,openai,anthropic,gemini"
     AI_MODEL: str = "phase4-foundation"
 
     # Embedding config

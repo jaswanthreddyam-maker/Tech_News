@@ -1,10 +1,13 @@
 import json
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.assistant.tools import AssistantToolRegistry, Tool
 from app.ai.chat.digest_service import DigestService
 from app.services.workspace_service import WorkspaceService
+
+logger = logging.getLogger("tech_news.ai.assistant")
 
 
 async def list_workspaces_executor(db: AsyncSession, owner_type: str, owner_id: str, **kwargs) -> str:
@@ -56,6 +59,45 @@ async def search_my_knowledge_executor(
         return "No knowledge found for the query."
 
     return "\n".join(results[:10])
+
+
+async def search_global_tech_news_executor(query: str, db: AsyncSession, **kwargs) -> str:
+    from app.ai.chat.retrieval import RetrievalEngine
+
+    try:
+        engine = RetrievalEngine()
+        raw_results = await engine.retrieve(query=query, db=db, limit=5)
+        if not raw_results:
+            return "No relevant articles were found in the Tech News corpus."
+
+        formatted_articles = []
+        for item in raw_results:
+            title = item.get("title") or "Untitled Article"
+            url = item.get("url") or ""
+            score = item.get("score", 0.0)
+            raw_content = item.get("content") or ""
+
+            # Bounded excerpt: cap snippet to 350 characters
+            snippet = raw_content[:350] + "..." if len(raw_content) > 350 else raw_content
+
+            formatted_articles.append(
+                json.dumps(
+                    {
+                        "title": title,
+                        "source": item.get("source", "Tech News Today"),
+                        "url": url,
+                        "relevance_score": score,
+                        "snippet": snippet,
+                    },
+                    indent=2,
+                )
+            )
+
+        return "\n\n".join(formatted_articles)
+
+    except Exception as e:
+        logger.error(f"Error in search_global_tech_news_executor for query '{query}': {e}", exc_info=True)
+        return "An error occurred while searching global tech news articles."
 
 
 async def read_digests_executor(workspace_id: int, db: AsyncSession, owner_type: str, owner_id: str, **kwargs) -> str:
@@ -123,6 +165,28 @@ def register_default_tools(registry: AssistantToolRegistry):
             },
         ),
         search_my_knowledge_executor,
+    )
+
+    registry.register(
+        Tool(
+            name="search_global_tech_news",
+            description=(
+                "Search the published Tech News Today article corpus for current or historical technology news, "
+                "breaking stories, company updates, and industry developments. Use this when the user asks about general "
+                "technology topics, news, or external developments rather than their personal workspace notes."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The technology topic or news query to search for.",
+                    }
+                },
+                "required": ["query"],
+            },
+        ),
+        search_global_tech_news_executor,
     )
 
     registry.register(
