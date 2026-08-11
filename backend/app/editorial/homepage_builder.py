@@ -342,8 +342,8 @@ class HomepageBuilder:
         rows = res.all()
 
         is_fallback = False
-        if not rows:
-            logger.info("HomepageBuilder Category Fallback: No candidate articles found in EDITORIAL_WINDOW_HOURS (24h). Expanding selection to recent published articles.")
+        if not rows or len(rows) < 15:
+            logger.info("HomepageBuilder Category Fallback: Sparse candidate articles in 24h window. Expanding selection to 100 recent published articles.")
 
             is_fallback = True
             stmt_fb = (
@@ -373,13 +373,23 @@ class HomepageBuilder:
         # Group candidates by category slug
         candidates_by_cat = {}
         for art, raw_slug in rows:
-            cat_slug = raw_slug or "technology"
-            if cat_slug in ("ai", "artificial_intelligence"):
+            raw_s = (raw_slug or "").lower().strip()
+            if raw_s in ("ai", "artificial-intelligence", "artificial_intelligence", "machine-learning"):
                 cat_slug = "artificial-intelligence"
-            elif cat_slug in ("software", "apps", "tech", "web"):
-                cat_slug = "technology"
-            elif cat_slug in ("hardware-&-devices", "devices"):
+            elif raw_s in ("cybersecurity", "security", "privacy"):
+                cat_slug = "cybersecurity"
+            elif raw_s in ("hardware", "hardware-&-devices", "hardware-gadgets", "devices", "gadgets", "chips", "semiconductors"):
                 cat_slug = "hardware"
+            elif raw_s in ("robotics", "automation", "drones", "autonomous"):
+                cat_slug = "robotics"
+            elif raw_s in ("science", "science-&-quantum", "science-future", "quantum", "space", "biotech"):
+                cat_slug = "science"
+            elif raw_s in ("startups", "startups-and-business", "startups-&-business", "business", "finance", "venture"):
+                cat_slug = "startups-and-business"
+            elif raw_s in ("policy", "governance", "regulation", "legal", "policy-&-governance"):
+                cat_slug = "policy"
+            else:
+                cat_slug = "technology"
 
             pub_at = art.published_at
             if pub_at.tzinfo is None:
@@ -414,9 +424,12 @@ class HomepageBuilder:
         pipeline_ver = getattr(settings, "PIPELINE_VERSION", "1.0.0")
 
         # Upsert category desk projections for all allowed categories
+        all_candidates_flat = [item for sublist in candidates_by_cat.values() for item in sublist]
+        default_fallback = sorted(all_candidates_flat, key=lambda x: x["effective_score"], reverse=True) if all_candidates_flat else []
+
         for cat_slug in allowed_cats:
-            candidates = candidates_by_cat.get(cat_slug, [])
-            sorted_candidates = sort_candidates_deterministically(candidates) if candidates else []
+            candidates = candidates_by_cat.get(cat_slug) or candidates_by_cat.get("technology") or default_fallback
+            sorted_candidates = sorted(candidates, key=lambda x: x["effective_score"], reverse=True) if candidates else []
             top_arts = sorted_candidates[:max_per_desk]
             article_ids = [str(item["article"].id) for item in top_arts]
 
