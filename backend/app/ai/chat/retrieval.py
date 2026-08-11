@@ -48,51 +48,78 @@ class RetrievalEngine:
                 }
             ]
 
+        query_vector = None
         try:
             vectors = await self.embedding_service.generate_embeddings([query])
-            query_vector = vectors[0]
+            if vectors:
+                query_vector = vectors[0]
         except Exception as e:
-            logger.error(f"Retrieval Engine: Failed to generate embedding: {e}")
-            return []
-
-        # pgvector Semantic Search
-        distance_col = ArticleReadModel.embedding.cosine_distance(query_vector).label("distance")
-
-        stmt = (
-            select(ArticleReadModel, distance_col)
-            .where(ArticleReadModel.embedding != None)
-            .order_by(distance_col)
-            .limit(30)  # Fetch more for re-ranking
-        )
-
-        db_results = await db.execute(stmt)
+            logger.warning(f"Retrieval Engine: Embedding generation failed: {e}. Falling back to DB keyword search.")
 
         semantic_matches = []
-        for row in db_results:
-            article = row.ArticleReadModel
-            distance = row.distance
-            semantic_score = 1.0 - float(distance)
-            semantic_matches.append((article, semantic_score))
-
-        # Hybrid Ranker
-        ranked_results = rank_semantic_results(query, semantic_matches)
-
-        # Diversity Filter (Optional: could enforce different sources or dates here)
-        # For now, we take Top K
-        final_results = ranked_results[:limit]
+        if query_vector is not None:
+            try:
+                distance_col = ArticleReadModel.embedding.cosine_distance(query_vector).label("distance")
+                stmt = (
+                    select(ArticleReadModel, distance_col)
+                    .where(ArticleReadModel.embedding != None)
+                    .order_by(distance_col)
+                    .limit(30)
+                )
+                db_results = await db.execute(stmt)
+                for row in db_results:
+                    article = row.ArticleReadModel
+                    distance = row.distance
+                    semantic_score = 1.0 - float(distance)
+                    semantic_matches.append((article, semantic_score))
+            except Exception as e:
+                logger.warning(f"Retrieval Engine: pgvector query failed: {e}. Falling back to DB keyword search.")
 
         output = []
-        for rank_item in final_results:
-            art = rank_item["article"]
-            output.append(
-                {
-                    "type": "article",
-                    "id": art.id,
-                    "title": art.title,
-                    "content": art.content or art.summary,
-                    "url": art.url,
-                    "score": round(rank_item["final_score"], 4),
-                }
-            )
+        if semantic_matches:
+            ranked_results = rank_semantic_results(query, semantic_matches)
+            final_results = ranked_results[:limit]
+            for rank_item in final_results:
+                art = rank_item["article"]
+                output.append(
+                    {
+                        "type": "article",
+                        "id": art.id,
+                        "title": art.title,
+                        "content": art.content or art.summary,
+                        "url": art.url,
+                        "source": getattr(art, "source", "Tech News Today"),
+                        "score": round(rank_item["final_score"], 4),
+                    }
+                )
+
+        # Fallback to DB ILIKE keyword search if vector search produced no results
+        if not output:
+            from sqlalchemy import or_
+            query_words = [w.strip() for w in query.split() if len(w.strip()) > 2]
+            if query_words:
+                conditions = []
+                for w in query_words[:4]:
+                    conditions.append(ArticleReadModel.title.ilike(f"%{w}%"))
+                    conditions.append(ArticleReadModel.summary.ilike(f"%{w}%"))
+                kw_stmt = (
+                    select(ArticleReadModel)
+                    .where(or_(*conditions))
+                    .order_by(ArticleReadModel.published_at.desc().nullslast())
+                    .limit(limit)
+                )
+                kw_res = await db.execute(kw_stmt)
+                for art in kw_res.scalars().all():
+                    output.append(
+                        {
+                            "type": "article",
+                            "id": art.id,
+                            "title": art.title,
+                            "content": art.content or art.summary,
+                            "url": art.url,
+                            "source": getattr(art, "source", "Tech News Today"),
+                            "score": 0.85,
+                        }
+                    )
 
         return output

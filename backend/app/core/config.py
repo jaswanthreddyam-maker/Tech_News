@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     NVIDIA_MODEL: str = "openai/gpt-oss-120b"
     OPENAI_API_KEY: str = "sk-placeholder-openai-api-key"
     GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     AI_PROVIDER: str = "disabled"
     AI_PROVIDER_PRIORITY: str = "nvidia,openai,anthropic,gemini"
     AI_MODEL: str = "phase4-foundation"

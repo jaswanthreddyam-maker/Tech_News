@@ -51,7 +51,7 @@ class PersonalAssistantService:
                 api_key=gemini_key,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            self.model = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
+            self.model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
         else:
             self.client = None
             self.model = "gpt-4o-mini"

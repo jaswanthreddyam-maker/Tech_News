@@ -218,17 +218,22 @@ export function GlobalAssistant() {
       }
 
       let currentAssistantId = tempAssistantMsgId;
+      let sseBuffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n\n");
+        sseBuffer += decoder.decode(value, { stream: true });
+        const events = sseBuffer.split("\n\n");
+        sseBuffer = events.pop() || "";
 
-        for (const line of lines) {
-          if (line.startsWith("event: session")) {
-            const dataStr = line.replace("event: session\ndata: ", "");
+        for (const line of events) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          if (trimmed.startsWith("event: session")) {
+            const dataStr = trimmed.replace("event: session\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
               if (data.conversation_id) setConversationId(data.conversation_id);
@@ -239,17 +244,17 @@ export function GlobalAssistant() {
                 );
               }
             } catch (err) {}
-          } else if (line.startsWith("event: tool_started")) {
-            const dataStr = line.replace("event: tool_started\ndata: ", "");
+          } else if (trimmed.startsWith("event: tool_started")) {
+            const dataStr = trimmed.replace("event: tool_started\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
               const humanLabel = TOOL_TRANSLATION_MAP[data.tool] || "Searching research corpus...";
               setActiveToolLabel(humanLabel);
             } catch (err) {}
-          } else if (line.startsWith("event: tool_result")) {
+          } else if (trimmed.startsWith("event: tool_result")) {
             setActiveToolLabel(null);
-          } else if (line.startsWith("event: sources")) {
-            const dataStr = line.replace("event: sources\ndata: ", "");
+          } else if (trimmed.startsWith("event: sources")) {
+            const dataStr = trimmed.replace("event: sources\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
               const targetId = data.message_id || currentAssistantId;
@@ -259,10 +264,10 @@ export function GlobalAssistant() {
                 )
               );
             } catch (err) {}
-          } else if (line.startsWith("event: assistant_token")) {
+          } else if (trimmed.startsWith("event: assistant_token")) {
             // First token arrives: IMMEDIATELY stop rotating progress labels
             stopStatusRotation();
-            const dataStr = line.replace("event: assistant_token\ndata: ", "");
+            const dataStr = trimmed.replace("event: assistant_token\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
               const targetId = data.message_id || currentAssistantId;
@@ -273,26 +278,32 @@ export function GlobalAssistant() {
                 )
               );
             } catch (err) {}
-          } else if (line.startsWith("event: completed")) {
+          } else if (trimmed.startsWith("event: completed")) {
             stopStatusRotation();
-            const dataStr = line.replace("event: completed\ndata: ", "");
+            const dataStr = trimmed.replace("event: completed\ndata: ", "");
             try {
               const data = JSON.parse(dataStr);
               const targetId = data.message_id || currentAssistantId;
               setMessages((prev) =>
                 prev.map((msg) =>
-                  msg.id === targetId ? { ...msg, status: "complete" } : msg
+                  msg.id === targetId
+                    ? {
+                        ...msg,
+                        content: msg.content || "I couldn't find recent coverage for that query in the Tech News Today corpus.",
+                        status: "complete",
+                      }
+                    : msg
                 )
               );
             } catch (err) {}
             setIsGenerating(false);
             setActiveToolLabel(null);
-          } else if (line.startsWith("event: error") || line.includes('"event": "error"')) {
+          } else if (trimmed.startsWith("event: error") || trimmed.includes('"event": "error"')) {
             stopStatusRotation();
             try {
-              const jsonStr = line.startsWith("event: error")
-                ? line.replace("event: error\ndata: ", "")
-                : line.replace(/^data:\s*/, "");
+              const jsonStr = trimmed.startsWith("event: error")
+                ? trimmed.replace("event: error\ndata: ", "")
+                : trimmed.replace(/^data:\s*/, "");
               const parsed = JSON.parse(jsonStr);
               const msg = parsed?.data?.message || parsed?.message || "Assistant encountered an error.";
               setErrorMessage(msg);
@@ -303,6 +314,10 @@ export function GlobalAssistant() {
               prev.map((msg) => (msg.status === "streaming" ? { ...msg, status: "error" } : msg))
             );
             setIsGenerating(false);
+            setActiveToolLabel(null);
+          }
+        }
+      }
             setActiveToolLabel(null);
           }
         }
