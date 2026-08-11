@@ -46,16 +46,6 @@ export function UserMenu() {
             </Button>
           }
         />
-        <Link href="/login">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="group relative h-9 px-4 rounded-full border border-white/20 bg-white/[0.05] hover:bg-white/[0.12] hover:border-white/40 hover:-translate-y-[1px] transition-all duration-300 text-xs font-semibold text-foreground shadow-sm flex items-center gap-1.5"
-          >
-            <span>Sign In</span>
-            <span className="text-primary transition-transform duration-300 group-hover:translate-x-1">→</span>
-          </Button>
-        </Link>
       </div>
     );
   }
