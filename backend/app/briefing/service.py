@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.briefing.models import (
@@ -320,10 +320,12 @@ class DailyBriefingService:
         edition_date: Optional[str] = None,
     ) -> "DailyBriefingEdition":
         """
-        Get today's edition or create it.
+        Get today's edition or create/re-evaluate it.
 
-        INVARIANT: always selects up to EDITION_MAX_CAPACITY (10) items.
-        Subscriber story_count is applied at delivery time, not here.
+        INVARIANTS:
+        1. Existing editions with items > 0 OR successful SENT/DELIVERED deliveries are immutable.
+        2. Existing 0-item editions with NO successful deliveries are re-evaluated against selector.
+        3. Newly generated 0-story selections do not poison future runs.
         """
         if not edition_date:
             edition_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -339,8 +341,26 @@ class DailyBriefingService:
                 .order_by(DailyBriefingItem.rank)
             )
             items_res = await db.execute(stmt_items)
-            edition.loaded_items = list(items_res.scalars().all())
-            return edition
+            items = list(items_res.scalars().all())
+            edition.loaded_items = items
+
+            stmt_sent = (
+                select(func.count(DailyBriefingDelivery.id))
+                .where(
+                    and_(
+                        DailyBriefingDelivery.edition_id == edition.id,
+                        DailyBriefingDelivery.status.in_([
+                            BriefingDeliveryStatus.SENT,
+                            BriefingDeliveryStatus.DELIVERED,
+                        ]),
+                    )
+                )
+            )
+            sent_count = (await db.scalar(stmt_sent)) or 0
+
+            # Reuse cached edition if it contains stories OR has already been sent to subscribers
+            if len(items) > 0 or sent_count > 0:
+                return edition
 
         # Always generate at maximum capacity — subscriber preference is applied later
         selected_articles = await DailyBriefingSelector.select_top_stories(
@@ -353,14 +373,21 @@ class DailyBriefingService:
             "-".join([item["article_id"] for item in enriched_data]).encode("utf-8")
         ).hexdigest()
 
-        edition = DailyBriefingEdition(
-            edition_date=edition_date,
-            selection_hash=selection_hash,
-            algorithm_version="v2.2",
-            status="PUBLISHED",
-        )
-        db.add(edition)
-        await db.flush()
+        if not edition:
+            edition_status = "PUBLISHED" if enriched_data else "EMPTY"
+            edition = DailyBriefingEdition(
+                edition_date=edition_date,
+                selection_hash=selection_hash,
+                algorithm_version="v2.2",
+                status=edition_status,
+            )
+            db.add(edition)
+            await db.flush()
+        else:
+            edition.selection_hash = selection_hash
+            edition.status = "PUBLISHED" if enriched_data else "EMPTY"
+            await db.execute(delete(DailyBriefingItem).where(DailyBriefingItem.edition_id == edition.id))
+            await db.flush()
 
         item_models = []
         for item in enriched_data:
@@ -381,23 +408,24 @@ class DailyBriefingService:
         await db.flush()
         edition.loaded_items = item_models
 
-        # Transactional outbox event
-        outbox_event = EventOutbox(
-            event_type="DailyBriefingGenerated",
-            payload={
-                "edition_id": edition.id,
-                "edition_date": edition.edition_date,
-                "story_count": len(item_models),
-                "selection_hash": selection_hash,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-        db.add(outbox_event)
-        await db.flush()
+        # Transactional outbox event only for non-empty edition generation
+        if item_models:
+            outbox_event = EventOutbox(
+                event_type="DailyBriefingGenerated",
+                payload={
+                    "edition_id": edition.id,
+                    "edition_date": edition.edition_date,
+                    "story_count": len(item_models),
+                    "selection_hash": selection_hash,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            db.add(outbox_event)
+            await db.flush()
 
         logger.info(
-            f"DailyBriefingService: Generated edition {edition.id} ({edition_date}) "
-            f"with {len(item_models)} items at max capacity {EDITION_MAX_CAPACITY}."
+            f"DailyBriefingService: Edition {edition.id} ({edition_date}) "
+            f"has {len(item_models)} items at max capacity {EDITION_MAX_CAPACITY}."
         )
         return edition
 
