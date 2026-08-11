@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { m, AnimatePresence } from "framer-motion";
+import { m } from "framer-motion";
 import { MotionScales } from "@/design-system/motion/tokens";
 import ReactMarkdown from "react-markdown";
 import { apiClient } from "@/lib/api/client";
@@ -457,12 +457,17 @@ export function GlobalAssistant() {
                   suppressHydrationWarning
                   type="submit"
                   disabled={!query.trim()}
-                  whileHover={{ scale: MotionScales.hover }}
-                  whileTap={{ scale: MotionScales.tap }}
-                  className="p-2 bg-primary text-white rounded-lg hover:bg-primary/95 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  whileHover={query.trim() ? { scale: MotionScales.hover } : undefined}
+                  whileTap={query.trim() ? { scale: MotionScales.tap } : undefined}
+                  className={`p-2 rounded-xl transition-all flex items-center justify-center ${
+                    query.trim()
+                      ? "bg-primary text-white hover:bg-primary/90 shadow-md cursor-pointer"
+                      : "bg-muted-foreground/20 text-muted-foreground/40 cursor-not-allowed"
+                  }`}
+                  title="Send message (Enter)"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                   </svg>
                 </m.button>
               )}
