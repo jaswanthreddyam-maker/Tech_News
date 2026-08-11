@@ -167,7 +167,8 @@ async def test_personal_assistant_service_tool_loop():
         # Assert completion event
         assert any("event: completed" in e for e in events)
         # Assert retrieval engine was called
-        mock_retrieve.assert_called_once_with(query="NVIDIA GPUs", db=mock_db, limit=5)
+        # Fast-path calls retrieve directly with the raw user query and limit=3
+        mock_retrieve.assert_called_once_with(query="What happened with NVIDIA recently?", db=mock_db, limit=3)
 
 
 @pytest.mark.asyncio

@@ -66,7 +66,7 @@ async def search_global_tech_news_executor(query: str, db: AsyncSession, **kwarg
 
     try:
         engine = RetrievalEngine()
-        raw_results = await engine.retrieve(query=query, db=db, limit=5)
+        raw_results = await engine.retrieve(query=query, db=db, limit=3)
         if not raw_results:
             return "No relevant articles were found in the Tech News corpus."
 
@@ -77,8 +77,8 @@ async def search_global_tech_news_executor(query: str, db: AsyncSession, **kwarg
             score = item.get("score", 0.0)
             raw_content = item.get("content") or ""
 
-            # Bounded excerpt: cap snippet to 350 characters
-            snippet = raw_content[:350] + "..." if len(raw_content) > 350 else raw_content
+            # Compact snippet: cap at 200 characters to keep injected context small
+            snippet = raw_content[:200] + "..." if len(raw_content) > 200 else raw_content
 
             formatted_articles.append(
                 json.dumps(

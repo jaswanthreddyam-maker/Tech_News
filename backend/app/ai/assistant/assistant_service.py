@@ -151,59 +151,144 @@ class PersonalAssistantService:
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history_messages)
         messages.append({"role": "user", "content": query})
-
         # ── FAST PATH ────────────────────────────────────────────────────────────
-        # Instead of asking the LLM which tool to call (7-8s round-trip), eagerly
-        # run search_global_tech_news immediately for any query and inject the
-        # results directly into the prompt. This collapses two sequential LLM
-        # API calls into one streaming call, saving 7-8 seconds per query.
+        # For clearly global news queries: eagerly call search_global_tech_news
+        # and inject results into the system message, then make ONE streaming LLM
+        # call — saving ~7s vs the old two-round-trip approach.
+        #
+        # For personal/mixed queries ("my notes", "what do I know", etc.): fall
+        # back to the full orchestration loop so the correct tools are invoked.
         # ────────────────────────────────────────────────────────────────────────
+        _PERSONAL_SIGNALS = (
+            "my ", "i saved", "i know", "my notes", "my research",
+            "my knowledge", "what do i", "i've saved", "i have saved",
+            "from my", "in my", "did i save", "i read",
+        )
+        _is_personal = any(sig in query.lower() for sig in _PERSONAL_SIGNALS)
+
         collected_sources = []
 
-        try:
-            yield f"event: tool_started\ndata: {json.dumps({'message_id': message_id, 'tool': 'search_global_tech_news', 'args': {'query': query}})}\n\n"
-            from app.ai.assistant.default_tools import search_global_tech_news_executor
-            search_result = await asyncio.wait_for(
-                search_global_tech_news_executor(query=query, db=self.db),
-                timeout=8.0,
+        if not _is_personal:
+            # ── FAST PATH (global news query) ─────────────────────────────────
+            try:
+                yield f"event: tool_started\ndata: {json.dumps({'message_id': message_id, 'tool': 'search_global_tech_news', 'args': {'query': query}})}\n\n"
+                from app.ai.assistant.default_tools import search_global_tech_news_executor
+                search_result = await asyncio.wait_for(
+                    search_global_tech_news_executor(query=query, db=self.db),
+                    timeout=8.0,
+                )
+            except (asyncio.TimeoutError, Exception) as e:
+                logger.warning(f"Fast-path search failed ({type(e).__name__}): {e}")
+                search_result = "No articles found in the Tech News Today corpus for this query."
+
+            yield f"event: tool_result\ndata: {json.dumps({'message_id': message_id, 'tool': 'search_global_tech_news'})}\n\n"
+
+            # Parse sources card
+            try:
+                for obj_str in search_result.split("\n\n"):
+                    obj_str = obj_str.strip()
+                    if obj_str.startswith("{"):
+                        item = json.loads(obj_str)
+                        if isinstance(item, dict) and "title" in item:
+                            collected_sources.append({
+                                "title": item.get("title", ""),
+                                "source": item.get("source", "Tech News Today"),
+                                "url": item.get("url"),
+                                "snippet": item.get("snippet", "")[:200],
+                                "score": item.get("relevance_score", 0.0),
+                            })
+            except Exception:
+                pass
+
+            if collected_sources:
+                yield f"event: sources\ndata: {json.dumps({'message_id': message_id, 'sources': collected_sources})}\n\n"
+
+            # Inject corpus results into the system message so the user message
+            # stays unmodified (preserves message structure expected by tests and
+            # conversation history logic).
+            messages[0]["content"] += (
+                f"\n\n[RETRIEVED CORPUS CONTEXT]\n{search_result}\n[END CONTEXT]"
             )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Fast-path search failed ({type(e).__name__}): {e}")
-            search_result = "No articles found in the Tech News Today corpus for this query."
 
-        yield f"event: tool_result\ndata: {json.dumps({'message_id': message_id, 'tool': 'search_global_tech_news'})}\n\n"
+        else:
+            # ── ORCHESTRATION PATH (personal/mixed query) ─────────────────────
+            tools_schema = self.registry.get_all_tools_schema()
+            max_iterations = 5
 
-        # Parse sources from result for the sources card
-        try:
-            # Result is newline-separated JSON objects
-            for obj_str in search_result.split("\n\n"):
-                obj_str = obj_str.strip()
-                if obj_str.startswith("{"):
-                    item = json.loads(obj_str)
-                    if isinstance(item, dict) and "title" in item:
-                        collected_sources.append({
-                            "title": item.get("title", ""),
-                            "source": item.get("source", "Tech News Today"),
-                            "url": item.get("url"),
-                            "snippet": item.get("snippet", "")[:200],
-                            "score": item.get("relevance_score", 0.0),
-                        })
-        except Exception:
-            pass
+            for iteration in range(max_iterations):
+                try:
+                    response = await asyncio.wait_for(
+                        self.client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            tools=tools_schema if tools_schema else None,
+                            tool_choice="auto" if tools_schema else "none",
+                            timeout=30.0,
+                        ),
+                        timeout=35.0,
+                    )
+                except asyncio.TimeoutError:
+                    logger.error("Assistant LLM orchestration timed out after 35s")
+                    yield StreamService.format_error("Request timed out. Please try again.")
+                    return
+                except Exception as e:
+                    logger.error(f"Assistant LLM error: {e}")
+                    yield StreamService.format_error("Provider error during orchestration")
+                    return
 
-        if collected_sources:
-            yield f"event: sources\ndata: {json.dumps({'message_id': message_id, 'sources': collected_sources})}\n\n"
+                msg = response.choices[0].message
 
-        # Inject search context directly into the prompt so we only need ONE LLM call
-        messages.append({
-            "role": "user",
-            "content": (
-                f"[Context from Tech News Today corpus — use this to answer the question]\n\n"
-                f"{search_result}\n\n"
-                f"[End of corpus context]\n\n"
-                f"Now answer the original question: {query}"
-            ),
-        })
+                if not msg.tool_calls:
+                    break
+
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": msg.content,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": tc.type,
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                        }
+                        for tc in msg.tool_calls
+                    ],
+                }
+                messages.append(assistant_msg)
+
+                for tc in msg.tool_calls:
+                    name = tc.function.name
+                    try:
+                        kwargs = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        kwargs = {}
+
+                    yield f"event: tool_started\ndata: {json.dumps({'message_id': message_id, 'tool': name, 'args': kwargs})}\n\n"
+
+                    result_str = await self.registry.execute_tool(
+                        name=name, kwargs=kwargs, db=self.db, owner_type=owner_type, owner_id=owner_id
+                    )
+
+                    if result_str and name == "search_global_tech_news":
+                        try:
+                            parsed = json.loads(result_str)
+                            items = parsed if isinstance(parsed, list) else [parsed]
+                            for item in items:
+                                if isinstance(item, dict) and "title" in item:
+                                    collected_sources.append({
+                                        "title": item.get("title", ""),
+                                        "source": item.get("source", "Tech News Today"),
+                                        "url": item.get("url"),
+                                        "snippet": item.get("snippet", "")[:200],
+                                        "score": item.get("relevance_score", 0.0),
+                                    })
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+                    yield f"event: tool_result\ndata: {json.dumps({'message_id': message_id, 'tool': name})}\n\n"
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "name": name, "content": result_str})
+
+            if collected_sources:
+                yield f"event: sources\ndata: {json.dumps({'message_id': message_id, 'sources': collected_sources})}\n\n"
 
         # Final generation stream
         full_assistant_text = ""
