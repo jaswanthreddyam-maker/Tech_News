@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiFetch, apiClient } from '@/lib/api/client';
-import { useAppStore } from '@/store/useStore';
 
 export type ConversationMode = 'GENERAL' | 'ARTICLE' | 'COMPARISON' | 'ELI15' | 'TIMELINE' | 'DIGEST' | 'TOPIC' | 'WORKSPACE';
 export type CapabilityError = 'OFFLINE' | 'UNAUTHORIZED' | 'STREAM_UNSUPPORTED' | 'RATE_LIMITED' | null;
@@ -91,15 +90,9 @@ export function useConversation(
   const [title, setTitle] = useState('New Conversation');
   const [capabilityError, setCapabilityError] = useState<CapabilityError>(null);
 
-  const { user } = useAppStore();
-
   const checkCapability = useCallback(async () => {
     if (typeof window !== 'undefined' && !navigator.onLine) {
       setCapabilityError('OFFLINE');
-      return;
-    }
-    if (!user) {
-      setCapabilityError('UNAUTHORIZED');
       return;
     }
     if (typeof window !== 'undefined' && !window.ReadableStream) {
@@ -116,7 +109,7 @@ export function useConversation(
         setCapabilityError('OFFLINE');
       }
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     checkCapability();
