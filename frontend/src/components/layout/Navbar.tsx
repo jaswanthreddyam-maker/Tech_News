@@ -168,8 +168,8 @@ export function Navbar() {
           
           {/* Left: Brand Title */}
           <Link href="/" className="group flex items-center shrink-0 z-10">
-            <span className="font-extrabold text-lg sm:text-xl tracking-tight text-foreground group-hover:text-primary transition-colors">
-              Tech News Today
+            <span className="font-extrabold text-lg sm:text-xl tracking-tight text-foreground transition-colors">
+              Tech News <span className="text-purple-500 dark:text-purple-400 group-hover:text-purple-400 transition-colors">Today</span>
             </span>
           </Link>
 

@@ -28,7 +28,7 @@ export function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center space-x-2 mb-4">
               <Sparkles className="h-5 w-5 text-primary" />
-              <span className="font-bold text-sm tracking-tight">Tech News Today</span>
+              <span className="font-bold text-sm tracking-tight">Tech News <span className="text-purple-500 dark:text-purple-400">Today</span></span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs">
               AI-powered autonomous newsroom delivering real-time technology intelligence.
