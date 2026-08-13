@@ -233,7 +233,6 @@ async def expire_articles(db: AsyncSession) -> dict:
             ProcessedArticle.is_expired == False,
             ProcessedArticle.is_archived == False,
             ProcessedArticle.published_status == "published",
-            or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
         )
     )
     active_before = active_before_result.scalar() or 0
@@ -537,10 +536,22 @@ async def rebuild_homepage_feed(db: AsyncSession, limit: int = 15) -> list[int]:
 
     try:
         redis = get_redis_client()
-        await redis.set("homepage_article_ids", json.dumps(selected_ids))
-        logger.info(
-            f"News Ranking: Pre-ranked homepage feed rebuilt and cached in Redis. Slots filled: {len(selected_ids)}"
-        )
+        if redis:
+            now = datetime.now(timezone.utc)
+            from app.core.config import settings
+            algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
+            cache_payload = {
+                "projection_id": "ranking_engine_12h",
+                "projection_version": 1,
+                "algorithm_version": algo_ver,
+                "generated_at": now.isoformat(),
+                "expires_at": (now + timedelta(hours=1)).isoformat(),
+                "article_ids": [str(aid) for aid in selected_ids],
+            }
+            await redis.set("editorial:v2:homepage_ranked_ids", json.dumps(cache_payload), ex=3600)
+            logger.info(
+                f"News Ranking: Pre-ranked homepage feed rebuilt and cached in Redis (editorial:v2:homepage_ranked_ids). Slots filled: {len(selected_ids)}"
+            )
     except Exception as e:
         logger.warning(f"Failed to cache homepage feed in Redis: {e}")
 

@@ -37,6 +37,7 @@ class HomepageBuilder:
 
         from sqlalchemy.orm import defer
         from sqlalchemy import or_, and_, cast, String
+        from app.models.article import ProcessedArticle
         
         stmt = (
             select(ArticleReadModel)
