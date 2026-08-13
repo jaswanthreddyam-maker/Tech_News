@@ -9,7 +9,7 @@ import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
 import { SettingsDialog } from "@/components/layout/SettingsDialog";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { GlobalSearchOverlay } from "@/components/search/GlobalSearchOverlay";
-import { Search, Menu, X, Sparkles, Settings } from "lucide-react";
+import { Search, Menu, X, Settings } from "lucide-react";
 
 const navLinks: { href: string; label: string }[] = [];
 
@@ -166,19 +166,11 @@ export function Navbar() {
 
         <div className="relative mx-auto flex h-full max-w-screen-2xl items-center justify-between px-4 sm:px-6 lg:px-8">
           
-          {/* Left: Logo & Cockpit Subtitle */}
-          <Link href="/" className="group flex items-center space-x-3 shrink-0 z-10">
-            <div className="p-2 rounded-xl bg-white/[0.05] border border-white/10 group-hover:border-white/25 group-hover:bg-white/[0.08] transition-all duration-300 shadow-sm">
-              <Sparkles className="h-4 w-4 text-primary transition-transform duration-500 group-hover:rotate-12" />
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="font-bold text-sm tracking-tight text-foreground group-hover:text-primary transition-colors">
-                Tech News Today
-              </span>
-              <span className="text-[9px] text-muted-foreground/80 font-mono tracking-[0.2em] uppercase mt-0.5">
-                AI Cockpit
-              </span>
-            </div>
+          {/* Left: Brand Title */}
+          <Link href="/" className="group flex items-center shrink-0 z-10">
+            <span className="font-extrabold text-lg sm:text-xl tracking-tight text-foreground group-hover:text-primary transition-colors">
+              Tech News Today
+            </span>
           </Link>
 
           {/* Center: Zero-G Magnetic Floating Navigation Capsule (Only rendered when links exist) */}
