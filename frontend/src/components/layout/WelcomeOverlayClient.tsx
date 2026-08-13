@@ -290,8 +290,9 @@ export default function WelcomeOverlayClient({
                         letterSpacing: word.isBrand ? "-0.02em" : "0.02em",
                         margin: 0,
                         color: "var(--foreground)",
-                        textShadow:
-                          "0 0 40px color-mix(in srgb, var(--accent) 20%, transparent)",
+                        textShadow: word.isBrand
+                          ? "0 0 30px rgba(255, 255, 255, 0.4), 0 0 60px rgba(168, 85, 247, 0.6), 0 0 90px rgba(147, 51, 234, 0.35)"
+                          : "0 0 25px rgba(255, 255, 255, 0.6), 0 0 50px rgba(168, 85, 247, 0.45), 0 0 80px rgba(147, 51, 234, 0.25)",
                         lineHeight: 1.1,
                         whiteSpace: "nowrap",
                         textAlign: "center",
@@ -299,7 +300,7 @@ export default function WelcomeOverlayClient({
                     >
                       {word.isBrand ? (
                         <>
-                          Tech News <span className="text-purple-500 dark:text-purple-400">Today</span>
+                          Tech News <span className="text-purple-500 dark:text-purple-400 drop-shadow-[0_0_25px_rgba(168,85,247,0.9)]">Today</span>
                         </>
                       ) : (
                         word.text
