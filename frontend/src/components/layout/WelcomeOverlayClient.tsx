@@ -300,7 +300,7 @@ export default function WelcomeOverlayClient({
                     >
                       {word.isBrand ? (
                         <>
-                          Tech News <span className="text-purple-500 dark:text-purple-400 drop-shadow-[0_0_25px_rgba(168,85,247,0.9)]">Today</span>
+                          Tech News <span className="text-purple-500 dark:text-purple-400">Today</span>
                         </>
                       ) : (
                         word.text
