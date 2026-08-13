@@ -40,11 +40,14 @@ class HomepageBuilder:
         
         stmt = (
             select(ArticleReadModel)
+            .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
             .where(
                 and_(
                     ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.published_at >= cutoff,
-                    ArticleReadModel.publication_status == "PUBLISHED"
+                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                    or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
                 )
             ).options(
                 defer(ArticleReadModel.content),
@@ -55,33 +58,38 @@ class HomepageBuilder:
         articles = res.scalars().all()
 
         if not articles:
-            logger.info("HomepageBuilder Fallback: No candidate articles found in the EDITORIAL_WINDOW_HOURS (24h). Expanding selection to recent published non-test articles to prevent empty homepage.")
+            logger.info("HomepageBuilder Fallback: No candidate articles found in the EDITORIAL_WINDOW_HOURS. Expanding selection to 30 recent published articles to prevent empty homepage.")
 
-            stmt_fb = select(ArticleReadModel).where(
-                and_(
-                    ArticleReadModel.is_test_data == False,
-                    or_(ArticleReadModel.publication_status == None, ArticleReadModel.publication_status != "EXPIRED")
+            stmt_fb = (
+                select(ArticleReadModel)
+                .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                .where(
+                    and_(
+                        ArticleReadModel.is_test_data == False,
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False)
+                    )
+                ).order_by(ArticleReadModel.published_at.desc()).limit(30).options(
+                    defer(ArticleReadModel.content),
+                    defer(ArticleReadModel.embedding)
                 )
-            ).order_by(ArticleReadModel.published_at.desc()).limit(30).options(
-                defer(ArticleReadModel.content),
-                defer(ArticleReadModel.embedding)
             )
             res_fb = await db.execute(stmt_fb)
             articles = res_fb.scalars().all()
             if not articles:
                 return []
 
-        # 2. Fetch all topic links for these candidates in one batch using a join and selecting only columns
-        topic_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).join(
-            ArticleReadModel, ArticleReadModel.id == ArticleTopicLink.article_id
-        ).where(
-            ArticleReadModel.is_test_data == False, ArticleReadModel.published_at >= cutoff
-        )
-        topic_res = await db.execute(topic_stmt)
-
+        # 2. Fetch all topic links for the actual selected candidates in a single query
+        candidate_ids = [art.id for art in articles]
         article_topics = {}
-        for row in topic_res.all():
-            article_topics.setdefault(row[0], []).append(row[1])
+        if candidate_ids:
+            topic_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(
+                ArticleTopicLink.article_id.in_(candidate_ids)
+            )
+            topic_res = await db.execute(topic_stmt)
+            for row in topic_res.all():
+                article_topics.setdefault(row[0], []).append(row[1])
 
         # 3. Calculate freshness multiplier and effective score
         decay_model = getattr(settings, "FRESHNESS_DECAY_MODEL", "curved")
@@ -329,8 +337,9 @@ class HomepageBuilder:
             .where(
                 and_(
                     ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.published_at >= cutoff,
                     ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                    or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
                     or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
                 )
             ).options(
@@ -343,7 +352,7 @@ class HomepageBuilder:
 
         is_fallback = False
         if not rows or len(rows) < 15:
-            logger.info("HomepageBuilder Category Fallback: Sparse candidate articles in 24h window. Expanding selection to 100 recent published articles.")
+            logger.info("HomepageBuilder Category Fallback: Sparse active candidate articles. Expanding selection to 100 recent published articles.")
 
             is_fallback = True
             stmt_fb = (
@@ -353,7 +362,8 @@ class HomepageBuilder:
                 .where(
                     and_(
                         ArticleReadModel.is_test_data == False,
-                        ArticleReadModel.publication_status == "PUBLISHED"
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False)
                     )
                 ).order_by(ArticleReadModel.published_at.desc()).limit(100).options(
                     defer(ArticleReadModel.content),

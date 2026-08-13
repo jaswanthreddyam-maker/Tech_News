@@ -11,6 +11,33 @@ from app.core.redis import get_redis_client
 logger = logging.getLogger("tech_news.editorial.projection_validator")
 
 
+from sqlalchemy import cast, String, or_, and_
+from datetime import datetime, timezone
+from app.models.article import ProcessedArticle
+
+
+async def _get_active_article_ids(db: AsyncSession, ref_ids: List[str]) -> set[str]:
+    if not ref_ids:
+        return set()
+    now = datetime.now(timezone.utc)
+    stmt = (
+        select(ArticleReadModel.id)
+        .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+        .where(
+            and_(
+                ArticleReadModel.id.in_(ref_ids),
+                ArticleReadModel.is_test_data == False,
+                ArticleReadModel.publication_status == "PUBLISHED",
+                or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
+            )
+        )
+    )
+    res = await db.execute(stmt)
+    return set(str(art_id) for art_id in res.scalars().all())
+
+
 def determine_status(referenced_count: int, existing_count: int) -> str:
     if referenced_count == 0:
         return "EMPTY"
@@ -42,10 +69,7 @@ async def validate_editorial_projections_integrity(db: AsyncSession) -> Dict[str
         hp_ref_ids = [str(s["id"]) for s in latest_hp.stories_json if "id" in s]
         unique_ref_ids = list(dict.fromkeys(hp_ref_ids))
         
-        art_stmt = select(ArticleReadModel.id).where(ArticleReadModel.id.in_(unique_ref_ids))
-        art_res = await db.execute(art_stmt)
-        existing_ids = set(str(art_id) for art_id in art_res.scalars().all())
-        
+        existing_ids = await _get_active_article_ids(db, unique_ref_ids)
         missing_ids = [aid for aid in unique_ref_ids if aid not in existing_ids]
         hp_status = determine_status(len(unique_ref_ids), len(existing_ids))
         
@@ -82,9 +106,7 @@ async def validate_editorial_projections_integrity(db: AsyncSession) -> Dict[str
         unique_ids = list(dict.fromkeys(ref_ids))
         
         if unique_ids:
-            art_stmt = select(ArticleReadModel.id).where(ArticleReadModel.id.in_(unique_ids))
-            art_res = await db.execute(art_stmt)
-            existing_ids = set(str(art_id) for art_id in art_res.scalars().all())
+            existing_ids = await _get_active_article_ids(db, unique_ids)
             missing_ids = [aid for aid in unique_ids if aid not in existing_ids]
             desk_status = determine_status(len(unique_ids), len(existing_ids))
         else:
@@ -123,9 +145,7 @@ async def validate_editorial_projections_integrity(db: AsyncSession) -> Dict[str
                 unique_redis_ids = list(dict.fromkeys(redis_ref_ids))
                 
                 if unique_redis_ids:
-                    art_stmt = select(ArticleReadModel.id).where(ArticleReadModel.id.in_(unique_redis_ids))
-                    art_res = await db.execute(art_stmt)
-                    existing_ids = set(str(art_id) for art_id in art_res.scalars().all())
+                    existing_ids = await _get_active_article_ids(db, unique_redis_ids)
                     redis_missing_ids = [aid for aid in unique_redis_ids if aid not in existing_ids]
                     redis_status = determine_status(len(unique_redis_ids), len(existing_ids))
     except Exception as e:

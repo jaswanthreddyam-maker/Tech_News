@@ -79,7 +79,7 @@ def test_calculate_engagement_score():
 
 
 def test_calculate_final_score():
-    # Formula: impact * 0.60 + freshness * 0.25 + engagement * 0.15
-    res = calculate_final_score(impact=50.0, freshness=100.0, engagement=80.0)
-    expected = (50.0 * 0.60) + (100.0 * 0.25) + (80.0 * 0.15)
+    # Formula: impact * 0.45 + freshness * 0.30 + engagement * 0.15 + quality * 0.10
+    res = calculate_final_score(impact=50.0, freshness=100.0, engagement=80.0, quality=0.0)
+    expected = (50.0 * 0.45) + (100.0 * 0.30) + (80.0 * 0.15) + (0.0 * 0.10)
     assert res == expected

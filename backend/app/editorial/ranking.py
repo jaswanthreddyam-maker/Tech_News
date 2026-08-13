@@ -68,10 +68,10 @@ def sort_candidates_deterministically(candidates: list) -> list:
         # 2. -src_rank (descending source authority)
         # 3. -eff_score (exact score for exact ordering within same authority)
         # 4. -imp_score
-        # 5. pub_ts
+        # 5. -pub_ts (newer published timestamp first)
         # 6. art_id
         eff_score_band = round(eff_score / 5.0) * 5.0
-        return (-eff_score_band, -src_rank, -eff_score, -imp_score, pub_ts, art_id)
+        return (-eff_score_band, -src_rank, -eff_score, -imp_score, -pub_ts, art_id)
 
     candidates.sort(key=get_sort_key)
     return candidates

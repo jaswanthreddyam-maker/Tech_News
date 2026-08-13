@@ -4,6 +4,11 @@
 
 # Python files
 __pycache__/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
 /storage/
 *.py[cod]
 *$py.class
@@ -37,12 +42,14 @@ backend/celerybeat-schedule.*
 scratch_*.py
 backend/scratch_*.py
 backend/storage/backups/
+backend/chaos/results/runtime/
 
 # Node / NextJS files
 node_modules/
 /frontend/.next/
 /frontend/out/
 /frontend/build/
+*.tsbuildinfo
 .npm
 /frontend/npm-debug.log*
 /frontend/yarn-debug.log*

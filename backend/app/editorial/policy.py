@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 
@@ -13,7 +14,7 @@ class PolicyLoader:
     @classmethod
     def get_policy(cls) -> dict:
         if cls._cached_policy is not None:
-            return cls._cached_policy
+            return copy.deepcopy(cls._cached_policy)
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
         yaml_path = os.path.join(current_dir, "source_profiles.yaml")
@@ -21,7 +22,7 @@ class PolicyLoader:
         if not os.path.exists(yaml_path):
             logger.warning(f"Policy file {yaml_path} not found. Using default fallback configuration.")
             cls._cached_policy = cls._get_default_policy()
-            return cls._cached_policy
+            return copy.deepcopy(cls._cached_policy)
 
         try:
             with open(yaml_path, encoding="utf-8") as f:
@@ -30,11 +31,11 @@ class PolicyLoader:
                     raise ValueError("Policy YAML root must be a dictionary.")
                 cls._cached_policy = policy
                 logger.info(f"Successfully loaded editorial policy: version={policy.get('policy_version')}")
-                return cls._cached_policy
+                return copy.deepcopy(cls._cached_policy)
         except Exception as e:
             logger.error(f"Failed to parse policy YAML: {e}. Falling back to default configuration.")
             cls._cached_policy = cls._get_default_policy()
-            return cls._cached_policy
+            return copy.deepcopy(cls._cached_policy)
 
     @classmethod
     def reset_cache(cls):
@@ -44,7 +45,7 @@ class PolicyLoader:
     @classmethod
     def get_diversity_policy(cls) -> dict:
         if cls._cached_diversity_policy is not None:
-            return cls._cached_diversity_policy
+            return copy.deepcopy(cls._cached_diversity_policy)
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
         yaml_path = os.path.join(current_dir, "diversity_policy.yaml")
@@ -52,7 +53,7 @@ class PolicyLoader:
         if not os.path.exists(yaml_path):
             logger.warning(f"Diversity policy file {yaml_path} not found. Using default fallback configuration.")
             cls._cached_diversity_policy = cls._get_default_diversity_policy()
-            return cls._cached_diversity_policy
+            return copy.deepcopy(cls._cached_diversity_policy)
 
         try:
             with open(yaml_path, encoding="utf-8") as f:
@@ -61,11 +62,11 @@ class PolicyLoader:
                     raise ValueError("Diversity policy YAML root must be a dictionary.")
                 cls._cached_diversity_policy = policy
                 logger.info(f"Successfully loaded diversity policy.")
-                return cls._cached_diversity_policy
+                return copy.deepcopy(cls._cached_diversity_policy)
         except Exception as e:
             logger.error(f"Failed to parse diversity policy YAML: {e}. Falling back to default configuration.")
             cls._cached_diversity_policy = cls._get_default_diversity_policy()
-            return cls._cached_diversity_policy
+            return copy.deepcopy(cls._cached_diversity_policy)
 
     @staticmethod
     def _get_default_diversity_policy() -> dict:

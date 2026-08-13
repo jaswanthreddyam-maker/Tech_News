@@ -50,8 +50,8 @@ def get_lifecycle_policy() -> dict:
 
 def calculate_article_ttl(editorial_score: float, freshness_score: float) -> timedelta:
     policy = get_lifecycle_policy()
-    min_ttl = float(policy.get("minimum_ttl_hours", 6))
-    max_ttl = float(policy.get("maximum_ttl_hours", 24))
+    min_ttl = float(policy.get("minimum_ttl_hours", 12))
+    max_ttl = float(policy.get("maximum_ttl_hours", 72))
     ed_weight = float(policy.get("editorial_weight", 0.8))
     fr_weight = float(policy.get("freshness_weight", 0.2))
     
@@ -229,7 +229,12 @@ async def expire_articles(db: AsyncSession) -> dict:
     # ── Circuit Breaker: explicit active_before / expiring_now / active_after ──
     active_before_result = await db.execute(
         select(func.count(ProcessedArticle.id))
-        .where(ProcessedArticle.is_expired == False)
+        .where(
+            ProcessedArticle.is_expired == False,
+            ProcessedArticle.is_archived == False,
+            ProcessedArticle.published_status == "published",
+            or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
+        )
     )
     active_before = active_before_result.scalar() or 0
 
@@ -238,6 +243,8 @@ async def expire_articles(db: AsyncSession) -> dict:
         .where(
             ProcessedArticle.expires_at <= now,
             ProcessedArticle.is_expired == False,
+            ProcessedArticle.is_archived == False,
+            ProcessedArticle.published_status == "published",
         )
     )
     expiring_now = expiring_result.scalar() or 0
@@ -255,6 +262,8 @@ async def expire_articles(db: AsyncSession) -> dict:
             .where(
                 ProcessedArticle.expires_at <= now,
                 ProcessedArticle.is_expired == False,
+                ProcessedArticle.is_archived == False,
+                ProcessedArticle.published_status == "published",
             )
             .values(expires_at=now + timedelta(hours=6))
         )
@@ -273,6 +282,8 @@ async def expire_articles(db: AsyncSession) -> dict:
         ).where(
             ProcessedArticle.expires_at <= now,
             ProcessedArticle.is_expired == False,
+            ProcessedArticle.is_archived == False,
+            ProcessedArticle.published_status == "published",
         ).limit(500)
 
         res = await db.execute(stmt)
@@ -329,12 +340,8 @@ async def expire_articles(db: AsyncSession) -> dict:
                 .values(is_expired=True, expired_at=now)
             )
 
-            # Update ArticleReadModel status (NOT delete — preserves article detail pages)
-            await db.execute(
-                update(ArticleReadModel)
-                .where(ArticleReadModel.id.in_([str(i) for i in expired_ids]))
-                .values(publication_status="EXPIRED")
-            )
+            # Preserve ArticleReadModel publication_status='PUBLISHED' for permalinks & emergency fallback.
+            # Do not mutate publication_status to 'EXPIRED' to prevent read model breakage.
 
             # DO NOT delete RawArticle — canonical crawl evidence
             # DO NOT delete ProcessedArticle — source-of-truth
@@ -370,6 +377,12 @@ async def expire_and_purge_articles(db: AsyncSession) -> dict:
     return await expire_articles(db)
 
 
+async def expire_old_articles(db: AsyncSession) -> int:
+    """Alias for expire_articles() that returns just the count."""
+    metrics = await expire_articles(db)
+    return metrics.get("expired_articles_total", 0)
+
+
 async def rank_articles(db: AsyncSession) -> dict:
     """
     Performs the 12-hour evaluation run:
@@ -384,7 +397,6 @@ async def rank_articles(db: AsyncSession) -> dict:
     expired_count = expire_metrics.get("expired_articles_total", 0)
 
     # 2. Fetch all active articles (not archived and not expired)
-    cutoff_24h = now - timedelta(hours=24)
     stmt = (
         select(ProcessedArticle)
         .options(
@@ -397,7 +409,6 @@ async def rank_articles(db: AsyncSession) -> dict:
                 ProcessedArticle.is_archived == False,
                 ProcessedArticle.is_expired == False,
                 ProcessedArticle.published_status == "published",
-                ProcessedArticle.published_at >= cutoff_24h,
                 or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
             )
         )
@@ -518,6 +529,12 @@ async def rebuild_homepage_feed(db: AsyncSession, limit: int = 15) -> list[int]:
     articles = await get_ranked_homepage_articles(db, category_slug=None, limit=limit)
     selected_ids = [art.id for art in articles]
 
+    if not selected_ids:
+        logger.warning(
+            "News Ranking: Rebuilt homepage feed yielded 0 articles. Skipping Redis cache overwrite to prevent feed wipe."
+        )
+        return []
+
     try:
         redis = get_redis_client()
         await redis.set("homepage_article_ids", json.dumps(selected_ids))
@@ -537,7 +554,6 @@ async def get_ranked_homepage_articles(
     Retrieves ranked active articles based on the 70% current / 30% previous window rule.
     """
     now = datetime.now(timezone.utc)
-    cutoff_24h = now - timedelta(hours=24)
     cutoff_12h = now - timedelta(hours=12)
 
     # Query all active published articles
@@ -547,8 +563,8 @@ async def get_ranked_homepage_articles(
         .where(
             and_(
                 ProcessedArticle.is_archived == False,
+                ProcessedArticle.is_expired == False,
                 ProcessedArticle.published_status == "published",
-                ProcessedArticle.published_at >= cutoff_24h,
                 or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
             )
         )
