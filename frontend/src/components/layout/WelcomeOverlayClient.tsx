@@ -62,7 +62,7 @@ const PEEL_EASE: [number, number, number, number] = [0.76, 0, 0.24, 1];
 const WORDS: { text: string; stage: OverlayState; isBrand?: boolean }[] = [
   { text: "Welcome", stage: "stage1" },
   { text: "To", stage: "stage2" },
-  { text: "Tech-News Today", stage: "stage3", isBrand: true },
+  { text: "Tech News Today", stage: "stage3", isBrand: true },
 ];
 
 export default function WelcomeOverlayClient({
@@ -297,7 +297,13 @@ export default function WelcomeOverlayClient({
                         textAlign: "center",
                       }}
                     >
-                      {word.text}
+                      {word.isBrand ? (
+                        <>
+                          Tech News <span className="text-purple-500 dark:text-purple-400">Today</span>
+                        </>
+                      ) : (
+                        word.text
+                      )}
                     </h1>
 
                     {(word.stage === "stage1" || word.stage === "stage3") && (
