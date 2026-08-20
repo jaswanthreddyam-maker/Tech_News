@@ -10,7 +10,6 @@ import { FeaturedStory } from "./FeaturedStory";
 import { StoryTile } from "./StoryTile";
 import { StorySkeleton } from "./StorySkeleton";
 import { TRENDING_LAYOUT } from "./constants";
-import { usePhysicalRig } from "./usePhysicalRig";
 import { validateCanonicalArticles } from "@/domains/article/validator";
 import {
   normalizeArticle,
@@ -36,7 +35,6 @@ import { MediaService } from "@/domains/article/media";
  */
 export function TrendingStories() {
   const queryClient = useQueryClient();
-  const gridRef = usePhysicalRig<HTMLDivElement>();
   const { enqueue } = useOfflineQueue();
 
   const trendingQuery = useTrending();
@@ -98,16 +96,15 @@ export function TrendingStories() {
 
     // First: Big giant card starts immediately at delay 0
     // Then: Right compact cards start after 0.50s lead delay, cascading sequentially top-to-bottom
-    const delay = isFeatured ? 0 : 0.50 + idx * 0.12;
-    const duration = isFeatured ? 1.7 : 1.4;
+    const delay = isFeatured ? 0 : 0.45 + idx * 0.10;
+    const duration = isFeatured ? 1.4 : 1.2;
 
     return {
       initial: {
-        rotateY: isFeatured ? -28 : -20,
-        rotateX: isFeatured ? 6 : 3,
-        z: -40,
+        rotateY: isFeatured ? -24 : -16,
+        rotateX: isFeatured ? 5 : 2,
+        z: -30,
         opacity: 0,
-        filter: "brightness(0.6)",
       },
       animate: isInView
         ? {
@@ -115,13 +112,12 @@ export function TrendingStories() {
             rotateX: 0,
             z: 0,
             opacity: 1,
-            filter: "brightness(1)",
           }
         : undefined,
       transition: {
         duration,
         delay,
-        ease: [0.16, 1, 0.3, 1] as const, // slow-motion cubic-bezier — premium deceleration tail
+        ease: [0.16, 1, 0.3, 1] as const, // pure compositor GPU transition
       },
     };
   };
@@ -235,14 +231,8 @@ export function TrendingStories() {
           perspective: "1800px",
         }}
       >
-        {/*
-         * ExhibitionGrid — single element rotated by usePhysicalRig on mousemove.
-         * usePhysicalRig writes transform directly via el.style.transform using a
-         * requestAnimationFrame loop with lerp. No React state is touched on mouse move.
-         * will-change is NOT applied here to avoid creating excess compositor layers.
-         */}
+        {/* Exhibition Grid */}
         <div
-          ref={gridRef}
           className="ExhibitionGrid grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mx-auto items-stretch"
           style={{
             transformStyle: "preserve-3d",

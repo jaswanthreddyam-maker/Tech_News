@@ -43,26 +43,16 @@ export function ArticleImage({
   return (
     <div className={`relative overflow-hidden bg-neutral-950 flex-none ${aspectRatio} ${className}`}>
       {resolvedSrc ? (
-        <>
-          <Image
-            src={resolvedSrc}
-            alt=""
-            fill
-            className="object-cover blur-xl scale-125 opacity-70 select-none pointer-events-none"
-            aria-hidden="true"
-            unoptimized
-          />
-          <Image
-            src={resolvedSrc}
-            alt={alt}
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            className="object-cover object-center relative z-10 drop-shadow-md transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-            unoptimized
-            onError={handleError}
-          />
-        </>
+        <Image
+          src={resolvedSrc}
+          alt={alt}
+          fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          className="object-cover object-center relative z-10 transition-transform duration-300 group-hover:scale-105"
+          loading="lazy"
+          unoptimized
+          onError={handleError}
+        />
       ) : (
         <CategoryPlaceholder category={typeof category === "string" ? category : category?.name} className="absolute inset-0" />
       )}

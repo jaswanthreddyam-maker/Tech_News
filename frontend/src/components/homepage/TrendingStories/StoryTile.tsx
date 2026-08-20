@@ -3,23 +3,16 @@
 import { StoryCardProps } from "./types";
 import { getCategory, formatReadTime, getSource, getImageUrl } from "./helpers";
 import { ArticleImage } from "./ArticleImage";
-import { useCardTilt } from "./useCardTilt";
 import { ArticleLink } from "@/domains/article/ArticleLink";
 import { PhysicalCard3D } from "./PhysicalCard3D";
 import { PhysicalLighting } from "./PhysicalLighting";
 import { PHYSICAL_DEPTH, TRENDING_LAYOUT } from "./constants";
 
 /**
- * StoryTile — 3D Physical Extruded Tile Slab Content Provider
- * Layer Hierarchy: MotionReveal -> PhysicalCard3D (Geometry) -> LightingLayer -> FrontFace -> TiltLayer -> ArticleLink -> Editorial Content
+ * StoryTile — 3D Physical Extruded Compact Tile Content Provider
+ * Layer Hierarchy: MotionReveal -> PhysicalCard3D (Geometry) -> LightingLayer -> FrontFace -> ArticleLink -> Editorial Content
  */
 export function StoryTile({ article, onClick }: StoryCardProps) {
-  const cardRef = useCardTilt<HTMLDivElement>({
-    maxTiltDeg: 6,
-    maxTranslateZ: 10,
-    scaleOnHover: 1.015,
-  });
-
   const category = getCategory(article);
   const readTime = formatReadTime(article, true);
   const source = getSource(article);
@@ -29,7 +22,7 @@ export function StoryTile({ article, onClick }: StoryCardProps) {
     <PhysicalCard3D
       thickness={12}
       roundedClass="rounded-[16px]"
-      frontFaceClassName="p-5 bg-neutral-950/80 hover:bg-neutral-900/90 border border-white/15 border-t-white/50 border-r-white/25 group-hover:border-t-white/80 group-hover:border-r-white/40 shadow-[0_12px_30px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] hover:shadow-[0_28px_56px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.35)] drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)]"
+      frontFaceClassName="p-5 bg-neutral-950/80 hover:bg-neutral-900/90 border border-white/15 border-t-white/50 border-r-white/25 group-hover:border-t-white/80 group-hover:border-r-white/40 shadow-[0_12px_30px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] hover:shadow-[0_28px_56px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.35)] drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)] transition-all duration-300 ease-out group-hover:scale-[1.02]"
       lighting={
         <PhysicalLighting
           roundedClass="rounded-[16px]"
@@ -37,17 +30,8 @@ export function StoryTile({ article, onClick }: StoryCardProps) {
         />
       }
     >
-      {/* Hover Lift Layer (Reserved for future hover elevation, click-bounce, etc.) */}
+      {/* Content Layer */}
       <div className="w-full h-full" style={{ transformStyle: "preserve-3d" }}>
-        {/* Tilt Layer (Owns cursor tracking transform independently) */}
-        <div
-          ref={cardRef}
-          className="w-full h-full"
-          style={{
-            transformStyle: "preserve-3d",
-            transform: "rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) translateZ(var(--tilt-z, 0px)) scale3d(var(--tilt-scale, 1), var(--tilt-scale, 1), 1)",
-          }}
-        >
         {/* Navigation Layer */}
         <ArticleLink
           article={article}
@@ -108,7 +92,6 @@ export function StoryTile({ article, onClick }: StoryCardProps) {
             />
           </div>
         </ArticleLink>
-        </div>
       </div>
     </PhysicalCard3D>
   );
