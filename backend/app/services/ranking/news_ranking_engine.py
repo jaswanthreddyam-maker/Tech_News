@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -247,29 +248,41 @@ async def expire_articles(db: AsyncSession) -> dict:
         )
     )
     expiring_now = expiring_result.scalar() or 0
+    active_after = max(0, active_before - expiring_now)
 
-    active_after = active_before - expiring_now
-
+    # ── Circuit Breaker & Auto-Replenishment Trigger ──
     if expiring_now > 0 and active_after < MINIMUM_FLOOR:
         logger.warning(
             f"CIRCUIT BREAKER: Expiring {expiring_now} articles would reduce "
             f"inventory from {active_before} to {active_after} "
-            f"(below floor of {MINIMUM_FLOOR}). Extending TTL by 6h instead."
+            f"(below floor of {MINIMUM_FLOOR}). Triggering AutoReplenishment to fetch fresh replacements."
         )
+        
+        # Trigger active self-healing auto-replenishment crawl
+        try:
+            from app.services.ingestion.replenishment import AutoReplenishmentService
+            asyncio.create_task(AutoReplenishmentService.trigger_replenishment_if_needed(None, force=True))
+        except Exception as repl_err:
+            logger.warning(f"Failed to schedule AutoReplenishment in expire_articles: {repl_err}")
+
+        # Strict Age Bound: Any article older than 48 hours MUST expire immediately.
+        # Only articles < 36 hours old may receive a temporary 2h grace extension during active crawl.
+        cutoff_hard = now - timedelta(hours=48)
+        grace_cutoff = now - timedelta(hours=36)
+
         await db.execute(
             update(ProcessedArticle)
             .where(
                 ProcessedArticle.expires_at <= now,
+                ProcessedArticle.published_at >= grace_cutoff,
                 ProcessedArticle.is_expired == False,
                 ProcessedArticle.is_archived == False,
                 ProcessedArticle.published_status == "published",
             )
-            .values(expires_at=now + timedelta(hours=6))
+            .values(expires_at=now + timedelta(hours=2))
         )
         await db.commit()
         metrics["circuit_breaker_activated"] = True
-        metrics["expire_duration_ms"] = int((datetime.now() - start_time).total_seconds() * 1000)
-        return metrics
 
     # ── Non-destructive expiration (batched) ──
     while True:
@@ -566,8 +579,9 @@ async def get_ranked_homepage_articles(
     """
     now = datetime.now(timezone.utc)
     cutoff_12h = now - timedelta(hours=12)
+    cutoff_48h = now - timedelta(hours=48)
 
-    # Query all active published articles
+    # Query all active published articles within 48h
     stmt = (
         select(ProcessedArticle)
         .options(selectinload(ProcessedArticle.category))
@@ -576,6 +590,7 @@ async def get_ranked_homepage_articles(
                 ProcessedArticle.is_archived == False,
                 ProcessedArticle.is_expired == False,
                 ProcessedArticle.published_status == "published",
+                ProcessedArticle.published_at >= cutoff_48h,
                 or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
             )
         )

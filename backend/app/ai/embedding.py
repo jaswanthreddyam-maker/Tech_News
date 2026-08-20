@@ -24,7 +24,7 @@ class EmbeddingService:
         self.dimensions = settings.EMBEDDING_DIMENSIONS
 
     async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
-        if not self.client:
+        if not self.client or not self.api_key or self.api_key.startswith("sk-placeholder") or self.api_key.startswith("placeholder") or self.api_key.startswith("mock-"):
             raise ValueError("OpenAI client not configured for embeddings.")
 
         redis_client = get_redis_client()

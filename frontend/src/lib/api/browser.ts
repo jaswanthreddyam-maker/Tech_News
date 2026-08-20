@@ -68,6 +68,16 @@ export class BrowserTransport implements ApiTransport {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+    const callerSignal = options.signal || (restOptions as any).signal;
+    const handleCallerAbort = () => controller.abort();
+    if (callerSignal) {
+      if (callerSignal.aborted) {
+        controller.abort();
+      } else {
+        callerSignal.addEventListener("abort", handleCallerAbort);
+      }
+    }
+
     try {
       const response = await fetch(url, {
         ...restOptions,
@@ -78,6 +88,9 @@ export class BrowserTransport implements ApiTransport {
       });
 
       clearTimeout(timeoutId);
+      if (callerSignal) {
+        callerSignal.removeEventListener("abort", handleCallerAbort);
+      }
 
       // Handle 401 Silent Refresh
       if (response.status === 401 && !_isRetryAfterRefresh && token) {

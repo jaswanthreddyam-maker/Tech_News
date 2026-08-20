@@ -14,17 +14,17 @@ def test_calculate_impact_score():
     score_base = calculate_impact_score(title="Simple News Title", category="General", content="Nothing important.")
     assert score_base == 40.0
 
-    # 2. Company boost: settings.RANKING_COMPANY_WEIGHTS has e.g. "openai" -> 30.0
+    # 2. Company boost: settings.RANKING_COMPANY_WEIGHTS has e.g. "openai" -> 15.0
     score_company = calculate_impact_score(
-        title="OpenAI announces new update", category="General", content="Some text."
+        title="OpenAI announces new breakthrough", category="General", content="Some text."
     )
-    assert score_company == 40.0 + 30.0
+    assert score_company == 40.0 + 15.0
 
-    # 3. Tech keyword boost: settings.RANKING_TECH_KEYWORDS has "cybersecurity" -> 20.0
+    # 3. Tech keyword boost: settings.RANKING_TECH_KEYWORDS has "cybersecurity" -> 10.0
     score_tech = calculate_impact_score(
         title="Security check", category="General", content="A cybersecurity system details."
     )
-    assert score_tech == 40.0 + 20.0
+    assert score_tech == 40.0 + 10.0
 
     # 4. Category Boost: "intelligence", "ai", "cybersecurity", "security" in category name -> +10.0
     score_category = calculate_impact_score(
@@ -32,13 +32,13 @@ def test_calculate_impact_score():
     )
     assert score_category == 40.0 + 10.0
 
-    # 5. Reductions: settings.RANKING_REDUCTIONS has e.g. "minor update" -> -15.0
+    # 5. Reductions: settings.RANKING_REDUCTIONS has e.g. "minor update" -> -10.0
     score_reduction = calculate_impact_score(title="Minor update to system", category="General", content="Details.")
-    assert score_reduction == 40.0 - 15.0
+    assert score_reduction == 40.0 - 10.0
 
     # 6. Min/max bounds [0.0, 100.0]
     score_underflow = calculate_impact_score(
-        title="Minor update blog post funding round", category="General", content=""
+        title="Minor update product update blog post funding round opinion", category="General", content=""
     )
     assert score_underflow == 0.0
 

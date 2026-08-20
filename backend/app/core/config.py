@@ -178,6 +178,8 @@ class Settings(BaseSettings):
         "product update": -8.0,
         "funding round": -8.0,
         "blog post": -10.0,
+        "rumor": -10.0,
+        "opinion": -10.0,
     }
 
 

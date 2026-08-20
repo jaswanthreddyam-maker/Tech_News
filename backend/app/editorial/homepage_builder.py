@@ -38,7 +38,9 @@ class HomepageBuilder:
         from sqlalchemy.orm import defer
         from sqlalchemy import or_, and_, cast, String
         from app.models.article import ProcessedArticle
+        from app.services.ingestion.replenishment import AutoReplenishmentService
         
+        # 1. Primary candidate selection: Strictly within EDITORIAL_WINDOW_HOURS and unexpired
         stmt = (
             select(ArticleReadModel)
             .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
@@ -46,6 +48,7 @@ class HomepageBuilder:
                 and_(
                     ArticleReadModel.is_test_data == False,
                     ArticleReadModel.publication_status == "PUBLISHED",
+                    ArticleReadModel.published_at >= cutoff,
                     or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
                     or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
                     or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
@@ -58,9 +61,19 @@ class HomepageBuilder:
         res = await db.execute(stmt)
         articles = res.scalars().all()
 
-        if not articles:
-            logger.info("HomepageBuilder Fallback: No candidate articles found in the EDITORIAL_WINDOW_HOURS. Expanding selection to 30 recent published articles to prevent empty homepage.")
+        # If inventory is low or empty, trigger auto-replenishment in background
+        if len(articles) < 5:
+            logger.info(f"HomepageBuilder: Low candidate count ({len(articles)}). Scheduling AutoReplenishment.")
+            try:
+                import asyncio
+                asyncio.create_task(AutoReplenishmentService.trigger_replenishment_if_needed(None))
+            except Exception as e:
+                logger.debug(f"Could not dispatch background replenishment: {e}")
 
+        if not articles:
+            logger.info("HomepageBuilder Fallback: No active candidate articles found in primary window. Searching recent unexpired articles (max 48h).")
+
+            fallback_cutoff = now - timedelta(hours=48)
             stmt_fb = (
                 select(ArticleReadModel)
                 .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
@@ -68,10 +81,12 @@ class HomepageBuilder:
                     and_(
                         ArticleReadModel.is_test_data == False,
                         ArticleReadModel.publication_status == "PUBLISHED",
+                        ArticleReadModel.published_at >= fallback_cutoff,
                         or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
-                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False)
+                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                        or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
                     )
-                ).order_by(ArticleReadModel.published_at.desc()).limit(30).options(
+                ).order_by(ArticleReadModel.published_at.desc()).limit(15).options(
                     defer(ArticleReadModel.content),
                     defer(ArticleReadModel.embedding)
                 )
@@ -79,6 +94,7 @@ class HomepageBuilder:
             res_fb = await db.execute(stmt_fb)
             articles = res_fb.scalars().all()
             if not articles:
+                logger.warning("HomepageBuilder: No unexpired articles found within 48h. Awaiting auto-replenishment.")
                 return []
 
         # 2. Fetch all topic links for the actual selected candidates in a single query
@@ -330,7 +346,7 @@ class HomepageBuilder:
         from sqlalchemy import func
         cat_slug_expr = func.coalesce(Category.slug, func.lower(func.replace(ArticleReadModel.category, ' ', '-'))).label("cat_slug")
 
-        # Fetch articles and their category slug
+        # Fetch articles and their category slug strictly within window
         stmt = (
             select(ArticleReadModel, cat_slug_expr)
             .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
@@ -339,6 +355,7 @@ class HomepageBuilder:
                 and_(
                     ArticleReadModel.is_test_data == False,
                     ArticleReadModel.publication_status == "PUBLISHED",
+                    ArticleReadModel.published_at >= cutoff,
                     or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
                     or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
                     or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
@@ -353,9 +370,10 @@ class HomepageBuilder:
 
         is_fallback = False
         if not rows or len(rows) < 15:
-            logger.info("HomepageBuilder Category Fallback: Sparse active candidate articles. Expanding selection to 100 recent published articles.")
+            logger.info("HomepageBuilder Category Fallback: Sparse active candidate articles. Expanding selection to recent unexpired articles (max 48h).")
 
             is_fallback = True
+            fallback_cutoff = now - timedelta(hours=48)
             stmt_fb = (
                 select(ArticleReadModel, cat_slug_expr)
                 .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
@@ -364,9 +382,12 @@ class HomepageBuilder:
                     and_(
                         ArticleReadModel.is_test_data == False,
                         ArticleReadModel.publication_status == "PUBLISHED",
-                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False)
+                        ArticleReadModel.published_at >= fallback_cutoff,
+                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                        or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
                     )
-                ).order_by(ArticleReadModel.published_at.desc()).limit(100).options(
+                ).order_by(ArticleReadModel.published_at.desc()).limit(50).options(
                     defer(ArticleReadModel.content),
                     defer(ArticleReadModel.embedding)
                 )

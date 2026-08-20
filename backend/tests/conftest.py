@@ -41,9 +41,6 @@ async def cleanup_database_connections():
 async def setup_test_database():
     import asyncpg
     from urllib.parse import urlparse
-    from alembic.config import Config
-    from alembic import command
-    from sqlalchemy import create_engine
     from app.core.config import settings
 
     parsed = urlparse(settings.DATABASE_URL)
@@ -56,26 +53,34 @@ async def setup_test_database():
         if not exists:
             await conn.execute("CREATE DATABASE tech_news_today_test")
         await conn.close()
-    except Exception as e:
-        pass # The DB might already exist or the user lacks permission; alembic will catch the real error
+    except Exception:
+        pass
 
-    # Run alembic upgrade head programmatically via CLI to use native asyncpg config
-    import subprocess
-    import os
-    env = os.environ.copy()
-    env["DATABASE_URL"] = settings.DATABASE_URL
+    # Ensure all models are imported so Base.metadata knows about all tables
+    import app.models.article  # noqa: F401
+    import app.models.user  # noqa: F401
+    import app.models.story  # noqa: F401
+    import app.models.tnt_knowledge  # noqa: F401
+    import app.models.ingestion  # noqa: F401
+    import app.models.editorial  # noqa: F401
+    import app.models.distribution  # noqa: F401
+    import app.models.recipient  # noqa: F401
+    import app.models.projection  # noqa: F401
+    import app.models.source  # noqa: F401
+    from app.models.base import Base
+    from app.core.database import async_engine
+
     try:
-        import sys
-        subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], env=env, check=True, capture_output=True)
+        from sqlalchemy import text
+        async with async_engine.begin() as conn:
+            try:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            except Exception:
+                pass
+            await conn.run_sync(Base.metadata.create_all)
     except Exception as e:
-        # Fall back to SQLAlchemy metadata creation if alembic vector extension is unavailable
-        try:
-            from app.models.base import Base
-            from app.core.database import async_engine
-            async with async_engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-        except Exception:
-            pass
+        import logging
+        logging.getLogger("pytest").error(f"setup_test_database create_all failed: {e}")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -105,8 +110,12 @@ async def reset_redis_client():
     """Reset the global Redis client and data between tests to prevent closed event loop errors."""
     from app.core import redis
 
-    r = redis.get_redis_client()
-    await r.flushdb()
+    try:
+        r = redis.get_redis_client()
+        if r:
+            await r.flushdb()
+    except Exception:
+        pass
     redis.redis_client = None
     yield
     redis.redis_client = None

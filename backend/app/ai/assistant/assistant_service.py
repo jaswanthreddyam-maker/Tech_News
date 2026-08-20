@@ -36,26 +36,26 @@ GREETINGS_MAP: dict[str, str] = {
 class PersonalAssistantService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        gemini_key = getattr(settings, "GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
         nvidia_key = getattr(settings, "NVIDIA_API_KEY", os.getenv("NVIDIA_API_KEY"))
         openai_key = getattr(settings, "OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
-        gemini_key = getattr(settings, "GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
 
-        if nvidia_key and not nvidia_key.startswith("nvapi-placeholder"):
+        if gemini_key and not gemini_key.startswith("mock-") and not gemini_key.startswith("placeholder"):
+            self.client = AsyncOpenAI(
+                api_key=gemini_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+            self.model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+        elif nvidia_key and not nvidia_key.startswith("nvapi-placeholder"):
             nvidia_base_url = getattr(settings, "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
             self.client = AsyncOpenAI(api_key=nvidia_key, base_url=nvidia_base_url)
             self.model = getattr(settings, "NVIDIA_MODEL", "openai/gpt-oss-120b")
         elif openai_key and not openai_key.startswith("sk-placeholder"):
             self.client = AsyncOpenAI(api_key=openai_key)
             self.model = getattr(settings, "CHAT_MODEL", "gpt-4o-mini")
-        elif gemini_key and not gemini_key.startswith("mock-"):
-            self.client = AsyncOpenAI(
-                api_key=gemini_key,
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            )
-            self.model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
         else:
             self.client = None
-            self.model = "gpt-4o-mini"
+            self.model = "gemini-2.5-flash"
 
         self.registry = AssistantToolRegistry()
         register_default_tools(self.registry)

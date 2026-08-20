@@ -5,7 +5,7 @@ from app.editorial.homepage_builder import HomepageBuilder
 from app.models.article import ArticleReadModel
 
 @pytest.mark.asyncio
-async def test_homepage_builder_final_score_included(db_session, clean_db_tables):
+async def test_homepage_builder_final_score_included(db_session):
     # Test 1: final_score = 80 -> Included
     article = ArticleReadModel(
         id="test-high-impact",
@@ -26,7 +26,7 @@ async def test_homepage_builder_final_score_included(db_session, clean_db_tables
     assert any(a.id == "test-high-impact" for a in results), "High impact article should be included"
 
 @pytest.mark.asyncio
-async def test_homepage_builder_final_score_zero_filtered(db_session, clean_db_tables):
+async def test_homepage_builder_final_score_zero_filtered(db_session):
     # Test 2: final_score = 0 -> Filtered
     article_zero = ArticleReadModel(
         id="test-zero-impact",
@@ -61,7 +61,7 @@ async def test_homepage_builder_final_score_zero_filtered(db_session, clean_db_t
     assert any(a.id == "test-high-impact-dummy" for a in results), "High impact article should be included"
 
 @pytest.mark.asyncio
-async def test_homepage_builder_fresh_article_included(db_session, clean_db_tables):
+async def test_homepage_builder_fresh_article_included(db_session):
     # Test 3: Fresh article -> Included
     article = ArticleReadModel(
         id="test-fresh-impact",
@@ -82,7 +82,7 @@ async def test_homepage_builder_fresh_article_included(db_session, clean_db_tabl
     assert any(a.id == "test-fresh-impact" for a in results), "Fresh high-impact article should be included"
 
 @pytest.mark.asyncio
-async def test_homepage_builder_old_article_filtered(db_session, clean_db_tables):
+async def test_homepage_builder_old_article_filtered(db_session):
     # Test 4: Old article -> Filtered due to freshness multiplier
     article = ArticleReadModel(
         id="test-old-impact",
