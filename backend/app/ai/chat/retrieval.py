@@ -78,25 +78,38 @@ class RetrievalEngine:
         output = []
         if semantic_matches:
             ranked_results = rank_semantic_results(query, semantic_matches)
-            final_results = ranked_results[:limit]
-            for rank_item in final_results:
-                art = rank_item["article"]
-                output.append(
-                    {
-                        "type": "article",
-                        "id": art.id,
-                        "title": art.title,
-                        "content": art.content or art.summary,
-                        "url": art.url,
-                        "source": getattr(art, "source", "Tech News Today"),
-                        "score": round(rank_item["final_score"], 4),
-                    }
-                )
+            for rank_item in ranked_results[:limit]:
+                # Strict relevance gate: article must have keyword overlap OR high semantic similarity
+                sem = rank_item["components"]["semantic"]
+                kw = rank_item["components"]["keyword"]
+                score = rank_item["final_score"]
 
-        # Fallback to DB ILIKE keyword search if vector search produced no results
+                if score >= 0.55 and (kw > 0.0 or sem >= 0.65):
+                    art = rank_item["article"]
+                    output.append(
+                        {
+                            "type": "article",
+                            "id": art.id,
+                            "title": art.title,
+                            "content": art.content or art.summary,
+                            "url": art.url,
+                            "source": getattr(art, "source", "Tech News Today"),
+                            "score": round(score, 4),
+                        }
+                    )
+
+        # Fallback to DB ILIKE keyword search if vector search produced no relevant results
         if not output:
             from sqlalchemy import or_
-            query_words = [w.strip() for w in query.split() if len(w.strip()) > 2]
+            STOP_WORDS = {
+                "what", "when", "where", "which", "with", "this", "that", "from", "your",
+                "have", "tell", "about", "news", "today", "show", "give", "some", "more",
+                "explain", "help", "who", "whom", "will", "would", "could", "should", "does"
+            }
+            query_words = [
+                w.strip().lower() for w in query.split()
+                if len(w.strip()) > 3 and w.strip().lower() not in STOP_WORDS
+            ]
             if query_words:
                 conditions = []
                 for w in query_words[:4]:

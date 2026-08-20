@@ -174,20 +174,22 @@ class PersonalAssistantService:
 
             yield f"event: tool_result\ndata: {json.dumps({'message_id': message_id, 'tool': 'search_global_tech_news'})}\n\n"
 
-            # Parse sources card
+            # Parse sources card with relevance score threshold
             try:
                 for obj_str in search_result.split("\n\n"):
                     obj_str = obj_str.strip()
                     if obj_str.startswith("{"):
                         item = json.loads(obj_str)
                         if isinstance(item, dict) and "title" in item:
-                            collected_sources.append({
-                                "title": item.get("title", ""),
-                                "source": item.get("source", "Tech News Today"),
-                                "url": item.get("url"),
-                                "snippet": item.get("snippet", "")[:200],
-                                "score": item.get("relevance_score", 0.0),
-                            })
+                            score = float(item.get("relevance_score", 0.0))
+                            if score >= 0.55:
+                                collected_sources.append({
+                                    "title": item.get("title", ""),
+                                    "source": item.get("source", "Tech News Today"),
+                                    "url": item.get("url"),
+                                    "snippet": item.get("snippet", "")[:200],
+                                    "score": score,
+                                })
             except Exception:
                 pass
 

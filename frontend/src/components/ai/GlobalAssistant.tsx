@@ -426,26 +426,13 @@ export function GlobalAssistant() {
       <div className="relative z-10 bg-card w-full max-w-3xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border">
         
         {/* Header */}
-        <div className="px-5 py-4 border-b border-border/60 flex items-center justify-between bg-muted/20 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-blue-600 flex items-center justify-center shadow-md">
-              <AiStarsIcon className="w-5 h-5 text-white" strokeWidth={2.2} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-bold text-foreground leading-none text-base">Personal Research Assistant</h2>
-                <span className="text-[10px] uppercase font-semibold font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  Gemini Flash
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">Instant research across personal notes & tech corpus</p>
-            </div>
+        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-muted/20 backdrop-blur-sm">
+          <div>
+            <h2 className="font-bold text-foreground leading-tight text-base">Personal Research Assistant</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Instant research across personal notes & tech corpus</p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block text-[11px] font-mono text-muted-foreground/60 border border-border/60 rounded px-1.5 py-0.5 bg-background/40">
-              ESC to close
-            </span>
             <m.button 
               suppressHydrationWarning
               onClick={() => setIsOpen(false)}
@@ -523,114 +510,117 @@ export function GlobalAssistant() {
             )}
 
             {/* Message Thread */}
-            {messages.map((msg) => (
-              <div key={msg.id} className="space-y-3">
-                {msg.role === "user" ? (
-                  <div className="flex justify-end">
-                    <div className="bg-primary text-white font-medium text-sm px-4 py-2.5 rounded-2xl max-w-[85%] shadow-md leading-relaxed">
-                      {msg.content}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="bg-card border border-border rounded-xl p-5 shadow-sm text-foreground text-sm relative group">
-                      
-                      {/* Copy Message Button */}
-                      {msg.content && msg.status !== "streaming" && (
-                        <button
-                          onClick={() => handleCopyMessage(msg.id, msg.content)}
-                          className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100"
-                          title="Copy response markdown"
-                        >
-                          {copiedId === msg.id ? (
-                            <span className="text-[10px] font-medium text-emerald-500 flex items-center gap-1">
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                              Copied
-                            </span>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </button>
-                      )}
-
-                      {/* Content or Skeleton Loading */}
-                      {msg.content ? (
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown components={customMarkdownComponents}>
-                            {msg.content}
-                          </ReactMarkdown>
-                          {msg.status === "streaming" && (
-                            <span className="inline-block w-1.5 h-4 bg-primary ml-1 animate-pulse rounded-sm align-middle" />
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-3 py-1">
-                          {/* Live Status Header */}
-                          <div className="flex items-center gap-2 text-xs font-medium text-primary">
-                            <div className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
-                            <AnimatePresence mode="wait">
-                              <m.span
-                                key={currentStatusLabel || "Synthesizing..."}
-                                initial={{ opacity: 0, y: 3 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -3 }}
-                                transition={{ duration: 0.15 }}
-                              >
-                                {currentStatusLabel || "Synthesizing answer..."}
-                              </m.span>
-                            </AnimatePresence>
-                          </div>
-
-                          {/* Shimmer Skeleton Lines */}
-                          <div className="space-y-2 pt-1 animate-pulse">
-                            <div className="h-3.5 bg-muted/60 rounded-md w-11/12" />
-                            <div className="h-3.5 bg-muted/40 rounded-md w-full" />
-                            <div className="h-3.5 bg-muted/50 rounded-md w-4/5" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Integrated Source Cards */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="space-y-2 pt-1">
-                        <div className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground/80 font-semibold pl-1 flex items-center gap-1.5">
-                          <svg className="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                          </svg>
-                          <span>Sources ({msg.sources.length})</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {msg.sources.map((src, idx) => (
-                            <a
-                              key={idx}
-                              href={src.url || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-3 rounded-xl bg-card hover:bg-muted/30 border border-border hover:border-primary/40 transition-all text-xs flex flex-col justify-between gap-1.5 group shadow-sm"
-                            >
-                              <div className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                                {src.title}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground flex items-center justify-between">
-                                <span className="truncate max-w-[150px]">{src.source || "Tech News Today"}</span>
-                                {src.score !== undefined && (
-                                  <span className="font-mono text-primary/80 font-medium px-1.5 py-0.5 rounded bg-primary/10">
-                                    {(src.score * 100).toFixed(0)}% match
-                                  </span>
-                                )}
-                              </div>
-                            </a>
-                          ))}
-                        </div>
+            {messages.map((msg) => {
+              const validSources = (msg.sources || []).filter((src) => (src.score === undefined || src.score >= 0.55));
+              return (
+                <div key={msg.id} className="space-y-3">
+                  {msg.role === "user" ? (
+                    <div className="flex justify-end">
+                      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium text-sm px-5 py-3 rounded-2xl max-w-[85%] shadow-lg border border-white/10 leading-relaxed break-words">
+                        {msg.content}
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="bg-card border border-border rounded-xl p-5 shadow-sm text-foreground text-sm relative group">
+                        
+                        {/* Copy Message Button */}
+                        {msg.content && msg.status !== "streaming" && (
+                          <button
+                            onClick={() => handleCopyMessage(msg.id, msg.content)}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Copy response markdown"
+                          >
+                            {copiedId === msg.id ? (
+                              <span className="text-[10px] font-medium text-emerald-500 flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                Copied
+                              </span>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Content or Skeleton Loading */}
+                        {msg.content ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                            <ReactMarkdown components={customMarkdownComponents}>
+                              {msg.content}
+                            </ReactMarkdown>
+                            {msg.status === "streaming" && (
+                              <span className="inline-block w-1.5 h-4 bg-primary ml-1 animate-pulse rounded-sm align-middle" />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-3 py-1">
+                            {/* Live Status Header */}
+                            <div className="flex items-center gap-2 text-xs font-medium text-primary">
+                              <div className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
+                              <AnimatePresence mode="wait">
+                                <m.span
+                                  key={currentStatusLabel || "Synthesizing..."}
+                                  initial={{ opacity: 0, y: 3 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -3 }}
+                                  transition={{ duration: 0.15 }}
+                                >
+                                  {currentStatusLabel || "Synthesizing answer..."}
+                                </m.span>
+                              </AnimatePresence>
+                            </div>
+
+                            {/* Shimmer Skeleton Lines */}
+                            <div className="space-y-2 pt-1 animate-pulse">
+                              <div className="h-3.5 bg-muted/60 rounded-md w-11/12" />
+                              <div className="h-3.5 bg-muted/40 rounded-md w-full" />
+                              <div className="h-3.5 bg-muted/50 rounded-md w-4/5" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Integrated Source Cards (Strictly filtered by relevance) */}
+                      {validSources.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <div className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground/80 font-semibold pl-1 flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                            </svg>
+                            <span>Sources ({validSources.length})</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {validSources.map((src, idx) => (
+                              <a
+                                key={idx}
+                                href={src.url || "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-3 rounded-xl bg-card hover:bg-muted/30 border border-border hover:border-primary/40 transition-all text-xs flex flex-col justify-between gap-1.5 group shadow-sm"
+                              >
+                                <div className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                                  {src.title}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground flex items-center justify-between">
+                                  <span className="truncate max-w-[150px]">{src.source || "Tech News Today"}</span>
+                                  {src.score !== undefined && (
+                                    <span className="font-mono text-primary/80 font-medium px-1.5 py-0.5 rounded bg-primary/10">
+                                      {(src.score * 100).toFixed(0)}% match
+                                    </span>
+                                  )}
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
           </div>
         </div>
