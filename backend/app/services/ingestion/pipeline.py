@@ -873,8 +873,18 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         candidates = extract_all_candidate_urls(raw_html, raw_art.url)
         if candidates:
             proc_art.thumbnail_url = candidates[0]
-        # Flush session to assign ID to new proc_art before Celery tasks
-        await db.flush()
+
+    if not getattr(proc_art, "thumbnail_url", None):
+        from agents.ingestion.rss_agent import RSSIngestionAgent
+        agent = RSSIngestionAgent()
+        target_url = getattr(proc_art, "source_url", None) or getattr(raw_art, "url", None)
+        if target_url:
+            og_img = agent._fetch_og_image(target_url)
+            if og_img:
+                proc_art.thumbnail_url = og_img
+
+    # Flush session to assign ID to new proc_art before Celery tasks
+    await db.flush()
 
     try:
         from app.core.redis import get_redis_client

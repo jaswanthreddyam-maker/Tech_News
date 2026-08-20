@@ -615,6 +615,34 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
     return desks
 
 
+async def _backfill_missing_thumbnails(db: AsyncSession):
+    """Backfills og:image thumbnails for unthumbnailed published articles."""
+    from app.models.article import ArticleReadModel, ProcessedArticle
+    from agents.ingestion.rss_agent import RSSIngestionAgent
+    from sqlalchemy import or_
+
+    agent = RSSIngestionAgent()
+
+    stmt = select(ProcessedArticle).where(
+        or_(ProcessedArticle.thumbnail_url == None, ProcessedArticle.thumbnail_url == "")
+    ).limit(30)
+    res = await db.execute(stmt)
+    for p in res.scalars().all():
+        target = getattr(p, "source_url", None)
+        if target and (target.startswith("http://") or target.startswith("https://")):
+            img = agent._fetch_og_image(target)
+            if img:
+                p.thumbnail_url = img
+                r_stmt = select(ArticleReadModel).where(ArticleReadModel.id == str(p.id))
+                r_res = await db.execute(r_stmt)
+                r_art = r_res.scalars().first()
+                if r_art:
+                    r_art.thumbnail_url = img
+                    r_art.images = [img]
+
+    await db.commit()
+
+
 @router.api_route("/rebuild", methods=["GET", "POST"])
 async def trigger_editorial_rebuild(db: AsyncSession = Depends(get_db)):
     """
@@ -628,6 +656,7 @@ async def trigger_editorial_rebuild(db: AsyncSession = Depends(get_db)):
 
     expire_metrics = await expire_articles(db)
     repl_metrics = await AutoReplenishmentService.trigger_replenishment_if_needed(db, force=True)
+    await _backfill_missing_thumbnails(db)
     homepage_articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
     category_desks = await HomepageBuilder.build_and_persist_category_desks(db)
     await CacheService.invalidate_homepage_cache(reason="manual_rebuild_endpoint")
@@ -638,7 +667,7 @@ async def trigger_editorial_rebuild(db: AsyncSession = Depends(get_db)):
         "expired_metrics": expire_metrics,
         "replenishment_metrics": repl_metrics,
         "homepage_article_count": len(homepage_articles),
-        "homepage_articles": [{"id": a.id, "title": a.title, "published_at": a.published_at} for a in homepage_articles[:5]],
+        "homepage_articles": [{"id": a.id, "title": a.title, "thumbnail": a.thumbnail_url} for a in homepage_articles[:12]],
         "category_desks_count": len(category_desks),
     }
 
@@ -656,6 +685,7 @@ async def trigger_flush_and_crawl(db: AsyncSession = Depends(get_db)):
 
     expire_metrics = await expire_articles(db)
     repl_metrics = await AutoReplenishmentService.trigger_replenishment_if_needed(db, force=True)
+    await _backfill_missing_thumbnails(db)
     homepage_articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
     category_desks = await HomepageBuilder.build_and_persist_category_desks(db)
     await CacheService.invalidate_homepage_cache(reason="flush_and_crawl_endpoint")
@@ -666,6 +696,6 @@ async def trigger_flush_and_crawl(db: AsyncSession = Depends(get_db)):
         "expired": expire_metrics,
         "replenishment": repl_metrics,
         "fresh_homepage_count": len(homepage_articles),
-        "articles": [{"id": a.id, "title": a.title, "published_at": a.published_at} for a in homepage_articles[:10]],
+        "articles": [{"id": a.id, "title": a.title, "thumbnail": a.thumbnail_url} for a in homepage_articles[:12]],
     }
 

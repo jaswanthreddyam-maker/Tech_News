@@ -8,7 +8,8 @@ import { CategoryPlaceholder } from "@/components/common/media/CategoryPlacehold
 interface ArticleImageProps {
   src?: string | null;
   alt: string;
-  category?: string | null;
+  category?: string | { name?: string } | null;
+  seed?: string | number | null;
   className?: string;
   aspectRatio?: string;
 }
@@ -16,13 +17,13 @@ interface ArticleImageProps {
 /**
  * ArticleImage — Production Media Renderer for Article Cards
  * 
- * Enforces 1-to-1 article image mapping. Eliminates stock photo fallback arrays,
- * rendering CategoryPlaceholder when media is missing or marked as failed in MediaService.
+ * Enforces 1-to-1 article image mapping with high-entropy category photo fallback.
  */
 export function ArticleImage({
   src,
   alt,
   category,
+  seed,
   className = "",
   aspectRatio = "aspect-[4/3]",
 }: ArticleImageProps) {
@@ -30,7 +31,7 @@ export function ArticleImage({
 
   const resolvedSrc = (!hasError && src && !MediaService.isFailed(src)) 
     ? src 
-    : MediaService.getCategoryFallbackImage(category, alt);
+    : MediaService.getCategoryFallbackImage(category, seed || alt);
 
   const handleError = () => {
     if (src) {
@@ -63,7 +64,7 @@ export function ArticleImage({
           />
         </>
       ) : (
-        <CategoryPlaceholder category={category} className="absolute inset-0" />
+        <CategoryPlaceholder category={typeof category === "string" ? category : category?.name} className="absolute inset-0" />
       )}
     </div>
   );

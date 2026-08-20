@@ -67,6 +67,7 @@ export function FeaturedStory({ article, onClick }: StoryCardProps) {
               src={imageUrl}
               alt={article.title || "Featured Story"}
               category={category}
+              seed={article.id || article.slug || article.title}
               aspectRatio="aspect-[4/3]"
               className="w-full rounded-[12px] ring-1 ring-white/20 origin-center transition-all duration-300 group-hover:contrast-[1.04] group-hover:saturate-[1.05]"
             />

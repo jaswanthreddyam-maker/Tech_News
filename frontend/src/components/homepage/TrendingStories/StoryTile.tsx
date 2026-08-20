@@ -102,6 +102,7 @@ export function StoryTile({ article, onClick }: StoryCardProps) {
               src={imageUrl}
               alt={article.title || "Story Thumbnail"}
               category={category}
+              seed={article.id || article.slug || article.title}
               aspectRatio="aspect-square"
               className="w-full h-full rounded-[8px] group-hover:contrast-[1.04] group-hover:saturate-[1.05]"
             />

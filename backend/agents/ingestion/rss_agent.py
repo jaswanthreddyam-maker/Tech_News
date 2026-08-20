@@ -76,13 +76,13 @@ class RSSIngestionAgent(BaseAgent):
         try:
             title = self._find_xml_text(item, "title")
             link = self._find_xml_text(item, "link")
-            description = self._find_xml_text(item, "description") or self._find_xml_text(item, "content")
+            description = self._find_xml_text(item, "description") or self._find_xml_text(item, "content") or self._find_xml_text(item, "encoded")
             pub_date = self._find_xml_text(item, "pubDate") or self._find_xml_text(item, "pubdate")
 
             if not title or not link:
                 return None
 
-            thumbnail_url = self._extract_image_url(item, description)
+            thumbnail_url = self._extract_image_url(item, description, link.strip())
 
             return {
                 "title": title.strip(),
@@ -118,7 +118,7 @@ class RSSIngestionAgent(BaseAgent):
             if not title or not link:
                 return None
 
-            thumbnail_url = self._extract_image_url(entry, summary)
+            thumbnail_url = self._extract_image_url(entry, summary, link.strip())
 
             return {
                 "title": title.strip(),
@@ -132,36 +132,79 @@ class RSSIngestionAgent(BaseAgent):
             self.logger.warning(f"Failed parsing individual Atom entry: {e!s}")
             return None
 
-    def _extract_image_url(self, element: ET.Element, html_content: str | None) -> str | None:
+    def _extract_image_url(self, element: ET.Element, html_content: str | None, article_url: str = "") -> str | None:
         """
-        Extract image/thumbnail URL from media:content, media:thumbnail, enclosure, or HTML content.
+        Extract image/thumbnail URL from media:content, media:thumbnail, enclosure, embedded <img>, or live og:image.
         """
         import re
+        import html
 
         # 1. Check direct child nodes (media:content, media:thumbnail, enclosure)
         for child in element:
-            tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+            tag = child.tag.split("}")[-1].lower() if "}" in child.tag else child.tag.lower()
             
             if tag in ("thumbnail", "content") and "url" in child.attrib:
                 url = child.attrib["url"]
                 medium = child.attrib.get("medium", "")
                 if medium == "image" or not medium:
                     if self._is_valid_image_url(url):
-                        return url
+                        return html.unescape(url)
 
             if tag == "enclosure" and "url" in child.attrib:
                 enc_type = child.attrib.get("type", "")
                 if "image" in enc_type or self._is_valid_image_url(child.attrib["url"]):
-                    return child.attrib["url"]
+                    return html.unescape(child.attrib["url"])
 
-        # 2. Check for embedded <img> in description/content HTML
+        # 2. Check all text and content nodes inside the element for embedded <img> tags
+        for child in element:
+            child_text = child.text or ""
+            img_match = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', child_text, re.IGNORECASE)
+            if img_match:
+                candidate = img_match.group(1)
+                if self._is_valid_image_url(candidate):
+                    return html.unescape(candidate)
+
+        # 3. Check for embedded <img> in provided html_content
         if html_content:
             img_match = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html_content, re.IGNORECASE)
             if img_match:
                 candidate = img_match.group(1)
                 if self._is_valid_image_url(candidate):
-                    return candidate
+                    return html.unescape(candidate)
 
+        # 4. Live fallback: scrape og:image / twitter:image from article URL head
+        if article_url and (article_url.startswith("http://") or article_url.startswith("https://")):
+            og_img = self._fetch_og_image(article_url)
+            if og_img:
+                return og_img
+
+        return None
+
+    def _fetch_og_image(self, url: str) -> str | None:
+        """Quickly stream <head> of article web page to extract og:image or twitter:image."""
+        import urllib.request
+        import re
+        import html
+
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                chunk = resp.read(65536).decode("utf-8", errors="ignore")
+                m = re.search(r'<meta[^>]+(?:property|name)=["\'](?:og:image|twitter:image)["\'][^>]+content=["\']([^"\']+)["\']', chunk, re.IGNORECASE)
+                if not m:
+                    m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\'](?:og:image|twitter:image)["\']', chunk, re.IGNORECASE)
+                if m:
+                    candidate = html.unescape(m.group(1))
+                    if self._is_valid_image_url(candidate):
+                        return candidate
+        except Exception:
+            pass
         return None
 
     def _is_valid_image_url(self, url: str | None) -> bool:
@@ -170,8 +213,8 @@ class RSSIngestionAgent(BaseAgent):
         url_lower = url.lower().strip()
         if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
             return False
-        # Filter out 1x1 tracking pixels and icons
-        if any(bad in url_lower for bad in ["1x1", "pixel", "tracker", "favicon", "gravatar"]):
+        # Filter out tracking pixels, badges, and avatars
+        if any(bad in url_lower for bad in ["1x1", "pixel", "tracker", "favicon", "gravatar", "author-avatar", "badge"]):
             return False
         return True
 
@@ -181,6 +224,6 @@ class RSSIngestionAgent(BaseAgent):
         """
         for child in parent:
             child_tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
-            if child_tag == tag_name:
+            if child_tag.lower() == tag_name.lower():
                 return child.text
         return None
