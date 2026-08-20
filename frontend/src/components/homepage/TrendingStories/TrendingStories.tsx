@@ -93,51 +93,35 @@ export function TrendingStories() {
     return () => es.close();
   }, [queryClient]);
 
-  const getCardDelay = (idx: number, isFeatured: boolean) => {
-    if (isFeatured) return 0;
-    // Custom stagger sequence for compact cards
-    if (idx === 1) return 1;
-    if (idx === 0) return 2;
-    if (idx === 3) return 3;
-    if (idx === 2) return 4;
-    if (idx === 5) return 5;
-    if (idx === 4) return 6;
-    return idx + 1;
-  };
-
-  /**
-   * PERF v3.3: Use direct transform properties (rotateY, z, opacity) instead of
-   * CSS custom properties (--reveal-ry, --reveal-z).
-   *
-   * WHY: Framer Motion can hand direct transform properties (translate, rotate, scale)
-   * to the browser's compositor thread via the Web Animations API, bypassing main-thread
-   * style recalculation entirely. CSS variable animation CANNOT use this path — the
-   * browser must re-evaluate the variable through the CSSOM cascade on the main thread
-   * on every animation frame, causing forced style recalculation across the entire
-   * card subtree (7 cards × 2 properties = 14 recalculations per frame at 60fps).
-   */
   const getAnimationProps = (idx: number, isFeatured: boolean): any => {
     if (shouldReduceMotion) return {};
 
+    // First: Big giant card starts immediately at delay 0
+    // Then: Right compact cards start after 0.50s lead delay, cascading sequentially top-to-bottom
+    const delay = isFeatured ? 0 : 0.50 + idx * 0.12;
+    const duration = isFeatured ? 1.7 : 1.4;
+
     return {
       initial: {
-        rotateY: -25,
-        z: -30,
+        rotateY: isFeatured ? -28 : -20,
+        rotateX: isFeatured ? 6 : 3,
+        z: -40,
         opacity: 0,
         filter: "brightness(0.6)",
       },
       animate: isInView
         ? {
             rotateY: 0,
+            rotateX: 0,
             z: 0,
             opacity: 1,
             filter: "brightness(1)",
           }
         : undefined,
       transition: {
-        duration: 2.2,
-        delay: getCardDelay(idx, isFeatured) * 0.14, // 140ms stagger — slower cascade
-        ease: [0.16, 1, 0.3, 1] as const, // slow-motion cubic-bezier — long deceleration tail
+        duration,
+        delay,
+        ease: [0.16, 1, 0.3, 1] as const, // slow-motion cubic-bezier — premium deceleration tail
       },
     };
   };
