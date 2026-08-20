@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
-const apiProxyTarget = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL || 'https://tech-news-api-production-1b42.up.railway.app';
+const rawTarget = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL;
+const apiProxyTarget = (rawTarget && rawTarget.startsWith('http')) ? rawTarget : 'http://localhost:8000';
 
 const nextConfig = {
   experimental: {
