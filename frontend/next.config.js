@@ -1,6 +1,7 @@
-/** @type {import('next').NextConfig} */
-const rawTarget = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL;
-const apiProxyTarget = (rawTarget && rawTarget.startsWith('http')) ? rawTarget : 'http://localhost:8000';
+const rawTarget = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || process.env.INTERNAL_API_URL;
+const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+const defaultTarget = isProd ? 'https://technews-production-d18d.up.railway.app' : 'http://localhost:8000';
+const apiProxyTarget = (rawTarget && rawTarget.startsWith('http')) ? rawTarget : defaultTarget;
 
 const nextConfig = {
   experimental: {
