@@ -38,8 +38,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
       if (isVal(l)) return l;
     }
 
-    const { getCategoryFallbackImage } = require("@/domains/article/media");
-    return getCategoryFallbackImage(art.category, art.id || art.title);
+    return "";
   };
 
   const [imgSrc, setImgSrc] = React.useState(getHeroImg(article));

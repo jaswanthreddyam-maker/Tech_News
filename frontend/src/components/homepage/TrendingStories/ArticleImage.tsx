@@ -31,7 +31,7 @@ export function ArticleImage({
 
   const resolvedSrc = (!hasError && src && !MediaService.isFailed(src)) 
     ? src 
-    : MediaService.getCategoryFallbackImage(category, seed || alt);
+    : null;
 
   const handleError = () => {
     if (src) {

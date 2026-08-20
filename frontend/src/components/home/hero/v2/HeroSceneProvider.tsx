@@ -18,8 +18,10 @@ const PLAYBACK_CONFIG = {
   TRANSITION_DURATION_MS: 450,
 };
 
+import { MediaService } from "@/domains/article/media";
+
 export function HeroSceneProvider({
-  items = [],
+  items: rawItems = [],
   editorPicks = [],
   latest = [],
   aiInsights = [],
@@ -30,6 +32,7 @@ export function HeroSceneProvider({
   onInsightClick,
   children,
 }: React.PropsWithChildren<HeroSceneProps>) {
+  const items = useMemo(() => rawItems.filter((a) => MediaService.hasGenuineThumbnail(a)), [rawItems]);
   const itemCount = items.length;
   const anglePerItem = useMemo(() => (itemCount > 0 ? 360 / itemCount : 0), [itemCount]);
 

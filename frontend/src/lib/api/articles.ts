@@ -15,11 +15,11 @@ export async function getArticleById(id: number): Promise<StandardResponse<Artic
 }
 
 export async function getTrendingArticles(): Promise<PaginatedResponse<Article>> {
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "10", sort_by: "trending" } });
+  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "25", sort_by: "trending" } });
 }
 
 export async function getBreakingNews(): Promise<PaginatedResponse<Article>> {
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "10", sort_by: "freshness" } });
+  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "25", sort_by: "freshness" } });
 }
 
 export async function getPersonalizedFeed(anonymousId?: string | null): Promise<StandardResponse<any[]>> {

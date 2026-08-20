@@ -49,13 +49,7 @@ export function resolve(dto: BackendArticleDTO | null | undefined): ResolvedMedi
     }
   }
 
-  // Priority 6: Themed Category HD Editorial Fallback
-  const fallbackUrl = getCategoryFallbackImage(dto.category, dto.id || dto.title);
-  if (fallbackUrl) {
-    return { url: fallbackUrl, source: "category_fallback" };
-  }
-
-  // Final Fallback
+  // Final Fallback: Return null so UI components know there is no genuine publisher thumbnail
   return { url: null, source: "fallback" };
 }
 

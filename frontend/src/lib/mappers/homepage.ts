@@ -3,8 +3,11 @@ import { FeaturedArticle } from "@/components/home/hero/types";
 import { MediaService } from "@/domains/article/media";
 
 export function mapArticleToFeatured(a: Article): FeaturedArticle {
+  const isVal = (u?: string | null) => 
+    Boolean(u && typeof u === "string" && (u.startsWith("http://") || u.startsWith("https://")) && !u.includes("example.com") && !MediaService.isFailed(u));
+
   const media = MediaService.resolve(a as any);
-  const resolvedImg = media.url || (a as any).thumbnail_url || (a as any).image_url || MediaService.getCategoryFallbackImage(a.category, a.id || a.title);
+  const resolvedImg = isVal(media.url) ? media.url : (isVal((a as any).thumbnail_url) ? (a as any).thumbnail_url : (isVal((a as any).image_url) ? (a as any).image_url : ""));
 
   return {
     id: String(a.id),
