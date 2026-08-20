@@ -8,7 +8,8 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Equal, Moon, Eye, Mail, Send, CheckCircle2, Sparkles, ExternalLink } from "lucide-react";
+import { Moon, Eye, Mail, Send, CheckCircle2, Sparkles, ExternalLink } from "lucide-react";
+import { Sliders2Icon } from "@/components/common/icons/Sliders2Icon";
 import { getBriefingPreferences, updateBriefingPreferences, sendTestBriefing } from "@/lib/api/briefing";
 
 interface SettingsDialogProps {
@@ -81,7 +82,7 @@ export function SettingsDialog({ open, onOpenChange, trigger }: SettingsDialogPr
       <DialogContent className="sm:max-w-[480px] bg-background/95 backdrop-blur-2xl border border-white/15 text-foreground shadow-2xl rounded-2xl p-6">
         <DialogHeader className="space-y-1 pb-3 border-b border-white/10">
           <div className="flex items-center gap-2 text-primary font-mono text-xs uppercase tracking-widest font-semibold">
-            <Equal className="w-4 h-4" strokeWidth={2} />
+            <Sliders2Icon className="w-4 h-4" strokeWidth={2.2} />
             <span>Preferences & Email Sync</span>
           </div>
           <DialogTitle className="text-xl font-bold font-sans">Settings</DialogTitle>
