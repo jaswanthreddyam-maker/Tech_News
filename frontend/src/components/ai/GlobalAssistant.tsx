@@ -426,7 +426,7 @@ export function GlobalAssistant() {
       <div className="relative z-10 bg-card w-full max-w-3xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-muted/20 backdrop-blur-sm">
+        <div className="px-6 py-4 flex items-center justify-between bg-muted/20 backdrop-blur-sm">
           <div>
             <h2 className="font-bold text-foreground leading-tight text-base">Personal Research Assistant</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Instant research across personal notes & tech corpus</p>
@@ -640,7 +640,7 @@ export function GlobalAssistant() {
         </div>
 
         {/* Composer Area */}
-        <div className="p-4 border-t border-border/60 bg-card/80 backdrop-blur-sm">
+        <div className="p-4 bg-card/80 backdrop-blur-sm">
           <form onSubmit={handleSubmit} className="max-w-2xl mx-auto relative flex items-center assistant-input-glow rounded-2xl bg-background/95 transition-all">
             <input
               ref={inputRef}
