@@ -16,7 +16,7 @@ export function BackgroundVideo({
   src = "/videos/bg-video.mp4",
   className = "",
   overlayClassName = "",
-  opacity = 0.8,
+  opacity = 1,
 }: BackgroundVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -27,16 +27,15 @@ export function BackgroundVideo({
 
     video.defaultMuted = true;
     video.muted = true;
+    video.playbackRate = 1.0;
 
-    const attemptPlay = () => {
+    const playVideo = () => {
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise
-          .then(() => {
-            setIsPlaying(true);
-          })
+          .then(() => setIsPlaying(true))
           .catch(() => {
-            // Autoplay blocked by browser policy: retry on first user interaction
+            // Autoplay retry on user interaction or visibility change
             const handleInteract = () => {
               video.play().then(() => setIsPlaying(true)).catch(() => {});
               window.removeEventListener("click", handleInteract);
@@ -52,12 +51,23 @@ export function BackgroundVideo({
       }
     };
 
-    attemptPlay();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        playVideo();
+      }
+    };
+
+    playVideo();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [src]);
 
   return (
     <div
-      className={`fixed inset-0 pointer-events-none z-0 overflow-hidden select-none bg-black ${className}`}
+      className={`fixed inset-0 pointer-events-none z-0 overflow-hidden select-none ${className}`}
       aria-hidden="true"
     >
       {/* Cinematic Background Video Element */}
@@ -71,14 +81,20 @@ export function BackgroundVideo({
         controls={false}
         disablePictureInPicture
         disableRemotePlayback
-        onCanPlay={() => {
-          if (videoRef.current) {
-            videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-          }
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          v.muted = true;
+          v.play().then(() => setIsPlaying(true)).catch(() => {});
         }}
-        className="w-full h-full object-cover transition-opacity duration-700 scale-105"
+        onCanPlay={(e) => {
+          const v = e.currentTarget;
+          v.muted = true;
+          v.play().then(() => setIsPlaying(true)).catch(() => {});
+        }}
+        className="w-full h-full object-cover transition-opacity duration-500 scale-[1.02]"
         style={{
           opacity,
+          filter: "brightness(1.2) contrast(1.15)",
           transform: "translate3d(0, 0, 0)",
           backfaceVisibility: "hidden",
         }}
@@ -86,11 +102,10 @@ export function BackgroundVideo({
         <source src={src} type="video/mp4" />
       </video>
 
-      {/* Subtle Contrast & Vignette Overlays for Crisp Text Legibility */}
+      {/* Subtle Ambient Blend Overlay */}
       <div
-        className={`absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/75 pointer-events-none ${overlayClassName}`}
+        className={`absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30 pointer-events-none ${overlayClassName}`}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_20%,rgba(0,0,0,0.6)_100%)] pointer-events-none" />
     </div>
   );
 }
@@ -101,7 +116,7 @@ export function BackgroundVideo({
 export function SectionVideoBackground({
   src = "/videos/bg-video.mp4",
   className = "",
-  opacity = 0.75,
+  opacity = 1,
   children,
 }: {
   src?: string;
@@ -121,7 +136,7 @@ export function SectionVideoBackground({
   }, [src]);
 
   return (
-    <div className={`relative overflow-hidden rounded-3xl border border-white/15 bg-black/40 backdrop-blur-xl ${className}`}>
+    <div className={`relative overflow-hidden rounded-3xl border border-white/15 bg-black/30 backdrop-blur-xl ${className}`}>
       {/* Background Video */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
         <video
@@ -132,11 +147,11 @@ export function SectionVideoBackground({
           playsInline
           preload="auto"
           className="w-full h-full object-cover"
-          style={{ opacity }}
+          style={{ opacity, filter: "brightness(1.15) contrast(1.1)" }}
         >
           <source src={src} type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30" />
       </div>
 
       {/* Foreground Content */}
