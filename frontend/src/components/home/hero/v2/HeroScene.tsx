@@ -45,7 +45,7 @@ export function HeroScene(props: HeroSceneProps) {
         style={{ opacity }}
         data-testid="hero-scene-stage"
         aria-label="Featured AI Newsroom Stage"
-        className="relative w-full overflow-visible bg-black min-h-[580px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-4 group/hero-stage select-none"
+        className="relative w-full overflow-visible bg-transparent min-h-[580px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-4 group/hero-stage select-none"
       >
         <HeroStageBackground />
         <HeroAtmosphere />

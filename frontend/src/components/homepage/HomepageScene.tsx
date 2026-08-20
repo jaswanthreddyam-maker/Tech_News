@@ -1,21 +1,22 @@
 "use client";
 
 import React from "react";
+import { BackgroundVideo } from "@/components/ui/BackgroundVideo";
 
 interface HomepageSceneProps {
   children: React.ReactNode;
 }
 
 /**
- * HomepageScene — Pitch OLED Black Environment
+ * HomepageScene — Cinematic Ambient Video & Spatial Scene
  */
 export function HomepageScene({ children }: HomepageSceneProps) {
   return (
-    <div className="relative w-full min-h-screen bg-black text-foreground overflow-x-clip select-none">
-      {/* Layer 1: Pure OLED Black Environment */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-black" />
+    <div className="relative w-full min-h-screen bg-transparent text-foreground overflow-x-clip select-none">
+      {/* Background Video Environment */}
+      <BackgroundVideo />
 
-      {/* Layer 2: Seamless Spatial Content */}
+      {/* Spatial Section Content */}
       <div className="relative z-10 w-full flex flex-col items-center">
         {children}
       </div>

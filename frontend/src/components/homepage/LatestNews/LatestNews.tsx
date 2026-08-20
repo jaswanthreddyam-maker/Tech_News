@@ -165,12 +165,12 @@ export function LatestNews() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.01 }}
         transition={{ duration: 0.6, ease: EASE_CUBIC }}
-        className="py-12 sm:py-20 border-t border-border/20 mt-12 mb-24 relative rounded-3xl overflow-hidden bg-gradient-to-b from-[#0e0f12]/40 via-background to-background p-4 sm:p-8 lg:p-10"
+        className="py-12 sm:py-20 border border-white/10 mt-12 mb-24 relative rounded-3xl overflow-hidden bg-black/30 backdrop-blur-md p-4 sm:p-8 lg:p-10 shadow-2xl"
       >
         {/* Layer 1: Spatial Volume Environment with Parallax */}
         <m.div style={{ y: sectionBgY }} className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:40px_40px] opacity-40" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,rgba(0,0,0,0.85)_100%)] opacity-70" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:40px_40px] opacity-30" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,rgba(0,0,0,0.6)_100%)] opacity-70" />
         </m.div>
 
         <m.div style={{ y: contentY }} className="relative z-10 w-full">
