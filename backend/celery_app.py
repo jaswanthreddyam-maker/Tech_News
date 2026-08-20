@@ -19,7 +19,7 @@ logger = logging.getLogger("tech_news.celery")
 
 # Explicitly configure default DB pool for Celery Beat (and worker parent processes)
 from app.core.database import configure_database_pool
-configure_database_pool(pool_size=1, max_overflow=0)
+configure_database_pool(pool_size=5, max_overflow=5)
 
 # Core Celery Queue Initializer
 celery_app = Celery(
@@ -64,9 +64,9 @@ def init_worker_process(**kwargs):
     # we must completely replace the global engine in the child process to prevent
     # connection acquisition deadlocks and 5-second pool timeouts.
     from app.core.database import configure_database_pool
-    configure_database_pool(pool_size=1, max_overflow=2)
+    configure_database_pool(pool_size=5, max_overflow=5)
     
-    logger.info("Celery worker process initialized and global DB pool safely re-created (1+2).")
+    logger.info("Celery worker process initialized and global DB pool safely re-created (5+5).")
 
 def run_in_worker_loop(coro):
     """Helper to safely run coroutines using the persistent worker loop, or fallback to a new one."""
@@ -93,26 +93,14 @@ celery_app.conf.update(
     # Fail-fast request timeouts: prevent hung scraper or API tasks from blocking workers
     task_time_limit=300,  # Hard timeout (5 minutes)
     task_soft_time_limit=240,  # Soft timeout (4 minutes, raises SoftTimeLimitExceeded)
-    # Queue Routing Topology
+    # Queue Routing: Single-worker deployment uses default queue for all tasks.
+    # Multi-queue topology (ingestion, ai_processing, etc.) requires separate worker
+    # processes per queue. Railway runs a single worker, so consolidate here.
     task_default_queue="default",
     task_queues=(
         Queue("default", routing_key="default.#"),
-        Queue("ingestion", routing_key="ingestion.#"),
-        Queue("ai_processing", routing_key="ai_processing.#"),
-        Queue("embedding_processing", routing_key="embedding_processing.#"),
-        Queue("moderation", routing_key="moderation.#"),
     ),
-    task_routes={
-        "tasks.scrapers.run_all_sources": {"queue": "ingestion"},
-        "tasks.scrapers.force_crawl_source": {"queue": "ingestion"},
-        "tasks.ai.process_raw_article": {"queue": "ai_processing"},
-        "tasks.ai.process_embedding_task": {"queue": "embedding_processing"},
-        "tasks.admin.moderate_article": {"queue": "moderation"},
-        "tasks.images.download_thumbnail": {"queue": "default"},
-        "tasks.ranking.rebuild_news_rankings": {"queue": "default"},
-        "tasks.editorial.log_editorial_decision_snapshot": {"queue": "default"},
-        "run_article_intelligence_pipeline": {"queue": "ai_processing"},
-    },
+    task_routes={},
 
 )
 
@@ -121,12 +109,12 @@ celery_app.conf.beat_schedule = {
     "auto-rss-ingestion": {
         "task": "tasks.scrapers.run_all_sources",
         "schedule": 900.0,  # Every 15 minutes
-        "options": {"queue": "ingestion"},
+        "options": {"queue": "default"},
     },
     "autonomous-ingestion-recovery": {
         "task": "tasks.recovery.autonomous_ingestion_recovery",
         "schedule": 3600.0,  # Every hour
-        "options": {"queue": "ingestion"},
+        "options": {"queue": "default"},
     },
     "auto-publish-scheduled-drafts": {
         "task": "check_and_publish_scheduled_drafts_task",
@@ -141,12 +129,12 @@ celery_app.conf.beat_schedule = {
     "trend-prioritization-ai-queue": {
         "task": "tasks.scrapers.run_trend_prioritization_and_ai_queue_task",
         "schedule": 300.0,  # Every 5 minutes
-        "options": {"queue": "ingestion"},
+        "options": {"queue": "default"},
     },
     "periodic-trends-calculation": {
         "task": "tasks.scrapers.run_trends_calculation_task",
         "schedule": 300.0,  # Every 5 minutes
-        "options": {"queue": "ingestion"},
+        "options": {"queue": "default"},
     },
     "periodic-news-ranking-and-expiry": {
         "task": "tasks.ranking.rebuild_news_rankings",
