@@ -7,6 +7,8 @@ import { HeroScene } from "./v2/HeroScene";
 import { useTrending } from "@/components/hooks/articles/useArticles";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 
+import { MediaService } from "@/domains/article/media";
+
 interface HeroCarouselProps {
   items?: FeaturedArticle[];
   editorPicks?: FeaturedArticle[];
@@ -30,9 +32,13 @@ export function HeroCarousel({
 
   const clientFeatured = mapArticlesToFeatured(rawClientArticles);
   
-  const isLoading = initialItems.length === 0 && trendingQuery.isLoading;
-  const isError = initialItems.length === 0 && trendingQuery.isError;
-  const isEmpty = initialItems.length === 0 && !trendingQuery.isLoading && clientFeatured.length === 0;
+  // Strictly filter items to only those with genuine publisher editorial thumbnails
+  const genuineInitial = initialItems.filter((a) => MediaService.hasGenuineThumbnail(a));
+  const genuineClient = clientFeatured.filter((a) => MediaService.hasGenuineThumbnail(a));
+
+  const isLoading = genuineInitial.length === 0 && trendingQuery.isLoading;
+  const isError = genuineInitial.length === 0 && trendingQuery.isError;
+  const isEmpty = genuineInitial.length === 0 && !trendingQuery.isLoading && genuineClient.length === 0;
 
   const skeletonItems = Array.from({ length: 12 }).map((_, i) => ({
     id: `skeleton-${i}`,
@@ -41,10 +47,10 @@ export function HeroCarousel({
     thumbnail: "",
   } as FeaturedArticle));
 
-  const items = isLoading ? skeletonItems : (initialItems.length > 0 ? initialItems : clientFeatured);
-  const editorPicks = isLoading ? skeletonItems.slice(0, 4) : (initialEditorPicks.length > 0 ? initialEditorPicks : clientFeatured.slice(1, 5));
-  const latest = isLoading ? skeletonItems.slice(0, 4) : (initialLatest.length > 0 ? initialLatest : clientFeatured.slice(1, 5));
-  const aiInsights = isLoading ? skeletonItems.slice(0, 4) : (initialAiInsights.length > 0 ? initialAiInsights : clientFeatured.slice(1, 5));
+  const items = isLoading ? skeletonItems : (genuineInitial.length > 0 ? genuineInitial : genuineClient);
+  const editorPicks = isLoading ? skeletonItems.slice(0, 4) : (initialEditorPicks.length > 0 ? initialEditorPicks : items.slice(1, 5));
+  const latest = isLoading ? skeletonItems.slice(0, 4) : (initialLatest.length > 0 ? initialLatest : items.slice(1, 5));
+  const aiInsights = isLoading ? skeletonItems.slice(0, 4) : (initialAiInsights.length > 0 ? initialAiInsights : items.slice(1, 5));
 
   useEffect(() => {
     setMounted(true);

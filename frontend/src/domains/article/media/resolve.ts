@@ -58,3 +58,23 @@ export function resolve(dto: BackendArticleDTO | null | undefined): ResolvedMedi
   // Final Fallback
   return { url: null, source: "fallback" };
 }
+
+/**
+ * hasGenuineThumbnail — Checks if an article possesses a genuine, verified publisher editorial image.
+ * Returns false if the article would otherwise rely on synthetic or category fallback images.
+ */
+export function hasGenuineThumbnail(dto: any): boolean {
+  if (!dto) return false;
+  const isVal = (u?: string | null) => 
+    Boolean(u && typeof u === "string" && (u.startsWith("http://") || u.startsWith("https://")) && !u.includes("example.com") && !isFailed(u));
+
+  if (isVal(dto.thumbnail_url)) return true;
+  if (isVal(dto.image_url)) return true;
+  if (dto.hero_image && !isFailed(normalizeUploadPath(dto.hero_image) || "")) return true;
+  if (dto.thumbnail_local && !isFailed(normalizeUploadPath(dto.thumbnail_local) || "")) return true;
+  if (dto.cover_image && !isFailed(normalizeUploadPath(dto.cover_image) || "")) return true;
+  if (isVal(dto.thumbnail)) return true;
+  if (isVal(dto.image)) return true;
+
+  return false;
+}

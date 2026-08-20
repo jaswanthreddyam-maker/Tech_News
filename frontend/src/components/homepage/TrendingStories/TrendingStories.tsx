@@ -19,6 +19,7 @@ import {
 
 import { useQueryClient } from "@tanstack/react-query";
 import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
+import { MediaService } from "@/domains/article/media";
 
 /**
  * TrendingStories — Clean Architectural Orchestrator (v3.3 Compositor-Friendly Transforms)
@@ -146,7 +147,10 @@ export function TrendingStories() {
       ? data
       : (data as any)?.data || [];
 
-    if (!rawResults || rawResults.length === 0) {
+    // Strictly filter out any articles without genuine publisher thumbnails
+    const genuineResults = rawResults.filter((r) => MediaService.hasGenuineThumbnail(r));
+
+    if (!genuineResults || genuineResults.length === 0) {
       return {
         featured: null,
         compact: [],
@@ -156,7 +160,7 @@ export function TrendingStories() {
     }
 
     const title = "Trending Now";
-    const articles: FeedArticle[] = rawResults.map(normalizeArticle);
+    const articles: FeedArticle[] = genuineResults.map(normalizeArticle);
 
     if (process.env.NODE_ENV === "development") {
       validateCanonicalArticles(articles as any);

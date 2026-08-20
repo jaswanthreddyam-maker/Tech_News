@@ -64,14 +64,16 @@ def sort_candidates_deterministically(candidates: list) -> list:
         art_id = str(art.id)
 
         # Sort key:
-        # 1. -eff_score_band (5-point buckets) so source authority can act as a tiebreaker for similar scores
-        # 2. -src_rank (descending source authority)
-        # 3. -eff_score (exact score for exact ordering within same authority)
-        # 4. -imp_score
-        # 5. -pub_ts (newer published timestamp first)
-        # 6. art_id
+        # 1. -has_thumb (prioritize stories with verified genuine editorial imagery)
+        # 2. -eff_score_band (5-point buckets) so source authority can act as a tiebreaker for similar scores
+        # 3. -src_rank (descending source authority)
+        # 4. -eff_score (exact score for exact ordering within same authority)
+        # 5. -imp_score
+        # 6. -pub_ts (newer published timestamp first)
+        # 7. art_id
+        has_thumb = 1 if (art.thumbnail_url and str(art.thumbnail_url).startswith("http") and not any(bad in str(art.thumbnail_url).lower() for bad in ["1x1", "pixel", "tracker", "favicon", "gravatar"])) else 0
         eff_score_band = round(eff_score / 5.0) * 5.0
-        return (-eff_score_band, -src_rank, -eff_score, -imp_score, -pub_ts, art_id)
+        return (-has_thumb, -eff_score_band, -src_rank, -eff_score, -imp_score, -pub_ts, art_id)
 
     candidates.sort(key=get_sort_key)
     return candidates
