@@ -95,7 +95,7 @@ function EmptyReadingDesk() {
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.7, delay: 0.3 }}
-          className="relative w-full bg-[#0D0D0D] border border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_20px_50px_rgba(0,0,0,0.85)] rounded-2xl p-8 sm:p-10 lg:p-12 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_30px_70px_rgba(0,0,0,0.95)] hover:border-white/15 [transform-style:preserve-3d] [transform:rotateX(2deg)] hover:[transform:rotateX(0deg)] group/card"
+          className="relative w-full bg-[#0D0D0D] border-[3px] reading-desk-card-glow rounded-2xl p-8 sm:p-10 lg:p-12 transition-all duration-500 hover:-translate-y-1.5 [transform-style:preserve-3d] [transform:rotateX(2deg)] hover:[transform:rotateX(0deg)] group/card"
         >
           {/* Subtle Paper Grain Specular Highlight */}
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none rounded-2xl" />
@@ -188,7 +188,7 @@ function ReadingDeskContent({ sessions }: { sessions: Session[] }) {
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.7, delay: 0.3 }}
-          className="relative w-full bg-[#0D0D0D] border border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_20px_50px_rgba(0,0,0,0.85)] rounded-2xl p-8 sm:p-10 lg:p-12 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_30px_70px_rgba(0,0,0,0.95)] hover:border-white/15 [transform-style:preserve-3d] [transform:rotateX(2deg)] hover:[transform:rotateX(0deg)] group/card"
+          className="relative w-full bg-[#0D0D0D] border-[3px] reading-desk-card-glow rounded-2xl p-8 sm:p-10 lg:p-12 transition-all duration-500 hover:-translate-y-1.5 [transform-style:preserve-3d] [transform:rotateX(2deg)] hover:[transform:rotateX(0deg)] group/card"
         >
           {/* Subtle Paper Grain Specular Highlight */}
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none rounded-2xl" />

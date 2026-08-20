@@ -572,5 +572,38 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ *  LIBRARY READING CARD 3PX DYNAMIC BORDER COLOR SHIFT & GLOW
+ * ═══════════════════════════════════════════════════════════════════ */
+@keyframes reading-card-border-shift {
+  0%, 100% {
+    border-color: #2563eb; /* Royal / Dark Blue */
+    box-shadow: 0 0 24px rgba(37, 99, 235, 0.28), inset 0 0 18px rgba(37, 99, 235, 0.08), 0 20px 50px rgba(0, 0, 0, 0.85);
+  }
+  33.33% {
+    border-color: #9333ea; /* Vibrant Purple */
+    box-shadow: 0 0 28px rgba(147, 51, 234, 0.32), inset 0 0 18px rgba(147, 51, 234, 0.1), 0 20px 50px rgba(0, 0, 0, 0.85);
+  }
+  66.66% {
+    border-color: #e11d48; /* Crimson Red */
+    box-shadow: 0 0 24px rgba(225, 29, 72, 0.28), inset 0 0 18px rgba(225, 29, 72, 0.08), 0 20px 50px rgba(0, 0, 0, 0.85);
+  }
+}
+
+.reading-desk-card-glow {
+  border-width: 3px !important;
+  border-style: solid !important;
+  animation: reading-card-border-shift 9s ease-in-out infinite;
+  will-change: border-color, box-shadow;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading-desk-card-glow {
+    animation: none !important;
+    border-color: #9333ea;
+    box-shadow: 0 0 24px rgba(147, 51, 234, 0.25), 0 20px 50px rgba(0, 0, 0, 0.85);
+  }
+}
+
 
 
