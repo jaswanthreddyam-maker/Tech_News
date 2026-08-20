@@ -481,11 +481,25 @@ export function GlobalAssistant() {
             {/* Empty State */}
             {messages.length === 0 && (
               <div className="py-14 text-center space-y-6">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary mx-auto flex items-center justify-center border border-primary/20 shadow-inner">
-                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
+                <m.div
+                  animate={{
+                    color: ["#1e40af", "#8b5cf6", "#be123c", "#1e40af"],
+                    filter: [
+                      "drop-shadow(0 0 16px rgba(30, 64, 175, 0.85))",
+                      "drop-shadow(0 0 22px rgba(139, 92, 246, 0.95))",
+                      "drop-shadow(0 0 18px rgba(190, 18, 60, 0.85))",
+                      "drop-shadow(0 0 16px rgba(30, 64, 175, 0.85))",
+                    ],
+                  }}
+                  transition={{
+                    duration: 6,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className="flex items-center justify-center mx-auto"
+                >
+                  <AiStarsIcon className="w-16 h-16" strokeWidth={2.4} />
+                </m.div>
                 <div>
                   <h3 className="font-semibold text-lg text-foreground">How can I assist your research today?</h3>
                   <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
@@ -627,7 +641,7 @@ export function GlobalAssistant() {
 
         {/* Composer Area */}
         <div className="p-4 border-t border-border/60 bg-card/80 backdrop-blur-sm">
-          <form onSubmit={handleSubmit} className="max-w-2xl mx-auto relative flex items-center">
+          <form onSubmit={handleSubmit} className="max-w-2xl mx-auto relative flex items-center assistant-input-glow rounded-2xl bg-background/95 transition-all">
             <input
               ref={inputRef}
               suppressHydrationWarning
@@ -636,7 +650,7 @@ export function GlobalAssistant() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDownInput}
               placeholder="Ask anything across your knowledge and Tech News Today..."
-              className="w-full pl-4 pr-24 py-3.5 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow text-sm text-foreground placeholder:text-muted-foreground shadow-inner"
+              className="w-full pl-4 pr-24 py-3.5 bg-transparent border-0 focus:outline-none focus:ring-0 text-sm text-foreground placeholder:text-muted-foreground/70"
               disabled={isGenerating}
             />
 

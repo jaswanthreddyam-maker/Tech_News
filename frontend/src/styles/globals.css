@@ -605,5 +605,38 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ *  ASSISTANT INPUT BOX 2PX DYNAMIC BORDER COLOR SHIFT & GLOW
+ * ═══════════════════════════════════════════════════════════════════ */
+@keyframes assistant-input-border-shift {
+  0%, 100% {
+    border-color: #2563eb;
+    box-shadow: 0 0 16px rgba(37, 99, 235, 0.35), inset 0 0 10px rgba(37, 99, 235, 0.08);
+  }
+  33.33% {
+    border-color: #9333ea;
+    box-shadow: 0 0 20px rgba(147, 51, 234, 0.4), inset 0 0 10px rgba(147, 51, 234, 0.1);
+  }
+  66.66% {
+    border-color: #e11d48;
+    box-shadow: 0 0 16px rgba(225, 29, 72, 0.35), inset 0 0 10px rgba(225, 29, 72, 0.08);
+  }
+}
+
+.assistant-input-glow {
+  border-width: 2px !important;
+  border-style: solid !important;
+  animation: assistant-input-border-shift 9s ease-in-out infinite;
+  will-change: border-color, box-shadow;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-input-glow {
+    animation: none !important;
+    border-color: #9333ea;
+    box-shadow: 0 0 16px rgba(147, 51, 234, 0.3);
+  }
+}
+
 
 
