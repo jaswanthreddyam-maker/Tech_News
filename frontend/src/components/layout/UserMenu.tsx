@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SettingsDialog } from "@/components/layout/SettingsDialog";
-import { LogOut, Settings, Shield, User as UserIcon, Mail } from "lucide-react";
+import { LogOut, Equal, Shield, User as UserIcon, Mail } from "lucide-react";
 
 export function UserMenu() {
   const { user, logoutUser } = useAppStore();
@@ -42,7 +42,7 @@ export function UserMenu() {
               className="h-9 w-9 rounded-full border border-white/10 bg-white/[0.04] text-foreground hover:border-white/25 hover:bg-white/[0.08] transition-all"
               aria-label="Settings & Theme"
             >
-              <Settings className="h-4 w-4 text-foreground" />
+              <Equal className="h-4 w-4 text-foreground" strokeWidth={2} />
             </Button>
           }
         />
@@ -81,7 +81,7 @@ export function UserMenu() {
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
-            <Settings className="h-4 w-4" />
+            <Equal className="h-4 w-4" strokeWidth={2} />
             Preferences & Theme
           </DropdownMenuItem>
           <DropdownMenuSeparator />
