@@ -131,7 +131,7 @@ class AutoReplenishmentService:
             else:
                 ingest_metrics = {"test_mode": True}
 
-            # 6. Process newly fetched/scraped raw articles to editorial ProcessedArticle & ArticleReadModel (top 20 priority batch)
+            # 6. Process newly fetched/scraped raw articles to editorial ProcessedArticle & ArticleReadModel (top 45 priority batch)
             raw_stmt = (
                 select(RawArticle.id)
                 .where(RawArticle.status.in_(["scraped", "fetched", "ai_queued"]))
@@ -139,7 +139,7 @@ class AutoReplenishmentService:
             )
             raw_ids = (await db.execute(raw_stmt)).scalars().all()
             processed_count = 0
-            for r_id in raw_ids[:20]:
+            for r_id in raw_ids[:45]:
                 try:
                     await process_raw_article_to_editorial(db, r_id)
                     processed_count += 1
@@ -182,10 +182,10 @@ class AutoReplenishmentService:
                 "enabled": True,
             },
             {
-                "name": "Google Blog",
+                "name": "Google AI Blog",
                 "category": "official",
                 "method": "rss",
-                "url": "https://blog.google/rss/",
+                "url": "https://blog.google/technology/ai/rss/",
                 "credibility_score": 98,
                 "crawl_interval": 900,
                 "enabled": True,
@@ -226,6 +226,24 @@ class AutoReplenishmentService:
                 "crawl_interval": 1200,
                 "enabled": True,
             },
+            {
+                "name": "Wired Top Stories",
+                "category": "editorial",
+                "method": "rss",
+                "url": "https://www.wired.com/feed/rss",
+                "credibility_score": 90,
+                "crawl_interval": 900,
+                "enabled": True,
+            },
+            {
+                "name": "VentureBeat AI",
+                "category": "editorial",
+                "method": "rss",
+                "url": "https://venturebeat.com/category/ai/feed/",
+                "credibility_score": 88,
+                "crawl_interval": 900,
+                "enabled": True,
+            },
         ]
 
         for s_data in default_sources:
@@ -233,6 +251,11 @@ class AutoReplenishmentService:
             if existing.scalars().first() is None:
                 src = Source(**s_data)
                 db.add(src)
+            else:
+                existing_src = existing.scalars().first()
+                if existing_src:
+                    existing_src.url = s_data["url"]
+                    existing_src.enabled = True
 
         await db.commit()
         logger.info("AutoReplenishment: Seeded default RSS sources.")

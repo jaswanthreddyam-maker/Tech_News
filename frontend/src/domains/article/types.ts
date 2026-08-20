@@ -7,6 +7,7 @@ export type MediaSource =
   | "thumbnail_url"
   | "image_url"
   | "cover_image"
+  | "category_fallback"
   | "fallback";
 
 export interface ResolvedMedia {

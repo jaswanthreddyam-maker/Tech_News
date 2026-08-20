@@ -73,7 +73,7 @@ const jsonLd = {
 export default async function HomePage() {
   let initialItems: any[] = [];
   try {
-    const raw = await getArticles({ limit: 10, sort_by: "trending" });
+    const raw = await getArticles({ limit: 12, sort_by: "trending" });
     const rawArticles = Array.isArray(raw) ? raw : (raw as any)?.data || [];
     initialItems = mapArticlesToFeatured(rawArticles);
   } catch (err) {

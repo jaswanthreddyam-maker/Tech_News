@@ -1,6 +1,7 @@
 import { BackendArticleDTO, ResolvedMedia } from "../types";
 import { normalizeUploadPath } from "./normalizePath";
 import { isFailed } from "./failedImages";
+import { getCategoryFallbackImage } from "./categoryFallbacks";
 
 /**
  * resolve — Pure media resolution logic evaluating DTO fields in priority order
@@ -40,14 +41,6 @@ export function resolve(dto: BackendArticleDTO | null | undefined): ResolvedMedi
     }
   }
 
-  // Priority 4: image_url
-  if (dto.image_url) {
-    const norm = normalizeUploadPath(dto.image_url);
-    if (norm && !isFailed(norm)) {
-      return { url: norm, source: "image_url" };
-    }
-  }
-
   // Priority 5: cover_image
   if (dto.cover_image) {
     const norm = normalizeUploadPath(dto.cover_image);
@@ -56,6 +49,12 @@ export function resolve(dto: BackendArticleDTO | null | undefined): ResolvedMedi
     }
   }
 
-  // Fallback
+  // Priority 6: Themed Category HD Editorial Fallback
+  const fallbackUrl = getCategoryFallbackImage(dto.category, dto.id || dto.title);
+  if (fallbackUrl) {
+    return { url: fallbackUrl, source: "category_fallback" };
+  }
+
+  // Final Fallback
   return { url: null, source: "fallback" };
 }

@@ -28,8 +28,9 @@ export function ArticleImage({
 }: ArticleImageProps) {
   const [hasError, setHasError] = useState(false);
 
-  const isFailed = src ? MediaService.isFailed(src) : false;
-  const isInvalid = !src || hasError || isFailed;
+  const resolvedSrc = (!hasError && src && !MediaService.isFailed(src)) 
+    ? src 
+    : MediaService.getCategoryFallbackImage(category, alt);
 
   const handleError = () => {
     if (src) {
@@ -39,13 +40,11 @@ export function ArticleImage({
   };
 
   return (
-    <div className={`relative overflow-hidden bg-muted flex-none ${aspectRatio} ${className}`}>
-      {isInvalid || !src ? (
-        <CategoryPlaceholder category={category} className="absolute inset-0" />
-      ) : (
+    <div className={`relative overflow-hidden bg-neutral-950 flex-none ${aspectRatio} ${className}`}>
+      {resolvedSrc ? (
         <>
           <Image
-            src={src}
+            src={resolvedSrc}
             alt=""
             fill
             className="object-cover blur-xl scale-125 opacity-70 select-none pointer-events-none"
@@ -53,16 +52,18 @@ export function ArticleImage({
             unoptimized
           />
           <Image
-            src={src}
+            src={resolvedSrc}
             alt={alt}
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            className="object-contain object-center p-1.5 relative z-10 drop-shadow-md"
+            className="object-cover object-center relative z-10 drop-shadow-md transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
             unoptimized
             onError={handleError}
           />
         </>
+      ) : (
+        <CategoryPlaceholder category={category} className="absolute inset-0" />
       )}
     </div>
   );

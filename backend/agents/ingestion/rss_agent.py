@@ -71,7 +71,7 @@ class RSSIngestionAgent(BaseAgent):
 
     def _parse_rss_item(self, item: ET.Element) -> dict[str, Any] | None:
         """
-        Parse single RSS 2.0 item node.
+        Parse single RSS 2.0 item node, extracting title, url, summary, date, and thumbnail image.
         """
         try:
             title = self._find_xml_text(item, "title")
@@ -82,11 +82,14 @@ class RSSIngestionAgent(BaseAgent):
             if not title or not link:
                 return None
 
+            thumbnail_url = self._extract_image_url(item, description)
+
             return {
                 "title": title.strip(),
                 "url": link.strip(),
                 "summary": description.strip() if description else "",
                 "published_at": pub_date.strip() if pub_date else None,
+                "thumbnail_url": thumbnail_url,
                 "raw_html": description or "" # Fallback raw HTML content
             }
         except Exception as e:
@@ -95,10 +98,9 @@ class RSSIngestionAgent(BaseAgent):
 
     def _parse_atom_entry(self, entry: ET.Element) -> dict[str, Any] | None:
         """
-        Parse single Atom feed entry node.
+        Parse single Atom feed entry node, extracting title, url, summary, date, and thumbnail image.
         """
         try:
-            # Strip namespaces in elements
             title = self._find_xml_text(entry, "title")
 
             # Atom links are typically attributes <link href="..." />
@@ -106,9 +108,9 @@ class RSSIngestionAgent(BaseAgent):
             for child in entry:
                 tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
                 if tag == "link":
-                    link = child.attrib.get("href")
-                    if link:
-                        break
+                    rel = child.attrib.get("rel", "alternate")
+                    if rel in ("alternate", "canonical") or not link:
+                        link = child.attrib.get("href")
 
             summary = self._find_xml_text(entry, "summary") or self._find_xml_text(entry, "content")
             published = self._find_xml_text(entry, "published") or self._find_xml_text(entry, "updated")
@@ -116,16 +118,62 @@ class RSSIngestionAgent(BaseAgent):
             if not title or not link:
                 return None
 
+            thumbnail_url = self._extract_image_url(entry, summary)
+
             return {
                 "title": title.strip(),
                 "url": link.strip(),
                 "summary": summary.strip() if summary else "",
                 "published_at": published.strip() if published else None,
+                "thumbnail_url": thumbnail_url,
                 "raw_html": summary or ""
             }
         except Exception as e:
             self.logger.warning(f"Failed parsing individual Atom entry: {e!s}")
             return None
+
+    def _extract_image_url(self, element: ET.Element, html_content: str | None) -> str | None:
+        """
+        Extract image/thumbnail URL from media:content, media:thumbnail, enclosure, or HTML content.
+        """
+        import re
+
+        # 1. Check direct child nodes (media:content, media:thumbnail, enclosure)
+        for child in element:
+            tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+            
+            if tag in ("thumbnail", "content") and "url" in child.attrib:
+                url = child.attrib["url"]
+                medium = child.attrib.get("medium", "")
+                if medium == "image" or not medium:
+                    if self._is_valid_image_url(url):
+                        return url
+
+            if tag == "enclosure" and "url" in child.attrib:
+                enc_type = child.attrib.get("type", "")
+                if "image" in enc_type or self._is_valid_image_url(child.attrib["url"]):
+                    return child.attrib["url"]
+
+        # 2. Check for embedded <img> in description/content HTML
+        if html_content:
+            img_match = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html_content, re.IGNORECASE)
+            if img_match:
+                candidate = img_match.group(1)
+                if self._is_valid_image_url(candidate):
+                    return candidate
+
+        return None
+
+    def _is_valid_image_url(self, url: str | None) -> bool:
+        if not url or not isinstance(url, str):
+            return False
+        url_lower = url.lower().strip()
+        if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
+            return False
+        # Filter out 1x1 tracking pixels and icons
+        if any(bad in url_lower for bad in ["1x1", "pixel", "tracker", "favicon", "gravatar"]):
+            return False
+        return True
 
     def _find_xml_text(self, parent: ET.Element, tag_name: str) -> str | None:
         """

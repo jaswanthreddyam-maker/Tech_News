@@ -4,15 +4,15 @@ import { MediaService } from "@/domains/article/media";
 
 export function mapArticleToFeatured(a: Article): FeaturedArticle {
   const media = MediaService.resolve(a as any);
-  const rawThumbUrl = (a as any).thumbnail_url;
-  const validUrl = rawThumbUrl && (rawThumbUrl.startsWith("http://") || rawThumbUrl.startsWith("https://")) ? rawThumbUrl : null;
+  const resolvedImg = media.url || (a as any).thumbnail_url || (a as any).image_url || MediaService.getCategoryFallbackImage(a.category, a.id || a.title);
+
   return {
     id: String(a.id),
     slug: a.slug,
     title: a.title,
     summary: a.summary || "",
-    thumbnail: validUrl || media.url || a.thumbnail_local || (a as any).hero_image || "https://images.unsplash.com/photo-1677442136019-21780efad99a?auto=format&fit=crop&w=1200&q=80",
-    thumbnail_url: validUrl || undefined,
+    thumbnail: resolvedImg,
+    thumbnail_url: resolvedImg,
     thumbnail_local: a.thumbnail_local || undefined,
     source: a.source,
     publishedAt: a.published_at,

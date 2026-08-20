@@ -352,6 +352,7 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                         "canonical_extraction_status": acquisition_decision.canonical_extraction_status,
                         "fallback_reason": acquisition_decision.fallback_reason,
                         "content_revision": 1,
+                        "thumbnail_url": item.get("thumbnail_url") or (getattr(extraction_res, "top_image_url", None) if extraction_res else None),
                         "extraction_confidence": quality_res.get("confidence", 0.0),
                         "quality_metrics": {
                             "paragraph_count": quality_res.get("paragraph_count", 0),
@@ -853,12 +854,25 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
             await db.rollback()
             return {"status": "error", "message": "Failed to persist telemetry."}
 
-    # 14. Background Thumbnail Download
+    # 14. Background Thumbnail Download & Candidate Resolution
     from app.services.ingestion.image_helper import extract_all_candidate_urls
+
+    raw_meta = {}
+    if raw_art.article_metadata:
+        try:
+            raw_meta = json.loads(raw_art.article_metadata) if isinstance(raw_art.article_metadata, str) else raw_art.article_metadata
+        except Exception:
+            pass
+
+    thumb_from_meta = raw_meta.get("thumbnail_url") if isinstance(raw_meta, dict) else None
+    if not getattr(proc_art, "thumbnail_url", None) and thumb_from_meta:
+        proc_art.thumbnail_url = thumb_from_meta
 
     candidates = []
     if not getattr(proc_art, "thumbnail_url", None):
         candidates = extract_all_candidate_urls(raw_html, raw_art.url)
+        if candidates:
+            proc_art.thumbnail_url = candidates[0]
         # Flush session to assign ID to new proc_art before Celery tasks
         await db.flush()
 
@@ -874,7 +888,7 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
             run_article_intelligence_pipeline.apply_async(args=[proc_art.id], retry=False)
             logger.info(f"Processor: Enqueued Article Intelligence Pipeline for ProcessedArticle ID {proc_art.id}")
 
-            if not getattr(proc_art, "thumbnail_url", None):
+            if candidates:
                 from app.core.config import settings
                 download_thumbnail_task.apply_async(
                     args=[proc_art.id, candidates[:settings.MAX_THUMBNAIL_CANDIDATES] if candidates else []],
@@ -963,6 +977,10 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         existing_read.category = category_name
         existing_read.freshness_score = float(proc_art.freshness_score) if proc_art.freshness_score else 0.0
         existing_read.final_score = float(proc_art.final_score) if proc_art.final_score else 0.0
+        existing_read.thumbnail_url = getattr(proc_art, "thumbnail_url", None)
+        existing_read.thumbnail_local = getattr(proc_art, "thumbnail_local", None)
+        if getattr(proc_art, "thumbnail_url", None):
+            existing_read.images = [proc_art.thumbnail_url]
     else:
         new_read = ArticleReadModel(
             id=str(proc_art.id),
@@ -979,6 +997,9 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
             reading_time=proc_art.reading_time or 1,
             tags=tags_list,
             category=category_name,
+            thumbnail_url=getattr(proc_art, "thumbnail_url", None),
+            thumbnail_local=getattr(proc_art, "thumbnail_local", None),
+            images=[proc_art.thumbnail_url] if getattr(proc_art, "thumbnail_url", None) else [],
             freshness_score=float(proc_art.freshness_score) if proc_art.freshness_score else 0.0,
             engagement_score=float(proc_art.engagement_score) if proc_art.engagement_score else 0.0,
             final_score=float(proc_art.final_score) if proc_art.final_score else 0.0,

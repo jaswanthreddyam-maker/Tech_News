@@ -146,7 +146,7 @@ class HomepageBuilder:
         sorted_candidates = sort_candidates_deterministically(candidates)
 
         # 5. Apply multi-dimensional diversity filtering
-        max_total = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 10)
+        max_total = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 12)
         selected_items, decisions = apply_diversity_filter(
             sorted_candidates, article_topics, max_total=max_total
         )
@@ -229,8 +229,8 @@ class HomepageBuilder:
         if not final_articles:
             return []
 
-        # Enforce exact Top 10 (or configured limit) homepage story limit
-        homepage_limit = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 10)
+        # Enforce exact Top 12 (or configured limit) homepage story limit
+        homepage_limit = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 12)
         top_articles = final_articles[:homepage_limit]
 
         import hashlib
