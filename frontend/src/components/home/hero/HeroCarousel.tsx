@@ -68,7 +68,7 @@ export function HeroCarousel({
     thumbnail: "",
   } as FeaturedArticle));
 
-  const items = isLoading ? skeletonItems : (genuinePool.length > 0 ? genuinePool : skeletonItems);
+  const items = isLoading ? skeletonItems : (genuinePool.length > 0 ? genuinePool.slice(0, 12) : skeletonItems);
   const editorPicks = isLoading ? skeletonItems.slice(0, 4) : (initialEditorPicks.length > 0 ? initialEditorPicks : items.slice(1, 5));
   const latest = isLoading ? skeletonItems.slice(0, 4) : (initialLatest.length > 0 ? initialLatest : items.slice(1, 5));
   const aiInsights = isLoading ? skeletonItems.slice(0, 4) : (initialAiInsights.length > 0 ? initialAiInsights : items.slice(1, 5));
