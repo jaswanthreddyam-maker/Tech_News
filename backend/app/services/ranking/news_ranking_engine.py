@@ -228,12 +228,14 @@ async def expire_articles(db: AsyncSession) -> dict:
     homepage_affected = False
 
     # ── Circuit Breaker: explicit active_before / expiring_now / active_after ──
+    cutoff_24h = now - timedelta(hours=24)
     active_before_result = await db.execute(
         select(func.count(ProcessedArticle.id))
         .where(
             ProcessedArticle.is_expired == False,
             ProcessedArticle.is_archived == False,
             ProcessedArticle.published_status == "published",
+            ProcessedArticle.published_at >= cutoff_24h,
         )
     )
     active_before = active_before_result.scalar() or 0
@@ -241,7 +243,11 @@ async def expire_articles(db: AsyncSession) -> dict:
     expiring_result = await db.execute(
         select(func.count(ProcessedArticle.id))
         .where(
-            ProcessedArticle.expires_at <= now,
+            or_(
+                ProcessedArticle.expires_at <= now,
+                ProcessedArticle.expires_at == None,
+                ProcessedArticle.published_at < cutoff_24h,
+            ),
             ProcessedArticle.is_expired == False,
             ProcessedArticle.is_archived == False,
             ProcessedArticle.published_status == "published",
@@ -270,7 +276,6 @@ async def expire_articles(db: AsyncSession) -> dict:
 
         # Strict Age Bound: Any article older than 48 hours MUST expire immediately.
         # Only articles < 36 hours old may receive a temporary 2h grace extension during active crawl.
-        cutoff_hard = now - timedelta(hours=48)
         grace_cutoff = now - timedelta(hours=36)
 
         await db.execute(
@@ -295,7 +300,11 @@ async def expire_articles(db: AsyncSession) -> dict:
             ProcessedArticle.final_score,
             ProcessedArticle.expires_at,
         ).where(
-            ProcessedArticle.expires_at <= now,
+            or_(
+                ProcessedArticle.expires_at <= now,
+                ProcessedArticle.expires_at == None,
+                ProcessedArticle.published_at < cutoff_24h,
+            ),
             ProcessedArticle.is_expired == False,
             ProcessedArticle.is_archived == False,
             ProcessedArticle.published_status == "published",
@@ -355,8 +364,13 @@ async def expire_articles(db: AsyncSession) -> dict:
                 .values(is_expired=True, expired_at=now)
             )
 
-            # Preserve ArticleReadModel publication_status='PUBLISHED' for permalinks & emergency fallback.
-            # Do not mutate publication_status to 'EXPIRED' to prevent read model breakage.
+            # Mark ArticleReadModel as EXPIRED to cleanly remove from active reads
+            str_expired_ids = [str(eid) for eid in expired_ids]
+            await db.execute(
+                update(ArticleReadModel)
+                .where(ArticleReadModel.id.in_(str_expired_ids))
+                .values(publication_status="EXPIRED")
+            )
 
             # DO NOT delete RawArticle — canonical crawl evidence
             # DO NOT delete ProcessedArticle — source-of-truth

@@ -614,3 +614,58 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
     desks.sort(key=lambda x: x["display_order"])
     return desks
 
+
+@router.api_route("/rebuild", methods=["GET", "POST"])
+async def trigger_editorial_rebuild(db: AsyncSession = Depends(get_db)):
+    """
+    Manually triggers article expiration, live auto-replenishment,
+    projection reconstruction, and Redis cache invalidation.
+    """
+    from app.services.ranking.news_ranking_engine import expire_articles
+    from app.editorial.homepage_builder import HomepageBuilder
+    from app.services.cache_service import CacheService
+    from app.services.ingestion.replenishment import AutoReplenishmentService
+
+    expire_metrics = await expire_articles(db)
+    repl_metrics = await AutoReplenishmentService.trigger_replenishment_if_needed(db, force=True)
+    homepage_articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
+    category_desks = await HomepageBuilder.build_and_persist_category_desks(db)
+    await CacheService.invalidate_homepage_cache(reason="manual_rebuild_endpoint")
+
+    return {
+        "status": "success",
+        "message": "Editorial projections successfully rebuilt.",
+        "expired_metrics": expire_metrics,
+        "replenishment_metrics": repl_metrics,
+        "homepage_article_count": len(homepage_articles),
+        "homepage_articles": [{"id": a.id, "title": a.title, "published_at": a.published_at} for a in homepage_articles[:5]],
+        "category_desks_count": len(category_desks),
+    }
+
+
+@router.api_route("/flush-and-crawl", methods=["GET", "POST"])
+async def trigger_flush_and_crawl(db: AsyncSession = Depends(get_db)):
+    """
+    Purges expired articles, triggers a full live crawl across all active RSS sources,
+    enriches with Gemini AI, and generates fresh homepage and category desks.
+    """
+    from app.services.ranking.news_ranking_engine import expire_articles
+    from app.services.ingestion.replenishment import AutoReplenishmentService
+    from app.editorial.homepage_builder import HomepageBuilder
+    from app.services.cache_service import CacheService
+
+    expire_metrics = await expire_articles(db)
+    repl_metrics = await AutoReplenishmentService.trigger_replenishment_if_needed(db, force=True)
+    homepage_articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
+    category_desks = await HomepageBuilder.build_and_persist_category_desks(db)
+    await CacheService.invalidate_homepage_cache(reason="flush_and_crawl_endpoint")
+
+    return {
+        "status": "success",
+        "action": "flush_and_crawl",
+        "expired": expire_metrics,
+        "replenishment": repl_metrics,
+        "fresh_homepage_count": len(homepage_articles),
+        "articles": [{"id": a.id, "title": a.title, "published_at": a.published_at} for a in homepage_articles[:10]],
+    }
+
