@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Mail, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { m } from "framer-motion";
+import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
 export function Newsletter() {
   const [email, setEmail] = useState("");
@@ -17,15 +18,16 @@ export function Newsletter() {
     setErrorMessage("");
 
     try {
-      const res = await fetch("/api/v1/newsletter/subscribe", {
+      const baseUrl = typeof window !== "undefined" ? "" : getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/newsletter/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email })
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Subscription failed");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.message || "Subscription failed");
       }
 
       setStatus("success");
@@ -37,7 +39,7 @@ export function Newsletter() {
   };
 
   return (
-    <section className="my-16 w-full flex justify-center relative max-w-lg mx-auto">
+    <section className="my-16 w-full flex justify-center relative max-w-lg mx-auto px-4">
       <div className="w-full">
         <m.div 
           initial="hidden"
@@ -50,7 +52,7 @@ export function Newsletter() {
               transition: { duration: 2.0, ease: [0.22, 1, 0.36, 1] } 
             }
           }}
-          className="relative w-full rounded-[28px] border border-white/10 overflow-hidden bg-black/40 backdrop-blur-xl shadow-2xl"
+          className="relative w-full rounded-3xl border-[3px] reading-desk-card-glow overflow-hidden bg-[#0D0D0D]/90 backdrop-blur-xl shadow-2xl"
         >
           {/* Ambient glow */}
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none" />

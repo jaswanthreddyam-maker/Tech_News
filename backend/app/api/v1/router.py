@@ -29,6 +29,8 @@ from app.api.v1.routes import (
     telemetry,
     topics,
     workspaces,
+    briefing_routes,
+    webhooks,
 )
 from app.newsletter.router import router as newsletter_router
 
@@ -70,8 +72,7 @@ api_router.include_router(experiments.router, prefix="/experiments", tags=["Grow
 api_router.include_router(funnels.router, prefix="/funnels", tags=["Growth"])
 api_router.include_router(cohorts.router, prefix="/cohorts", tags=["Growth"])
 api_router.include_router(intelligence.router, prefix="/intelligence", tags=["Intelligence"])
-from app.api.v1.routes import briefing_routes, webhooks
-
 api_router.include_router(briefing_routes.router)
+api_router.include_router(newsletter_router, prefix="/newsletter", tags=["Newsletter"])
 api_router.include_router(webhooks.router)
 
