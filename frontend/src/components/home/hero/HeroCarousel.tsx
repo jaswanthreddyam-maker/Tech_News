@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { FeaturedArticle } from "./types";
 import { HeroCarouselSkeleton } from "./HeroCarouselSkeleton";
 import { HeroScene } from "./v2/HeroScene";
-import { useTrending } from "@/components/hooks/articles/useArticles";
+import { useTrending, useCategoryDesks } from "@/components/hooks/articles/useArticles";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 
 import { MediaService } from "@/domains/article/media";
@@ -24,21 +24,42 @@ export function HeroCarousel({
 }: HeroCarouselProps) {
   const [mounted, setMounted] = useState(false);
 
-  // Client-side fallback fetch if server items were empty
   const trendingQuery = useTrending();
+  const desksQuery = useCategoryDesks();
+
   const rawClientArticles = Array.isArray(trendingQuery.data)
     ? trendingQuery.data
     : (trendingQuery.data as any)?.data || [];
 
-  const clientFeatured = mapArticlesToFeatured(rawClientArticles);
-  
-  // Strictly filter items to only those with genuine publisher editorial thumbnails
-  const genuineInitial = initialItems.filter((a) => MediaService.hasGenuineThumbnail(a));
-  const genuineClient = clientFeatured.filter((a) => MediaService.hasGenuineThumbnail(a));
+  const clientFeatured = React.useMemo(() => mapArticlesToFeatured(rawClientArticles), [rawClientArticles]);
 
-  const isLoading = genuineInitial.length === 0 && trendingQuery.isLoading;
-  const isError = genuineInitial.length === 0 && trendingQuery.isError;
-  const isEmpty = genuineInitial.length === 0 && !trendingQuery.isLoading && genuineClient.length === 0;
+  const deskFeatured = React.useMemo(() => {
+    const list: any[] = [];
+    if (Array.isArray(desksQuery.data)) {
+      for (const desk of desksQuery.data) {
+        if (desk && Array.isArray(desk.articles)) {
+          list.push(...desk.articles);
+        }
+      }
+    }
+    return mapArticlesToFeatured(list);
+  }, [desksQuery.data]);
+
+  // Pool all genuine-thumbnailed articles from server items, trending query, and category desks
+  const genuinePool = React.useMemo(() => {
+    const map = new Map<string, FeaturedArticle>();
+    for (const art of [...initialItems, ...clientFeatured, ...deskFeatured]) {
+      const artId = String(art.id || art.slug || art.title);
+      if (!map.has(artId) && MediaService.hasGenuineThumbnail(art)) {
+        map.set(artId, art);
+      }
+    }
+    return Array.from(map.values());
+  }, [initialItems, clientFeatured, deskFeatured]);
+
+  const isLoading = genuinePool.length === 0 && (trendingQuery.isLoading || desksQuery.isLoading);
+  const isError = genuinePool.length === 0 && trendingQuery.isError && desksQuery.isError;
+  const isEmpty = genuinePool.length === 0 && !trendingQuery.isLoading && !desksQuery.isLoading;
 
   const skeletonItems = Array.from({ length: 12 }).map((_, i) => ({
     id: `skeleton-${i}`,
@@ -47,7 +68,7 @@ export function HeroCarousel({
     thumbnail: "",
   } as FeaturedArticle));
 
-  const items = isLoading ? skeletonItems : (genuineInitial.length > 0 ? genuineInitial : genuineClient);
+  const items = isLoading ? skeletonItems : (genuinePool.length > 0 ? genuinePool : skeletonItems);
   const editorPicks = isLoading ? skeletonItems.slice(0, 4) : (initialEditorPicks.length > 0 ? initialEditorPicks : items.slice(1, 5));
   const latest = isLoading ? skeletonItems.slice(0, 4) : (initialLatest.length > 0 ? initialLatest : items.slice(1, 5));
   const aiInsights = isLoading ? skeletonItems.slice(0, 4) : (initialAiInsights.length > 0 ? initialAiInsights : items.slice(1, 5));

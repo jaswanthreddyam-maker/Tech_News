@@ -1,6 +1,6 @@
 "use client";
 
-import { useTrending } from "@/components/hooks/articles/useArticles";
+import { useTrending, useCategoryDesks } from "@/components/hooks/articles/useArticles";
 import { useOfflineQueue } from "@/components/reading/tracker/useOfflineQueue";
 import { Sparkles, TrendingUp } from "lucide-react";
 import { useMemo, useRef, useState, useEffect } from "react";
@@ -40,10 +40,11 @@ export function TrendingStories() {
   const { enqueue } = useOfflineQueue();
 
   const trendingQuery = useTrending();
+  const desksQuery = useCategoryDesks();
 
   const data = trendingQuery.data;
-  const isLoading = trendingQuery.isLoading;
-  const error = trendingQuery.isError;
+  const isLoading = trendingQuery.isLoading && desksQuery.isLoading;
+  const error = trendingQuery.isError && desksQuery.isError;
 
   // Animation Refs & Hooks
   const sectionRef = useRef<HTMLElement>(null);
@@ -142,13 +143,32 @@ export function TrendingStories() {
   };
 
   // Memoized Feed Transformer & Partitioning
+  // Pool genuine-thumbnailed articles from both trending feed AND category desks
   const { featured, compact, isPersonalized, titleText } = useMemo(() => {
     const rawResults: FeedResponseItem[] = Array.isArray(data)
       ? data
       : (data as any)?.data || [];
 
-    // Strictly filter out any articles without genuine publisher thumbnails
-    const genuineResults = rawResults.filter((r) => MediaService.hasGenuineThumbnail(r));
+    // Collect all category desk articles as additional pool
+    const deskArticles: FeedResponseItem[] = [];
+    if (Array.isArray(desksQuery.data)) {
+      for (const desk of desksQuery.data) {
+        if (desk && Array.isArray(desk.articles)) {
+          deskArticles.push(...desk.articles);
+        }
+      }
+    }
+
+    // Deduplicate by article ID across both sources, keeping genuine-thumbnailed only
+    const seenIds = new Set<string>();
+    const genuineResults: FeedResponseItem[] = [];
+    for (const r of [...rawResults, ...deskArticles]) {
+      const artId = String((r as any).id || (r as any).slug || (r as any).title);
+      if (!seenIds.has(artId) && MediaService.hasGenuineThumbnail(r)) {
+        seenIds.add(artId);
+        genuineResults.push(r);
+      }
+    }
 
     if (!genuineResults || genuineResults.length === 0) {
       return {
@@ -174,7 +194,7 @@ export function TrendingStories() {
       isPersonalized: false,
       titleText: title,
     };
-  }, [data]);
+  }, [data, desksQuery.data]);
 
   if (isLoading) {
     return <StorySkeleton />;
