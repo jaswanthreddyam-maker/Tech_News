@@ -19,14 +19,30 @@ export function Newsletter() {
 
     try {
       const baseUrl = typeof window !== "undefined" ? "" : getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/newsletter/subscribe`, {
+      
+      // Subscribe directly to the Daily AI Briefing delivery engine
+      const briefingRes = await fetch(`${baseUrl}/api/v1/briefing/preferences`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          enabled: true,
+          delivery_time: "08:00",
+          timezone: (typeof Intl !== "undefined" && Intl.DateTimeFormat().resolvedOptions().timeZone) || "Asia/Kolkata",
+          story_count: 5,
+          topics: ["artificial-intelligence", "technology", "cybersecurity"]
+        })
+      });
+
+      // Best-effort sync with newsletter table
+      fetch(`${baseUrl}/api/v1/newsletter/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email })
-      });
+      }).catch(() => {});
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+      if (!briefingRes.ok) {
+        const data = await briefingRes.json().catch(() => ({}));
         throw new Error(data.detail || data.message || "Subscription failed");
       }
 
@@ -34,7 +50,7 @@ export function Newsletter() {
       setEmail("");
     } catch (err: any) {
       setStatus("error");
-      setErrorMessage(err.message || "Something went wrong.");
+      setErrorMessage(err.message || "Unable to subscribe. Please try again.");
     }
   };
 
