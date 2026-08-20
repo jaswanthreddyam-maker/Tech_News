@@ -354,7 +354,7 @@ class HomepageBuilder:
             .where(
                 and_(
                     ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(ArticleReadModel.publication_status == None, ArticleReadModel.publication_status != "EXPIRED"),
                     ArticleReadModel.published_at >= cutoff,
                     or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
                     or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
@@ -381,7 +381,7 @@ class HomepageBuilder:
                 .where(
                     and_(
                         ArticleReadModel.is_test_data == False,
-                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(ArticleReadModel.publication_status == None, ArticleReadModel.publication_status != "EXPIRED"),
                         ArticleReadModel.published_at >= fallback_cutoff,
                         or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
                         or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),

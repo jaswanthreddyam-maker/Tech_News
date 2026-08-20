@@ -598,7 +598,19 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
     reading_time = calculate_reading_time(plain_text)
 
     # 6. Slugification
-    slug = generate_slug(raw_art.title)
+    base_slug = generate_slug(raw_art.title)
+    if not base_slug:
+        base_slug = f"article-{raw_id}"
+    slug_check = await db.execute(
+        select(ProcessedArticle.id).where(
+            ProcessedArticle.slug == base_slug,
+            ProcessedArticle.raw_article_id != raw_id
+        )
+    )
+    if slug_check.scalars().first():
+        slug = f"{base_slug}-{raw_id}"
+    else:
+        slug = base_slug
 
     # 8. SEO Metadata
     seo_meta = generate_seo_metadata(raw_art.title, plain_text)
@@ -725,9 +737,19 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         category_id = map_category_id(raw_art.title, plain_text, cat_map, source_name)
 
     # 12. Write or Update in processed_articles
-    existing_stmt = select(ProcessedArticle).where(ProcessedArticle.raw_article_id == raw_id)
+    from sqlalchemy import or_
+    existing_stmt = select(ProcessedArticle).where(
+        or_(
+            ProcessedArticle.raw_article_id == raw_id,
+            ProcessedArticle.slug == base_slug,
+            ProcessedArticle.slug == slug
+        )
+    )
     existing_res = await db.execute(existing_stmt)
     proc_art = existing_res.scalars().first()
+    if proc_art:
+        proc_art.raw_article_id = raw_id
+        proc_art.slug = slug
 
     # Resolve exact category name for the real-time event metadata payload
     try:
@@ -841,19 +863,29 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
         await db.flush()
 
     try:
-        from app.tasks.article_intelligence import run_article_intelligence_pipeline
-        from celery_app import download_thumbnail_task
+        from app.core.redis import get_redis_client
+        redis_available = get_redis_client() is not None
 
-        proc_art.embedding_status = "queued"
-        run_article_intelligence_pipeline.delay(proc_art.id)
-        logger.info(f"Processor: Enqueued Article Intelligence Pipeline for ProcessedArticle ID {proc_art.id}")
+        if redis_available:
+            from app.tasks.article_intelligence import run_article_intelligence_pipeline
+            from celery_app import download_thumbnail_task
 
-        if not getattr(proc_art, "thumbnail_url", None):
-            from app.core.config import settings
-            download_thumbnail_task.delay(proc_art.id, candidates[:settings.MAX_THUMBNAIL_CANDIDATES] if candidates else [])
-            logger.info(f"Processor: Enqueued background thumbnail download for ProcessedArticle ID {proc_art.id}")
+            proc_art.embedding_status = "queued"
+            run_article_intelligence_pipeline.apply_async(args=[proc_art.id], retry=False)
+            logger.info(f"Processor: Enqueued Article Intelligence Pipeline for ProcessedArticle ID {proc_art.id}")
+
+            if not getattr(proc_art, "thumbnail_url", None):
+                from app.core.config import settings
+                download_thumbnail_task.apply_async(
+                    args=[proc_art.id, candidates[:settings.MAX_THUMBNAIL_CANDIDATES] if candidates else []],
+                    retry=False
+                )
+                logger.info(f"Processor: Enqueued background thumbnail download for ProcessedArticle ID {proc_art.id}")
+        else:
+            proc_art.embedding_status = "skipped_offline_broker"
+            logger.debug(f"Processor: Celery task enqueueing skipped (Redis broker offline) for ProcessedArticle ID {proc_art.id}")
     except Exception as celery_err:
-        logger.warning(f"Processor: Celery task enqueueing skipped (Redis/Broker offline): {celery_err}")
+        logger.warning(f"Processor: Celery task enqueueing skipped: {celery_err}")
 
     # Mark raw article as processed
     raw_art.status = "processed"
@@ -958,10 +990,11 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
     try:
         from app.core.redis import get_redis_client
         redis = get_redis_client()
-        await redis.delete("editorial:v1:homepage_ranked_ids")
-        logger.info("Invalidated homepage ranked IDs cache due to new article publication.")
+        if redis:
+            await redis.delete("editorial:v1:homepage_ranked_ids")
+            logger.info("Invalidated homepage ranked IDs cache due to new article publication.")
     except Exception as redis_err:
-        logger.error(f"Failed to invalidate ranking cache on publication: {redis_err}")
+        logger.debug(f"Failed to invalidate ranking cache on publication: {redis_err}")
 
     # Publish real-time event to Redis pub/sub channel for SSE clients
     await publish_event(

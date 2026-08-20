@@ -44,6 +44,10 @@ class BaseAgent:
                     f"Agent {self.name}: HTTP request failed on attempt {attempt}/{max_retries}. "
                     f"Error: {e!s}"
                 )
+                # Fail fast on client errors that will never succeed on immediate retry
+                if isinstance(e, httpx.HTTPStatusError) and e.response is not None and e.response.status_code in (401, 403, 404):
+                    raise e
+
                 if attempt == max_retries:
                     self.logger.error(f"Agent {self.name}: Maximum HTTP retries reached for {url}")
                     if isinstance(e, httpx.HTTPStatusError):

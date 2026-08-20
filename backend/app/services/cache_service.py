@@ -29,5 +29,7 @@ class CacheService:
                 return True
             return False
         except Exception as e:
-            logger.error(f"CacheService: Failed to invalidate homepage cache (reason: {reason}): {e}", exc_info=True)
+            from app.core.redis import mark_redis_failed
+            mark_redis_failed()
+            logger.debug(f"CacheService: Redis offline or cache invalidation failed: {e}")
             return False

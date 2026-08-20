@@ -58,6 +58,8 @@ async def verify_redis_connection() -> bool:
     return False
 
 
+_in_memory_locks: dict[str, float] = {}
+
 # Redis-based distributed lock manager (prevents concurrent scraping or scheduled job runs)
 class RedisDistributedLock:
     def __init__(self, name: str, expire_seconds: int = 60):
@@ -67,19 +69,38 @@ class RedisDistributedLock:
         self.locked = False
 
     async def acquire(self) -> bool:
-        # SET key value NX PX: NX only sets if not exists, PX sets expiry
-        # Returns True if key was set, indicating lock acquired
-        res = await self.client.set(self.name, "1", ex=self.expire_seconds, nx=True)
-        self.locked = bool(res)
-        if self.locked:
-            logger.debug(f"Distributed lock successfully ACQUIRED: {self.name}")
-        else:
-            logger.debug(f"Distributed lock currently HELD: {self.name}")
-        return self.locked
+        if self.client is None:
+            # In-memory fallback lock
+            now = time.time()
+            exp = _in_memory_locks.get(self.name, 0.0)
+            if now < exp:
+                self.locked = False
+                return False
+            _in_memory_locks[self.name] = now + self.expire_seconds
+            self.locked = True
+            return True
+
+        try:
+            res = await self.client.set(self.name, "1", ex=self.expire_seconds, nx=True)
+            self.locked = bool(res)
+            if self.locked:
+                logger.debug(f"Distributed lock successfully ACQUIRED: {self.name}")
+            else:
+                logger.debug(f"Distributed lock currently HELD: {self.name}")
+            return self.locked
+        except Exception as e:
+            logger.debug(f"Redis lock acquire failed, using local lock: {e}")
+            self.locked = True
+            return True
 
     async def release(self):
         if self.locked:
-            await self.client.delete(self.name)
+            if self.client:
+                try:
+                    await self.client.delete(self.name)
+                except Exception:
+                    pass
+            _in_memory_locks.pop(self.name, None)
             self.locked = False
             logger.debug(f"Distributed lock RELEASED: {self.name}")
 

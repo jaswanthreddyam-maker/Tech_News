@@ -118,8 +118,8 @@ class AIEnrichmentOutput(BaseModel):
     keywords: list[str] = Field(default_factory=list, max_length=20)
     tags: list[str] = Field(default_factory=list, max_length=12)
     sentiment: SentimentLabel = SentimentLabel.NEUTRAL
-    primary_category: CategoryEnum = Field(..., description="The primary semantic category of the article")
-    category_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score for the category classification")
+    primary_category: CategoryEnum | None = Field(default=CategoryEnum.ARTIFICIAL_INTELLIGENCE, description="The primary semantic category of the article")
+    category_confidence: float = Field(default=0.9, ge=0.0, le=1.0, description="Confidence score for the category classification")
 
 
     @field_validator("keywords")

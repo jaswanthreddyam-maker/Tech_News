@@ -420,10 +420,10 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
     import yaml
 
     # 1. Load configuration
-    policy_path = Path("app/editorial/category_policy.yaml")
+    policy_path = Path(__file__).resolve().parents[3] / "editorial" / "category_policy.yaml"
     policy_data = {}
     if policy_path.exists():
-        with open(policy_path, "r") as f:
+        with open(policy_path, "r", encoding="utf-8") as f:
             policy_data = yaml.safe_load(f) or {}
     
     categories_cfg = policy_data.get("categories", {})

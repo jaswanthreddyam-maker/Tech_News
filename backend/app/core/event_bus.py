@@ -18,6 +18,9 @@ async def publish_event(agent: str, message: str, status: str = "info", metadata
         from app.core.redis import get_redis_client
 
         client = get_redis_client()
+        if client is None:
+            return
+
         event = {
             "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
             "agent": agent,
@@ -35,4 +38,4 @@ async def publish_event(agent: str, message: str, status: str = "info", metadata
 
         await asyncio.wait_for(_pub(), timeout=0.1)
     except Exception as e:
-        logger.warning(f"EventBus: Failed to publish event: {e}")
+        logger.debug(f"EventBus: Failed to publish event: {e}")

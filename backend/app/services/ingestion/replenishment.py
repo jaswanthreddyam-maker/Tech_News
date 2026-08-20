@@ -120,12 +120,26 @@ class AutoReplenishmentService:
 
         # 5. Execute ingestion pipeline
         try:
-            from app.services.ingestion.pipeline import run_source_ingestion_pipeline
+            from app.services.ingestion.pipeline import run_source_ingestion_pipeline, process_raw_article_to_editorial
+            from app.models.article import RawArticle
 
             ingest_metrics = await run_source_ingestion_pipeline(db)
             logger.info(f"AutoReplenishment Ingestion Complete: {ingest_metrics}")
 
-            # 6. Rebuild homepage projection and invalidate caches
+            # 6. Process newly fetched raw articles to editorial ProcessedArticle & ArticleReadModel (top 15 priority batch)
+            raw_stmt = select(RawArticle.id).where(RawArticle.status == "fetched").order_by(RawArticle.id.desc())
+            raw_ids = (await db.execute(raw_stmt)).scalars().all()
+            processed_count = 0
+            for r_id in raw_ids[:15]:
+                try:
+                    await process_raw_article_to_editorial(db, r_id)
+                    processed_count += 1
+                except Exception as p_err:
+                    logger.warning(f"AutoReplenishment: Failed to process RawArticle {r_id}: {p_err}")
+
+            logger.info(f"AutoReplenishment: Processed & projected {processed_count} articles into ArticleReadModel.")
+
+            # 7. Rebuild homepage projection and invalidate caches
             from app.editorial.homepage_builder import HomepageBuilder
             from app.services.cache_service import CacheService
 
@@ -137,6 +151,7 @@ class AutoReplenishmentService:
                 "triggered": True,
                 "reason": "REPLENISHED",
                 "metrics": ingest_metrics,
+                "processed_count": processed_count,
                 "active_before": active_fresh_count,
             }
         except Exception as e:
@@ -148,11 +163,11 @@ class AutoReplenishmentService:
         """Seeds default high-credibility RSS sources if sources table is empty."""
         default_sources = [
             {
-                "name": "OpenAI Blog",
-                "category": "official",
+                "name": "MIT Technology Review",
+                "category": "editorial",
                 "method": "rss",
-                "url": "https://openai.com/news/rss.xml",
-                "credibility_score": 98,
+                "url": "https://www.technologyreview.com/feed/",
+                "credibility_score": 96,
                 "crawl_interval": 900,
                 "enabled": True,
             },

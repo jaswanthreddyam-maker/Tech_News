@@ -6,7 +6,7 @@ from redis.asyncio import Redis
 
 
 class AIBudgetEnforcer:
-    def __init__(self, redis_client: Redis, daily_limit: Decimal | float):
+    def __init__(self, redis_client: Redis | None, daily_limit: Decimal | float):
         self.redis = redis_client
         self.daily_limit = Decimal(str(daily_limit))
 
@@ -15,31 +15,42 @@ class AIBudgetEnforcer:
         return f"ai:budget:daily:{date_str}"
 
     async def get_current_spend(self) -> Decimal:
-        val = await self.redis.get(self._get_daily_key())
-        return Decimal(str(val)) if val else Decimal("0.0")
+        if not self.redis:
+            return Decimal("0.0")
+        try:
+            val = await self.redis.get(self._get_daily_key())
+            return Decimal(str(val)) if val else Decimal("0.0")
+        except Exception:
+            return Decimal("0.0")
 
     async def increment_spend(self, amount: Decimal | float) -> None:
-        if amount <= 0:
+        if amount <= 0 or not self.redis:
             return
-        key = self._get_daily_key()
-        await self.redis.incrbyfloat(key, float(amount))
-        # ensure key expires in 48 hours to prevent memory leak
-        ttl = await self.redis.ttl(key)
-        if ttl == -1:
-            await self.redis.expire(key, 172800)
+        try:
+            key = self._get_daily_key()
+            await self.redis.incrbyfloat(key, float(amount))
+            # ensure key expires in 48 hours to prevent memory leak
+            ttl = await self.redis.ttl(key)
+            if ttl == -1:
+                await self.redis.expire(key, 172800)
+        except Exception:
+            pass
 
     async def check_budget(self) -> bool:
         """Returns True if within budget, False if budget exceeded."""
-        if self.daily_limit <= 0:
+        if self.daily_limit <= 0 or not self.redis:
             return True  # 0 means unlimited
-        spend = await self.get_current_spend()
-        return spend < self.daily_limit
+        try:
+            spend = await self.get_current_spend()
+            return spend < self.daily_limit
+        except Exception:
+            return True
 
 
 class AIRateLimiter:
     """A Token Bucket rate limiter for AI requests."""
 
-    def __init__(self, redis_client: Redis, max_requests_per_second: int = 5):
+    def __init__(self, redis_client: Redis | None, max_requests_per_second: int = 5):
         self.redis = redis_client
         self.max_rps = max_requests_per_second
         self.key = "ai:rate_limit:bucket"
@@ -49,6 +60,9 @@ class AIRateLimiter:
         Attempts to acquire a token from the bucket.
         Returns True if successful, False if rate limited.
         """
+        if not self.redis:
+            return True
+
         now = time.time()
 
         # Simple token bucket using Redis Lua script
@@ -81,5 +95,8 @@ class AIRateLimiter:
             return 0
         end
         """
-        result = await self.redis.eval(script, 1, self.key, self.max_rps, now)
-        return bool(result)
+        try:
+            result = await self.redis.eval(script, 1, self.key, self.max_rps, now)
+            return bool(result)
+        except Exception:
+            return True

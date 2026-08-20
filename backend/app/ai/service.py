@@ -82,10 +82,17 @@ class AIService:
         telemetry = []
 
         try:
-            summary_response, summary_retries = await self._run_task(AITaskType.SUMMARY, clipped_article)
-            keywords_response, keyword_retries = await self._run_task(AITaskType.KEYWORDS, clipped_article)
-            tags_response, tag_retries = await self._run_task(AITaskType.TAGS, clipped_article)
-            sentiment_response, sentiment_retries = await self._run_task(AITaskType.SENTIMENT, clipped_article)
+            (
+                (summary_response, summary_retries),
+                (keywords_response, keyword_retries),
+                (tags_response, tag_retries),
+                (sentiment_response, sentiment_retries),
+            ) = await asyncio.gather(
+                self._run_task(AITaskType.SUMMARY, clipped_article),
+                self._run_task(AITaskType.KEYWORDS, clipped_article),
+                self._run_task(AITaskType.TAGS, clipped_article),
+                self._run_task(AITaskType.SENTIMENT, clipped_article),
+            )
 
             responses_with_retries = [
                 (summary_response, summary_retries),
