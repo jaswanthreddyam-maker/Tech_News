@@ -260,8 +260,11 @@ async def expire_articles(db: AsyncSession) -> dict:
         
         # Trigger active self-healing auto-replenishment crawl
         try:
-            from app.services.ingestion.replenishment import AutoReplenishmentService
-            asyncio.create_task(AutoReplenishmentService.trigger_replenishment_if_needed(None, force=True))
+            import sys
+            is_test = "pytest" in sys.modules or getattr(settings, "ENV", "") == "test" or getattr(settings, "APP_ENV", "") == "test"
+            if not is_test:
+                from app.services.ingestion.replenishment import AutoReplenishmentService
+                asyncio.create_task(AutoReplenishmentService.trigger_replenishment_if_needed(None, force=True))
         except Exception as repl_err:
             logger.warning(f"Failed to schedule AutoReplenishment in expire_articles: {repl_err}")
 

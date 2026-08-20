@@ -87,11 +87,16 @@ class BehavioralStrategy(RecommendationStrategy):
 
         # We fetch recent articles overlapping categories for now
         now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(days=14)
+        cutoff = now - timedelta(days=7)
+
+        from sqlalchemy import or_
 
         stmt = select(ProcessedArticle).where(
             ProcessedArticle.published_status == "published",
             ProcessedArticle.is_test_data == False,
+            ProcessedArticle.is_archived == False,
+            ProcessedArticle.is_expired == False,
+            or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
             ProcessedArticle.published_at >= cutoff
         ).order_by(desc(ProcessedArticle.published_at)).limit(100)
 
@@ -211,9 +216,14 @@ class BehavioralStrategy(RecommendationStrategy):
 
 class TrendingStrategy(RecommendationStrategy):
     async def recommend(self, session: AsyncSession, user_id: int | None, anonymous_id: str | None, limit: int) -> list[RecommendationResponse]:
+        now = datetime.now(timezone.utc)
+        from sqlalchemy import or_
         stmt = select(ProcessedArticle).where(
             ProcessedArticle.published_status == "published",
-            ProcessedArticle.is_test_data == False
+            ProcessedArticle.is_test_data == False,
+            ProcessedArticle.is_archived == False,
+            ProcessedArticle.is_expired == False,
+            or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now),
         ).order_by(desc(ProcessedArticle.published_at)).limit(limit)
 
         res = await session.execute(stmt)

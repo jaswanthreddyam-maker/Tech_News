@@ -66,7 +66,10 @@ class HomepageBuilder:
             logger.info(f"HomepageBuilder: Low candidate count ({len(articles)}). Scheduling AutoReplenishment.")
             try:
                 import asyncio
-                asyncio.create_task(AutoReplenishmentService.trigger_replenishment_if_needed(None))
+                import sys
+                is_test = "pytest" in sys.modules or getattr(settings, "ENV", "") == "test" or getattr(settings, "APP_ENV", "") == "test"
+                if not is_test:
+                    asyncio.create_task(AutoReplenishmentService.trigger_replenishment_if_needed(None))
             except Exception as e:
                 logger.debug(f"Could not dispatch background replenishment: {e}")
 
@@ -247,8 +250,12 @@ class HomepageBuilder:
                 existing_checksum = hashlib.sha256(json.dumps(existing_ids).encode("utf-8")).hexdigest()
                 # Check if thumbnails exist in stored stories
                 has_thumbs = any(s.get("thumbnail_url") for s in latest_proj.stories_json)
-                if existing_checksum == current_checksum and has_thumbs:
-                    logger.info("HomepageBuilder: Identical homepage projection checksum detected. Skipping redundant persistence.")
+                p_created = latest_proj.created_at
+                if p_created and p_created.tzinfo is None:
+                    p_created = p_created.replace(tzinfo=timezone.utc)
+                proj_age_sec = (datetime.now(timezone.utc) - p_created).total_seconds() if p_created else 999999
+                if existing_checksum == current_checksum and has_thumbs and proj_age_sec < 3600:
+                    logger.info("HomepageBuilder: Identical homepage projection checksum detected (< 1h old). Skipping redundant persistence.")
                     return top_articles
 
             latest_version = latest_proj.projection_version if latest_proj else 0

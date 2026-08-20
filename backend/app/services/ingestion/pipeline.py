@@ -988,11 +988,9 @@ async def process_raw_article_to_editorial(db: AsyncSession, raw_id: int) -> dic
     await db.commit()
 
     try:
-        from app.core.redis import get_redis_client
-        redis = get_redis_client()
-        if redis:
-            await redis.delete("editorial:v1:homepage_ranked_ids")
-            logger.info("Invalidated homepage ranked IDs cache due to new article publication.")
+        from app.services.cache_service import CacheService
+        await CacheService.invalidate_homepage_cache(reason=f"article_published_{proc_art.id}")
+        logger.info("Invalidated homepage cache due to new article publication.")
     except Exception as redis_err:
         logger.debug(f"Failed to invalidate ranking cache on publication: {redis_err}")
 

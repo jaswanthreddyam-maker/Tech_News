@@ -86,12 +86,59 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Lifespan: Failed to emit RECOVERY event: {e}")
 
+    # ── Autonomous Article Lifecycle & Replenishment Background Worker Loop ──
+    from app.core.shutdown import shutdown_event
+    import asyncio
+
+    async def _autonomous_lifecycle_loop():
+        """
+        Autonomous background lifecycle worker (ticks every 60 seconds).
+        Continuously expires aged articles, checks inventory levels, triggers
+        auto-replenishment crawls, and rebuilds projections & category desks.
+        """
+        logger.info("Autonomous article lifecycle loop started.")
+        while not shutdown_event.is_set():
+            try:
+                await asyncio.sleep(60)
+                if shutdown_event.is_set():
+                    break
+
+                from app.core.database import AsyncSessionLocal
+                from app.services.ranking.news_ranking_engine import expire_articles
+                from app.editorial.homepage_builder import HomepageBuilder
+                from app.services.cache_service import CacheService
+                from app.services.ingestion.replenishment import AutoReplenishmentService
+
+                async with AsyncSessionLocal() as db:
+                    metrics = await expire_articles(db)
+                    expired_count = metrics.get("expired_articles_total", 0)
+                    if expired_count > 0:
+                        logger.info(f"Lifecycle loop: Expired {expired_count} articles. Rebuilding projections.")
+                        await HomepageBuilder.build_and_persist_homepage_projection(db)
+                        await HomepageBuilder.build_and_persist_category_desks(db)
+                        await CacheService.invalidate_homepage_cache(reason=f"periodic_expired_{expired_count}_articles")
+
+                    repl_res = await AutoReplenishmentService.trigger_replenishment_if_needed(db)
+                    if repl_res.get("triggered"):
+                        logger.info(f"Lifecycle loop: AutoReplenishment executed: {repl_res}")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as loop_err:
+                logger.warning(f"Lifecycle loop encountered error: {loop_err}")
+
+    lifecycle_task = asyncio.create_task(_autonomous_lifecycle_loop())
+
     yield  # Hand over execution to FastAPI
 
-    # Notify active SSE connections to close gracefully
-    from app.core.shutdown import shutdown_event
-
+    # Notify active SSE connections and background tasks to close gracefully
     shutdown_event.set()
+    if lifecycle_task and not lifecycle_task.done():
+        lifecycle_task.cancel()
+        try:
+            await lifecycle_task
+        except asyncio.CancelledError:
+            pass
 
     logger.info("Shutting down API gateway container...")
     # Close database pool connections cleanly
