@@ -92,13 +92,12 @@ export function getCategoryFallbackImage(
   }
 
   if (seed !== undefined && seed !== null) {
-    const strSeed = String(seed);
-    let hash = 0;
+    const strSeed = `${String(seed)}_${catStr}`;
+    let h = 2166136261;
     for (let i = 0; i < strSeed.length; i++) {
-      hash = (hash << 5) - hash + strSeed.charCodeAt(i);
-      hash |= 0;
+      h = Math.imul(h ^ strSeed.charCodeAt(i), 16777619) >>> 0;
     }
-    const idx = Math.abs(hash) % pool.length;
+    const idx = h % pool.length;
     return pool[idx];
   }
 
