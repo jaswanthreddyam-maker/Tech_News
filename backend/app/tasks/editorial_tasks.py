@@ -64,6 +64,7 @@ async def _async_purge_expired_articles_task():
     from app.services.ranking.news_ranking_engine import expire_articles
     from app.editorial.homepage_builder import HomepageBuilder
     from app.services.cache_service import CacheService
+    from app.services.ingestion.replenishment import AutoReplenishmentService
     from celery_app import get_celery_session
 
     async with get_celery_session() as db:
@@ -73,4 +74,12 @@ async def _async_purge_expired_articles_task():
             await HomepageBuilder.build_and_persist_homepage_projection(db)
             await HomepageBuilder.build_and_persist_category_desks(db)
             await CacheService.invalidate_homepage_cache(reason=f"expired_{metrics['expired_articles_total']}_articles")
+
+        # Actively ensure fresh article inventory is above the minimum floor; self-heal immediately
+        try:
+            repl_res = await AutoReplenishmentService.trigger_replenishment_if_needed(db)
+            if repl_res.get("triggered"):
+                logger.info(f"AutoReplenishment executed during purge cycle: {repl_res}")
+        except Exception as e:
+            logger.warning(f"AutoReplenishment failed during purge cycle: {e}")
 

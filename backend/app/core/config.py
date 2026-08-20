@@ -77,7 +77,7 @@ class Settings(BaseSettings):
         return v
 
     # Observability and Health Configurations
-    BACKEND_HEALTH_URL: str = "http://backend:8000/api/v1/health/live"
+    BACKEND_HEALTH_URL: str = "http://127.0.0.1:8080/health/live"
 
     HEALTH_THRESHOLDS: dict = {
         "postgres": {"healthy": 100.0, "delayed": 300.0, "degraded": 1000.0},

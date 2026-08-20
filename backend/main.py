@@ -56,15 +56,23 @@ async def lifespan(app: FastAPI):
     if not redis_ok:
         logger.warning("Redis connection validation failed. Cache services compromised.")
 
-    # Run startup reconciliation
+    # Run startup reconciliation and projection refresh
     try:
         from app.core.database import AsyncSessionLocal
         from app.services.ranking.news_ranking_engine import expire_articles
-        logger.info("Running startup article expiration reconciliation...")
+        from app.editorial.homepage_builder import HomepageBuilder
+        from app.services.cache_service import CacheService
+        from app.services.ingestion.replenishment import AutoReplenishmentService
+
+        logger.info("Running startup article expiration and projection reconciliation...")
         async with AsyncSessionLocal() as db:
             metrics = await expire_articles(db)
             if metrics.get("expired_articles_total", 0) > 0:
                 logger.info(f"Startup reconciliation expired articles. Metrics: {metrics}")
+            await HomepageBuilder.build_and_persist_homepage_projection(db)
+            await HomepageBuilder.build_and_persist_category_desks(db)
+            await CacheService.invalidate_homepage_cache(reason="startup_reconciliation")
+            await AutoReplenishmentService.trigger_replenishment_if_needed(db)
     except Exception as e:
         logger.warning(f"Startup reconciliation failed: {e}")
 

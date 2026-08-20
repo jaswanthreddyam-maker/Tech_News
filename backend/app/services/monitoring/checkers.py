@@ -248,32 +248,36 @@ class BackendChecker:
 
     async def check(self) -> HealthSnapshot:
         t0 = time.perf_counter()
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                res = await client.get(settings.BACKEND_HEALTH_URL)
-                latency_ms = (time.perf_counter() - t0) * 1000
+        urls_to_try = [
+            settings.BACKEND_HEALTH_URL,
+            "http://127.0.0.1:8080/health/live",
+            "http://127.0.0.1:8000/health/live",
+            "http://localhost:8000/health/live",
+        ]
+        seen = set()
+        unique_urls = [u for u in urls_to_try if not (u in seen or seen.add(u))]
 
-                status_reason = None
-                if res.status_code != 200:
-                    status_reason = "http_error"
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            for url in unique_urls:
+                try:
+                    res = await client.get(url)
+                    latency_ms = (time.perf_counter() - t0) * 1000
+                    if res.status_code == 200:
+                        return HealthEvaluationService.evaluate(
+                            service_name=self.service_name,
+                            available=True,
+                            latency_ms=latency_ms,
+                            metrics={"status_code": res.status_code, "health_url": url},
+                        )
+                except Exception:
+                    continue
 
-                return HealthEvaluationService.evaluate(
-                    service_name=self.service_name,
-                    available=True,
-                    latency_ms=latency_ms,
-                    metrics={"status_code": res.status_code},
-                    error=f"Unhealthy status code: {res.status_code}" if res.status_code != 200 else None,
-                    status_reason=status_reason,
-                )
-
-        except Exception as e:
-            latency_ms = (time.perf_counter() - t0) * 1000
-            logger.warning(f"Backend HTTP check failed: {e}")
-            return HealthEvaluationService.evaluate(
-                service_name=self.service_name,
-                available=False,
-                latency_ms=latency_ms,
-                metrics={},
-                error=str(e),
-                status_reason="timeout" if isinstance(e, httpx.TimeoutException) else "connection_refused",
-            )
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return HealthEvaluationService.evaluate(
+            service_name=self.service_name,
+            available=False,
+            latency_ms=latency_ms,
+            metrics={},
+            error="Backend health probe unreachable",
+            status_reason="connection_refused",
+        )
