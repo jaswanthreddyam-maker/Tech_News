@@ -34,7 +34,7 @@ export function UserMenu() {
 
   if (!user) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <SettingsDialog
           trigger={
             <Button
@@ -47,6 +47,14 @@ export function UserMenu() {
             </Button>
           }
         />
+        <Link href="/login">
+          <Button
+            size="sm"
+            className="h-8 px-3.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-mono text-xs font-semibold shadow-sm transition-all"
+          >
+            Sign In
+          </Button>
+        </Link>
       </div>
     );
   }

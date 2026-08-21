@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import {
   Eye, Shield, User, Mail, Send, CheckCircle2,
   ChevronDown, ChevronUp, Sparkles, Clock, AlertCircle, MailCheck,
+  Bell, BellRing, LogOut,
 } from "lucide-react";
 import {
   getBriefingPreferences,
@@ -15,6 +16,9 @@ import {
   sendVerificationEmail,
 } from "@/lib/api/briefing";
 import { useAppStore } from "@/store/useStore";
+import { useNotifications } from "@/components/providers/NotificationProvider";
+import { useAuthGate } from "@/hooks/useAuthGate";
+import { FeatureCapability } from "@/lib/auth/features";
 
 const AVAILABLE_TOPICS = [
   { id: "artificial-intelligence", label: "AI & Neural Systems" },
@@ -37,6 +41,8 @@ function formatDeliveryTime(isoString?: string | null): string {
 
 export default function SettingsPage() {
   const { user } = useAppStore();
+  const { notifications, unreadCount, markAllAsRead, isConnected } = useNotifications();
+  const { requireAuthentication } = useAuthGate();
   const [enabled, setEnabled] = useState(false);
   const [email, setEmail] = useState(user?.email || "");
   const [emailVerified, setEmailVerified] = useState(false);
@@ -419,15 +425,147 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Profile Information Section */}
-        <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-3 shadow-sm">
-          <div className="flex items-center gap-2.5 text-primary">
-            <User className="w-5 h-5" />
-            <h3 className="font-semibold text-lg text-foreground font-sans">Profile & Personalization</h3>
+        {/* Profile & Account Section */}
+        <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-full border border-primary/30 bg-primary/10 text-primary">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg text-foreground font-sans">Profile & Account</h3>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Your identity, authentication credentials, and synchronized session state.
+                </p>
+              </div>
+            </div>
+            {user && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Authenticated
+              </span>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground font-mono">
-            Your reading history, topic bookmarks, and AI preferences are automatically synced safely across your devices.
-          </p>
+
+          {user ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-background/50 border border-white/5">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="h-14 w-14 rounded-full border-2 border-primary/40 bg-primary/15 text-primary flex items-center justify-center font-bold text-lg font-mono shadow-md">
+                    {user.name
+                      ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+                      : "JR"}
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-base text-foreground font-sans">{user.name || "Authenticated Operator"}</h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-white/10 text-neutral-300">
+                      {typeof user.role === "string" ? user.role : "Member"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5" />
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2 sm:pt-0">
+                <button
+                  onClick={() => {
+                    useAppStore.getState().logoutUser();
+                    window.location.href = "/login";
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono font-semibold text-destructive bg-destructive/10 hover:bg-destructive/20 border border-destructive/30 transition-all cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-background/50 border border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-muted-foreground font-mono font-bold">
+                  ?
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Guest Reader Mode</p>
+                  <p className="text-xs text-muted-foreground font-mono">Sign in to save bookmarks, unlock AI copilot, and customize feeds.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => requireAuthentication(FeatureCapability.SAVED_ARTICLES, { returnUrl: "/settings" })}
+                className="px-5 py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all shrink-0 cursor-pointer"
+              >
+                Sign In / Register
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* In-App Notifications & Alerts Section */}
+        <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-full border border-primary/30 bg-primary/10 text-primary">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg text-foreground font-sans">In-App Notifications & Alerts</h3>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Real-time breaking tech event stream and editorial publication updates.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Live Stream Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" /> Standby
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-background/50 border border-white/5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <BellRing className="w-4 h-4 text-primary" />
+                  <span>Unread Notifications</span>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/20 text-primary border border-primary/30">
+                  {unreadCount} Unread
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground font-mono">
+                {notifications.length} total alerts recorded in current session.
+              </p>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="mt-2 text-xs font-mono text-primary hover:underline font-medium uppercase tracking-wider"
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
+
+            <div className="p-4 rounded-xl bg-background/50 border border-white/5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">Header Quick Access</span>
+                <span className="text-xs font-mono text-emerald-400 font-semibold">Active</span>
+              </div>
+              <p className="text-xs text-muted-foreground font-mono">
+                The notification bell and profile badge in the top navigation bar provide instant drop-down access across all pages.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Data & Privacy Section */}
