@@ -157,26 +157,28 @@ export function AuthenticationGateModal() {
             </button>
           </div>
 
-          {/* Google Sign-in */}
-          <div className="flex flex-col items-center justify-center">
-            <div className="w-full flex justify-center py-0.5">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setError("Google Sign-In was cancelled or failed.")}
-                theme="filled_black"
-                shape="pill"
-                size="large"
-                text={mode === "login" ? "signin_with" : "signup_with"}
-                width="100%"
-              />
+          {/* Google Sign-in (only if configured) */}
+          {Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) && (
+            <div className="flex flex-col items-center justify-center">
+              <div className="w-full flex justify-center py-0.5">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError("Google Sign-In was cancelled or failed.")}
+                  theme="filled_black"
+                  shape="pill"
+                  size="large"
+                  text={mode === "login" ? "signin_with" : "signup_with"}
+                  width="100%"
+                />
+              </div>
+              <div className="relative w-full flex items-center justify-center my-3">
+                <div className="w-full border-t border-white/[0.08]" />
+                <span className="absolute px-3 text-[11px] font-mono text-neutral-500 bg-[#0c0d0e] uppercase tracking-wider">
+                  or email
+                </span>
+              </div>
             </div>
-            <div className="relative w-full flex items-center justify-center my-3">
-              <div className="w-full border-t border-white/[0.08]" />
-              <span className="absolute px-3 text-[11px] font-mono text-neutral-500 bg-[#0c0d0e] uppercase tracking-wider">
-                or email
-              </span>
-            </div>
-          </div>
+          )}
 
           {error && (
             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs leading-relaxed">

@@ -341,35 +341,39 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
-            <span className="font-mono text-[10px] text-neutral-400 dark:text-neutral-500 tracking-[0.2em] font-bold">OR</span>
-            <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
-          </div>
+          {/* Google Sign In (only if configured) */}
+          {Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) && (
+            <>
+              {/* Divider */}
+              <div className="flex items-center gap-4 my-6">
+                <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
+                <span className="font-mono text-[10px] text-neutral-400 dark:text-neutral-500 tracking-[0.2em] font-bold">OR</span>
+                <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
+              </div>
 
-          {/* Google Sign In */}
-          <div className="w-full flex justify-center min-h-[44px]">
-            {googleLoading ? (
-              <div className="w-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 rounded-xl py-3.5 flex items-center justify-center">
-                <svg className="animate-spin h-4 w-4 text-neutral-500" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
+              <div className="w-full flex justify-center min-h-[44px]">
+                {googleLoading ? (
+                  <div className="w-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 rounded-xl py-3.5 flex items-center justify-center">
+                    <svg className="animate-spin h-4 w-4 text-neutral-500" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="w-full relative [&>div]:!w-full [&>div>div]:!w-full [&_iframe]:!w-full">
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleError}
+                      theme={googleTheme}
+                      shape="rectangular"
+                      text="signin_with"
+                      size="large"
+                    />
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="w-full relative [&>div]:!w-full [&>div>div]:!w-full [&_iframe]:!w-full">
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={handleGoogleError}
-                  theme={googleTheme}
-                  shape="rectangular"
-                  text="signin_with"
-                  size="large"
-                />
-              </div>
-            )}
-          </div>
+            </>
+          )}
 
           {/* Create Account redirect */}
           <div className="mt-6 text-center font-mono text-[10px] tracking-wider text-neutral-500 dark:text-neutral-400 border-t border-neutral-200 dark:border-neutral-800 pt-6 select-none">
