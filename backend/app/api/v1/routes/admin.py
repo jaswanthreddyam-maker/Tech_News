@@ -342,17 +342,22 @@ async def list_admin_sources(
 async def run_migrations(current_user: User = Depends(require_role("super_admin"))):
     import subprocess
     import os
-    try:
-        # Run alembic in a separate process to avoid asyncio.run() conflict
-        result = subprocess.run(
-            ["alembic", "-c", os.path.join(os.getcwd(), "alembic.ini"), "upgrade", "head"],
+    import asyncio
+
+    def _do_run():
+        ini_path = os.path.join(os.getcwd(), "alembic.ini")
+        return subprocess.run(
+            ["alembic", "-c", ini_path, "upgrade", "head"],
             capture_output=True,
             text=True,
-            check=True
         )
-        return {"status": "success", "message": result.stdout}
-    except subprocess.CalledProcessError as e:
-        return {"status": "error", "message": f"Command failed with exit code {e.returncode}. stderr: {e.stderr}"}
+
+    try:
+        res = await asyncio.to_thread(_do_run)
+        if res.returncode == 0:
+            return {"status": "success", "stdout": res.stdout, "stderr": res.stderr}
+        else:
+            return {"status": "error", "returncode": res.returncode, "stdout": res.stdout, "stderr": res.stderr}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
