@@ -5,7 +5,7 @@ import { AnimatePresence, m } from "framer-motion";
 import { Clock, Plus, Check, Settings2, SlidersHorizontal } from "lucide-react";
 import { useBreaking } from "@/components/hooks/articles/useArticles";
 import { useSourceFollow } from "@/hooks/useSourceFollow";
-import { SourceSelectorModal } from "@/components/sources/SourceSelectorModal";
+import { SourceSelectorModal, FALLBACK_SOURCES } from "@/components/sources/SourceSelectorModal";
 import { Skeleton } from "@/design-system/components/Skeleton";
 import { useLoadingState } from "@/design-system/hooks/useLoadingState";
 import { Article } from "@/lib/api/types";
@@ -48,6 +48,14 @@ export function BreakingNews() {
     toggleFollow,
     isToggling,
   } = useSourceFollow();
+
+  // All available sources (using default fallbacks if API is loading or network is slow)
+  const allAvailableSources = sources && sources.length > 0 ? sources : FALLBACK_SOURCES;
+
+  // Suggested sources for onboarding when 0 sources are followed
+  const suggestedSources = allAvailableSources
+    .filter((s) => s.category === "official")
+    .slice(0, 4);
 
   // Seed liveArticles with initial query data
   useEffect(() => {
@@ -100,11 +108,6 @@ export function BreakingNews() {
   const isCurrentLoading = activeTab === "latest" ? isLatestLoading : isFeedLoading;
   const currentError = activeTab === "latest" ? latestError : feedError;
   const loadingLevel = useLoadingState(isCurrentLoading);
-
-  // Suggested sources for onboarding when 0 sources are followed
-  const suggestedSources = sources
-    .filter((s) => s.category === "official")
-    .slice(0, 4);
 
   return (
     <m.div
@@ -338,7 +341,7 @@ export function BreakingNews() {
       <SourceSelectorModal
         isOpen={isSourceModalOpen}
         onClose={() => setIsSourceModalOpen(false)}
-        sources={sources}
+        sources={allAvailableSources}
         onToggleFollow={toggleFollow}
         isToggling={isToggling}
       />
