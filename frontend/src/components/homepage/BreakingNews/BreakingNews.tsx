@@ -29,7 +29,7 @@ function formatTime(dateStr?: string | null): string {
 }
 
 export function BreakingNews() {
-  const [activeTab, setActiveTab] = useState<"latest" | "following">("latest");
+  const [activeTab, setActiveTab] = useState<"latest" | "following">("following");
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
 
   // 1. Latest Chronological Stream (with real-time SSE additions)
@@ -136,18 +136,6 @@ export function BreakingNews() {
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.04] border border-white/10 self-start sm:self-auto">
           <button
             type="button"
-            id="tab-latest"
-            onClick={() => setActiveTab("latest")}
-            className={`px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
-              activeTab === "latest"
-                ? "bg-white/10 text-foreground border border-white/20 shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Latest
-          </button>
-          <button
-            type="button"
             id="tab-following"
             onClick={() => setActiveTab("following")}
             className={`px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
@@ -156,7 +144,19 @@ export function BreakingNews() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Following
+            Following ({followedCount})
+          </button>
+          <button
+            type="button"
+            id="tab-latest"
+            onClick={() => setActiveTab("latest")}
+            className={`px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
+              activeTab === "latest"
+                ? "bg-white/10 text-foreground border border-white/20 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Explore All
           </button>
         </div>
       </div>
