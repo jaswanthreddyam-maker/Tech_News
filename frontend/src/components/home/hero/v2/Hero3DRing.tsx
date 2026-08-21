@@ -95,7 +95,6 @@ export function Hero3DRing() {
   const arrivalRef = useRef<HTMLDivElement>(null);
   const spinRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
-  const shadowRef = useRef<HTMLDivElement>(null);
 
   // Isolated State Refs (Eliminates Stale Closures in rAF Loops)
   const radiusRef = useRef(radius);
@@ -139,12 +138,6 @@ export function Hero3DRing() {
       FINAL_SCALE,
       PEAK_SCALE_P,
     } = ARRIVAL_CONFIG;
-
-    // Trigger shadow CSS transition to full state (runs on GPU via CSS, not per-frame JS)
-    if (shadowRef.current) {
-      shadowRef.current.style.transform = "scale(1, 1)";
-      shadowRef.current.style.opacity = "0.85";
-    }
 
     const animateArrival = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
@@ -370,18 +363,6 @@ export function Hero3DRing() {
       onPointerCancel={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
-      {/* Stage Shadow (CSS-transitioned, not per-frame JS) */}
-      <div
-        ref={shadowRef}
-        className="absolute -bottom-6 w-[304px] h-[36px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.95)_0%,transparent_75%)] pointer-events-none z-0 transform -translate-y-2"
-        style={{
-          transform: "scale(0.2, 0.5)",
-          opacity: 0,
-          transition: "transform 2.2s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 2.2s cubic-bezier(0.22, 0.61, 0.36, 1)",
-          willChange: "transform, opacity",
-        }}
-      />
-
       {/* System 1: Camera Arrival Stage (Initial frame 0 set in deep space at -2200px) */}
       <div
         ref={arrivalRef}
