@@ -179,8 +179,8 @@ export function LatestNews() {
   const sectionBgY = useTransform(scrollYProgress, [0, 1], [0, 40]);
   const contentY = useTransform(scrollYProgress, [0, 1], [0, 15]);
 
-  // Dynamically compute all categories + aggregated "All Categories" option
-  const availableCategories = useMemo(() => {
+  // Individual active category desks
+  const individualCategories = useMemo(() => {
     if (!categoryGroups || !Array.isArray(categoryGroups)) return [];
 
     const activeDesks = categoryGroups.filter(
@@ -189,7 +189,7 @@ export function LatestNews() {
 
     if (activeDesks.length === 0) return [];
 
-    const mapped = activeDesks
+    return activeDesks
       .map((desk: any) => {
         const slug = (desk.slug || "").toLowerCase().trim();
         const known = KNOWN_METADATA[slug];
@@ -210,18 +210,11 @@ export function LatestNews() {
         };
       })
       .sort((a, b) => a.order - b.order);
+  }, [categoryGroups]);
 
-    // Aggregate unique articles across all desks for "All Categories"
-    const allArticlesMap = new Map<string | number, any>();
-    for (const desk of activeDesks) {
-      for (const art of desk.articles) {
-        const id = art.id || art.slug;
-        if (!allArticlesMap.has(id)) {
-          allArticlesMap.set(id, art);
-        }
-      }
-    }
-    const allArticles = Array.from(allArticlesMap.values());
+  // Dynamically compute all categories + "All Categories" option
+  const availableCategories = useMemo(() => {
+    if (individualCategories.length === 0) return [];
 
     const allCategoriesOption = {
       key: "all",
@@ -229,16 +222,16 @@ export function LatestNews() {
       icon: Layers,
       tags: "Comprehensive Technology Intelligence • All Coverage Desks",
       order: 0,
-      articlesCount: allArticles.length,
+      articlesCount: individualCategories.reduce((acc, cat) => acc + cat.articlesCount, 0),
       desk: {
         slug: "all",
         headline: "All Categories",
-        articles: allArticles,
+        articles: [],
       },
     };
 
-    return [allCategoriesOption, ...mapped];
-  }, [categoryGroups]);
+    return [allCategoriesOption, ...individualCategories];
+  }, [individualCategories]);
 
   // Ensure selectedKey is always set to an existing category
   useEffect(() => {
@@ -250,7 +243,7 @@ export function LatestNews() {
     }
   }, [availableCategories, selectedKey]);
 
-  // Active Category & Articles
+  // Active Category & Articles for single category view
   const activeCategory = useMemo(() => {
     if (availableCategories.length === 0) return null;
     return availableCategories.find((c) => c.key === selectedKey) || availableCategories[0];
@@ -432,9 +425,76 @@ export function LatestNews() {
               viewport={{ once: true }}
             />
 
-            {/* Selected Category Desk Presentation */}
+            {/* Category Desk Presentation */}
             <AnimatePresence mode="wait">
-              {activeCategory && (
+              {selectedKey === "all" ? (
+                <m.div
+                  key="all-categories"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.35, ease: EASE_CUBIC }}
+                  className="w-full space-y-16"
+                >
+                  {individualCategories.map((cat) => {
+                    const CatIcon = cat.icon || Sparkles;
+                    const catArticles = cat.desk?.articles?.slice(0, 4) || [];
+                    if (catArticles.length === 0) return null;
+
+                    return (
+                      <div key={cat.key} className="space-y-6">
+                        {/* Category Header Row */}
+                        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-white/10">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2.5">
+                              <CatIcon className="w-5 h-5 text-primary shrink-0" strokeWidth={1.75} />
+                              <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">
+                                {cat.title}
+                              </h3>
+                            </div>
+                            <div className="text-xs font-mono text-muted-foreground/60">
+                              {cat.tags}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Asymmetric Magazine/Editorial Grid */}
+                        <div 
+                          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 w-full items-stretch"
+                          style={{ 
+                            transformStyle: "preserve-3d",
+                            transform: "rotateX(calc(var(--camera-rotate-x, 0))) rotateY(calc(var(--camera-rotate-y, 0)))",
+                          }}
+                        >
+                          {catArticles.map((article: any, i: number) => {
+                            const isPrimary = i === 0;
+                            let spanClass = "col-span-1";
+                            if (i === 0) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-2";
+                            if (i === 3) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-1";
+                            
+                            return (
+                              <m.div
+                                key={article.id || i}
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true, amount: 0.05 }}
+                                transition={{ duration: 0.5, delay: i * 0.04, ease: EASE_CUBIC }}
+                                className={`w-full h-full ${spanClass}`}
+                              >
+                                <FloatingEditorialPanel
+                                  article={article}
+                                  index={i}
+                                  isPrimary={isPrimary}
+                                />
+                              </m.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </m.div>
+              ) : activeCategory ? (
                 <m.div
                   key={activeCategory.key}
                   initial={{ opacity: 0, y: 12 }}
@@ -497,7 +557,7 @@ export function LatestNews() {
                     </div>
                   )}
                 </m.div>
-              )}
+              ) : null}
             </AnimatePresence>
           </Scene3DProvider>
 
