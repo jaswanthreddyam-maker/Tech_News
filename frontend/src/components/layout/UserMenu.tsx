@@ -41,7 +41,7 @@ export function UserMenu() {
               variant="ghost"
               size="icon"
               className="h-9 w-9 rounded-full border border-white/10 bg-white/[0.04] text-foreground hover:border-white/25 hover:bg-white/[0.08] transition-all"
-              aria-label="Settings & Theme"
+              aria-label="Preferences"
             >
               <Sliders2Icon className="h-4 w-4 text-foreground" strokeWidth={2.2} />
             </Button>
@@ -91,7 +91,7 @@ export function UserMenu() {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
             <Sliders2Icon className="h-4 w-4" strokeWidth={2.2} />
-            Preferences & Theme
+            Preferences
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer rounded-lg hover:bg-destructive/10">
