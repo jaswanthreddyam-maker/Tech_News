@@ -17,12 +17,13 @@ import { ConversationalSearch } from "@/components/ai/ConversationalSearch";
 import { KnowledgePanel } from "@/components/knowledge/KnowledgePanel";
 import { apiFetch } from "@/lib/api/client";
 import { normalizeCanonicalArticle, CanonicalArticle } from "@/domains/article";
+import { getCategoryFallbackImage } from "@/domains/article/media/categoryFallbacks";
 import { ExploreRelatedTopics } from "@/components/article/recommendations/ExploreRelatedTopics";
 import { AdaptiveStoryCard } from "@/components/common/card/AdaptiveStoryCard";
 import { StickyReadingHeader } from "@/components/article/header/StickyReadingHeader";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Calendar, Sparkles, Eye, Minimize2, Type } from "lucide-react";
+import { Calendar, Sparkles, Eye, Minimize2, Type, ExternalLink } from "lucide-react";
 import { m, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { ArticleRevealSection } from "@/components/article/layout/ArticleRevealSection";
 import { ProgressiveImage } from "@/components/common/ProgressiveImage";
@@ -221,13 +222,14 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
     );
   }
 
-  // Hero Image Fallback Chain: hero_image -> thumbnail_local -> thumbnail_url -> default image
+  // Hero Image Fallback Chain: hero_image -> thumbnail_local -> thumbnail_url -> dynamic category fallback
   const heroImageObj = images?.[0] || {};
+  const fallbackImg = getCategoryFallbackImage(article.category, article.id || article.title);
   const heroImageSrc =
     rawData.hero_image ||
     article.thumbnail_url ||
     article.thumbnail_local ||
-    "/images/fallback-article.jpg";
+    fallbackImg;
 
   const heroImageAlt = heroImageObj.alt || article.title;
   const heroImageCaption = heroImageObj.caption || "";
@@ -561,7 +563,30 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
         }
         content={
           <ArticleRevealSection delay={REVEAL_DELAYS.body}>
-            <ArticleReader content={clean_html || content || ""} />
+            <div className="space-y-6">
+              <ArticleReader content={clean_html || content || ""} />
+              {article.url && (
+                <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3 mt-6">
+                  <div className="flex items-center gap-2 text-xs font-mono text-primary font-semibold uppercase tracking-wider">
+                    <span>Primary Source Dispatch</span>
+                  </div>
+                  <p className="text-xs sm:text-sm font-sans text-muted-foreground leading-relaxed">
+                    This coverage represents the primary announcement release from{" "}
+                    <strong className="text-foreground">{article.source || "the publisher"}</strong>.
+                    For complete interactive demonstrations and original release documentation, visit the source.
+                  </p>
+                  <a
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-mono font-semibold text-foreground border border-white/10 transition-all cursor-pointer"
+                  >
+                    <span>Read on {article.source || "Official Source"}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+            </div>
           </ArticleRevealSection>
         }
         keyTakeaways={keyTakeawaysNode}

@@ -134,3 +134,105 @@ windows_central:
     - "#article-body"
   exclude:
     - ".hawk-widget"
+
+openai:
+  name: "OpenAI"
+  version: "1.0.0"
+  last_updated: "2026-08-21"
+  priority: 10
+  selectors:
+    - "[data-component='RichText']"
+    - "article"
+    - "main"
+    - ".post-content"
+    - ".body-content"
+  exclude:
+    - "header"
+    - "footer"
+    - ".social-share"
+    - ".newsletter"
+
+google_blog:
+  name: "Google Blog"
+  version: "1.0.0"
+  last_updated: "2026-08-21"
+  priority: 10
+  selectors:
+    - ".article-content"
+    - ".uni-body-content"
+    - "[data-component='rich-text']"
+    - "article"
+    - "main"
+  exclude:
+    - ".social-share"
+    - ".author-bio"
+
+anthropic:
+  name: "Anthropic"
+  version: "1.0.0"
+  last_updated: "2026-08-21"
+  priority: 10
+  selectors:
+    - "article"
+    - "main"
+    - ".prose"
+    - ".post-content"
+  exclude:
+    - "header"
+    - "footer"
+
+nvidia:
+  name: "NVIDIA"
+  version: "1.0.0"
+  last_updated: "2026-08-21"
+  priority: 10
+  selectors:
+    - ".entry-content"
+    - ".post-entry"
+    - ".blog-content"
+  exclude:
+    - ".related-posts"
+    - ".sidebar-widget"
+
+microsoft:
+  name: "Microsoft"
+  version: "1.0.0"
+  last_updated: "2026-08-21"
+  priority: 10
+  selectors:
+    - ".entry-content"
+    - ".post-content"
+    - "article"
+    - "main"
+  exclude:
+    - "header"
+    - "footer"
+
+meta:
+  name: "Meta"
+  version: "1.0.0"
+  last_updated: "2026-08-21"
+  priority: 10
+  selectors:
+    - ".entry-content"
+    - ".post-content"
+    - "article"
+    - "main"
+  exclude:
+    - "header"
+    - "footer"
+
+apple:
+  name: "Apple"
+  version: "1.0.0"
+  last_updated: "2026-08-21"
+  priority: 10
+  selectors:
+    - ".page-article-body"
+    - ".article-body"
+    - "article"
+    - "main"
+  exclude:
+    - "header"
+    - "footer"
+
