@@ -151,7 +151,7 @@ export function useSourceFollow() {
         const current = getLocalFollowedSourceSlugs();
         const next = currentlyFollowing
           ? current.filter((s) => s !== sourceSlug)
-          : [...current, sourceSlug];
+          : Array.from(new Set([...current, sourceSlug]));
         setLocalFollowedSlugs(next);
         setLocalFollowedSourceSlugs(next);
         return { is_following: !currentlyFollowing, source_slug: sourceSlug };
@@ -204,11 +204,17 @@ export function useSourceFollow() {
 
   const toggleFollow = useCallback(
     (sourceSlug: string) => {
-      const source = sources.find((s) => s.slug === sourceSlug);
-      const currentlyFollowing = source ? source.is_following : false;
+      let currentlyFollowing = false;
+      if (user) {
+        const source = sources.find((s) => s.slug === sourceSlug);
+        currentlyFollowing = source ? source.is_following : false;
+      } else {
+        const current = getLocalFollowedSourceSlugs();
+        currentlyFollowing = current.includes(sourceSlug);
+      }
       toggleFollowMutation.mutate({ sourceSlug, currentlyFollowing });
     },
-    [sources, toggleFollowMutation]
+    [user, sources, toggleFollowMutation]
   );
 
   return {

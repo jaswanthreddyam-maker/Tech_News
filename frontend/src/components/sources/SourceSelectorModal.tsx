@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 import { Search, X, Check, Building2, Newspaper, Users, Plus } from "lucide-react";
 import { SourceItem } from "@/hooks/useSourceFollow";
 
@@ -12,8 +12,6 @@ interface SourceSelectorModalProps {
   onToggleFollow: (sourceSlug: string) => void;
   isToggling?: boolean;
 }
-
-const EASE_CUBIC = [0.16, 1, 0.3, 1] as const;
 
 export const FALLBACK_SOURCES: SourceItem[] = [
   { slug: "google", name: "Google Blog", category: "official", description: "Official news, research, and announcements from Google.", logo_url: null, url: "https://blog.google/rss/", credibility_score: 0.95, is_following: false },
@@ -37,6 +35,11 @@ export function SourceSelectorModal({
   isToggling,
 }: SourceSelectorModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Use provided sources if available, otherwise fallback
   const effectiveSources = useMemo(() => {
@@ -87,144 +90,134 @@ export function SourceSelectorModal({
     (s) => s.category !== "official" && s.category !== "editorial" && s.category !== "community"
   );
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-          {/* Backdrop */}
-          <motion.div
-            key="modal-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+  if (!isOpen || !mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className="fixed inset-0 bg-black/70 backdrop-blur-md"
+        aria-hidden="true"
+      />
+
+      {/* Modal Card */}
+      <div
+        className="relative w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-10 my-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="source-selector-title"
+      >
+        {/* Header */}
+        <div className="p-6 border-b border-neutral-800/80 flex items-center justify-between gap-4">
+          <div>
+            <h2 id="source-selector-title" className="text-xl font-bold text-neutral-100 tracking-tight">
+              Follow Authoritative Sources
+            </h2>
+            <p className="text-sm text-neutral-400 mt-1">
+              Select primary technology engineering blogs and editorial publishers for your feed.
+            </p>
+          </div>
+          <button
+            type="button"
             onClick={onClose}
-            className="fixed inset-0 z-[1] bg-black/60 backdrop-blur-sm"
-          />
-
-          {/* Modal Card */}
-          <motion.div
-            key="modal-card"
-            initial={{ opacity: 0, scale: 0.96, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 10 }}
-            transition={{ duration: 0.25, ease: EASE_CUBIC }}
-            className="relative w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-[2]"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="source-selector-title"
+            className="p-2 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            aria-label="Close dialog"
           >
-            {/* Header */}
-            <div className="p-6 border-b border-neutral-800/80 flex items-center justify-between gap-4">
-              <div>
-                <h2 id="source-selector-title" className="text-xl font-bold text-neutral-100 tracking-tight">
-                  Follow Authoritative Sources
-                </h2>
-                <p className="text-sm text-neutral-400 mt-1">
-                  Select primary technology engineering blogs and editorial publishers for your feed.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-2 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                aria-label="Close dialog"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div className="p-4 border-b border-neutral-800/50 bg-neutral-900/50">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                <input
-                  type="text"
-                  placeholder="Search sources by name or description..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-neutral-800/60 border border-neutral-700/60 rounded-xl text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-colors"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-200"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Sources List by Categories */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              {filteredSources.length === 0 ? (
-                <div className="py-12 text-center">
-                  <p className="text-neutral-400 text-sm">No sources found matching &ldquo;{searchQuery}&rdquo;</p>
-                </div>
-              ) : (
-                <>
-                  {officialSources.length > 0 && (
-                    <CategorySection
-                      title="Official Engineering & Research"
-                      icon={<Building2 className="w-4 h-4 text-amber-400" />}
-                      sources={officialSources}
-                      onToggleFollow={onToggleFollow}
-                      isToggling={isToggling}
-                    />
-                  )}
-
-                  {editorialSources.length > 0 && (
-                    <CategorySection
-                      title="Editorial & Journalism"
-                      icon={<Newspaper className="w-4 h-4 text-sky-400" />}
-                      sources={editorialSources}
-                      onToggleFollow={onToggleFollow}
-                      isToggling={isToggling}
-                    />
-                  )}
-
-                  {communitySources.length > 0 && (
-                    <CategorySection
-                      title="Community & Research Hubs"
-                      icon={<Users className="w-4 h-4 text-emerald-400" />}
-                      sources={communitySources}
-                      onToggleFollow={onToggleFollow}
-                      isToggling={isToggling}
-                    />
-                  )}
-
-                  {otherSources.length > 0 && (
-                    <CategorySection
-                      title="Other Sources"
-                      icon={<Building2 className="w-4 h-4 text-purple-400" />}
-                      sources={otherSources}
-                      onToggleFollow={onToggleFollow}
-                      isToggling={isToggling}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t border-neutral-800 bg-neutral-900/90 flex items-center justify-between">
-              <span className="text-xs text-neutral-500">
-                Following {effectiveSources.filter((s) => s.is_following).length} of {effectiveSources.length} sources
-              </span>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-xl transition-colors shadow-sm"
-              >
-                Done
-              </button>
-            </div>
-          </motion.div>
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      )}
-    </AnimatePresence>
+
+        {/* Search Input */}
+        <div className="p-4 border-b border-neutral-800/50 bg-neutral-900/50">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+            <input
+              type="text"
+              placeholder="Search sources by name or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-neutral-800/60 border border-neutral-700/60 rounded-xl text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-200"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sources List by Categories */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {filteredSources.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-neutral-400 text-sm">No sources found matching &ldquo;{searchQuery}&rdquo;</p>
+            </div>
+          ) : (
+            <>
+              {officialSources.length > 0 && (
+                <CategorySection
+                  title="Official Engineering & Research"
+                  icon={<Building2 className="w-4 h-4 text-amber-400" />}
+                  sources={officialSources}
+                  onToggleFollow={onToggleFollow}
+                  isToggling={isToggling}
+                />
+              )}
+
+              {editorialSources.length > 0 && (
+                <CategorySection
+                  title="Editorial & Journalism"
+                  icon={<Newspaper className="w-4 h-4 text-sky-400" />}
+                  sources={editorialSources}
+                  onToggleFollow={onToggleFollow}
+                  isToggling={isToggling}
+                />
+              )}
+
+              {communitySources.length > 0 && (
+                <CategorySection
+                  title="Community & Research Hubs"
+                  icon={<Users className="w-4 h-4 text-emerald-400" />}
+                  sources={communitySources}
+                  onToggleFollow={onToggleFollow}
+                  isToggling={isToggling}
+                />
+              )}
+
+              {otherSources.length > 0 && (
+                <CategorySection
+                  title="Other Sources"
+                  icon={<Building2 className="w-4 h-4 text-purple-400" />}
+                  sources={otherSources}
+                  onToggleFollow={onToggleFollow}
+                  isToggling={isToggling}
+                />
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-neutral-800 bg-neutral-900/90 flex items-center justify-between">
+          <span className="text-xs text-neutral-500">
+            Following {effectiveSources.filter((s) => s.is_following).length} of {effectiveSources.length} sources
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-xl transition-colors shadow-sm"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
