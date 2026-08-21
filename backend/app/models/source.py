@@ -26,9 +26,13 @@ class Source(Base):
     successful_crawls: Mapped[int] = mapped_column(Integer, default=0)
     reliability_score: Mapped[float] = mapped_column(Numeric, default=100.0)
     last_failure_type: Mapped[str] = mapped_column(String(100), nullable=True)
+    slug: Mapped[str | None] = mapped_column(String(100), unique=True, index=True, nullable=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     # Relationships
     raw_articles = relationship("RawArticle", back_populates="source", cascade="all, delete-orphan")
     processed_articles = relationship("ProcessedArticle", back_populates="source_ref")
+    followed_by = relationship("FollowedSource", back_populates="source", cascade="all, delete-orphan")

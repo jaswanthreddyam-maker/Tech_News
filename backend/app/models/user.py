@@ -77,6 +77,7 @@ class User(Base):
     reading_history = relationship("UserReadingHistory", back_populates="user", cascade="all, delete-orphan")
     followed_entities = relationship("FollowedEntity", back_populates="user", cascade="all, delete-orphan")
     followed_topics = relationship("FollowedTopic", back_populates="user", cascade="all, delete-orphan")
+    followed_sources = relationship("FollowedSource", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserSession(Base):

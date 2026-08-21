@@ -31,6 +31,7 @@ from app.api.v1.routes import (
     workspaces,
     briefing_routes,
     webhooks,
+    sources,
 )
 from app.newsletter.router import router as newsletter_router
 
@@ -52,6 +53,8 @@ api_router.include_router(calendar.router, prefix="/calendar", tags=["Editorial 
 api_router.include_router(articles.router, prefix="/articles", tags=["Articles"])
 api_router.include_router(certification.router, prefix="/certification", tags=["Certification"])
 api_router.include_router(news.router, prefix="/news", tags=["News Feed"])
+api_router.include_router(sources.router, prefix="/sources", tags=["Sources"])
+api_router.include_router(sources.router, tags=["Sources"])
 api_router.include_router(categories.router, prefix="/categories", tags=["Categories"])
 api_router.include_router(topics.router, prefix="/topics", tags=["Topics"])
 api_router.include_router(entities.router, prefix="/entities", tags=["Entities"])

@@ -25,7 +25,7 @@ def import_all_models():
         "ai_artifacts", "analytics", "article", "behavioral", "certification",
         "conversation", "distribution", "editorial", "event", "growth",
         "intelligence", "knowledge", "memory", "recipient", "recommendation",
-        "research", "source", "story", "telemetry", "tnt_knowledge",
+        "research", "source", "followed_source", "story", "telemetry", "tnt_knowledge",
         "user", "user_settings", "workspace"
     ]
     for name in model_names:
