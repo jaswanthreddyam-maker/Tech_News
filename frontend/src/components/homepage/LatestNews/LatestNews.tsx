@@ -179,12 +179,17 @@ export function LatestNews() {
   const sectionBgY = useTransform(scrollYProgress, [0, 1], [0, 40]);
   const contentY = useTransform(scrollYProgress, [0, 1], [0, 15]);
 
-  // Dynamically compute only categories that actually have fetched articles
+  // Dynamically compute all categories + aggregated "All Categories" option
   const availableCategories = useMemo(() => {
     if (!categoryGroups || !Array.isArray(categoryGroups)) return [];
 
-    return categoryGroups
-      .filter((desk: any) => desk && Array.isArray(desk.articles) && desk.articles.length > 0)
+    const activeDesks = categoryGroups.filter(
+      (desk: any) => desk && Array.isArray(desk.articles) && desk.articles.length > 0
+    );
+
+    if (activeDesks.length === 0) return [];
+
+    const mapped = activeDesks
       .map((desk: any) => {
         const slug = (desk.slug || "").toLowerCase().trim();
         const known = KNOWN_METADATA[slug];
@@ -205,6 +210,34 @@ export function LatestNews() {
         };
       })
       .sort((a, b) => a.order - b.order);
+
+    // Aggregate unique articles across all desks for "All Categories"
+    const allArticlesMap = new Map<string | number, any>();
+    for (const desk of activeDesks) {
+      for (const art of desk.articles) {
+        const id = art.id || art.slug;
+        if (!allArticlesMap.has(id)) {
+          allArticlesMap.set(id, art);
+        }
+      }
+    }
+    const allArticles = Array.from(allArticlesMap.values());
+
+    const allCategoriesOption = {
+      key: "all",
+      title: "All Categories",
+      icon: Layers,
+      tags: "Comprehensive Technology Intelligence • All Coverage Desks",
+      order: 0,
+      articlesCount: allArticles.length,
+      desk: {
+        slug: "all",
+        headline: "All Categories",
+        articles: allArticles,
+      },
+    };
+
+    return [allCategoriesOption, ...mapped];
   }, [categoryGroups]);
 
   // Ensure selectedKey is always set to an existing category
