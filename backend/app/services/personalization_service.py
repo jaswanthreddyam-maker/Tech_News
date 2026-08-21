@@ -15,20 +15,24 @@ logger = logging.getLogger(__name__)
 
 
 SLUG_ALIASES = {
-    "google": ["3", "google-blog", "google"],
-    "openai": ["1", "openai-blog", "openai"],
-    "anthropic": ["2", "anthropic-news", "anthropic"],
-    "nvidia": ["4", "nvidia-ai-blog", "nvidia"],
+    "google": ["3", "google-blog", "google blog", "google"],
+    "google-blog": ["3", "google-blog", "google blog", "google"],
+    "openai": ["1", "openai-blog", "openai blog", "openai"],
+    "openai-blog": ["1", "openai-blog", "openai blog", "openai"],
+    "anthropic": ["2", "anthropic-news", "anthropic news", "anthropic"],
+    "anthropic-news": ["2", "anthropic-news", "anthropic news", "anthropic"],
+    "nvidia": ["4", "nvidia-ai-blog", "nvidia ai blog", "nvidia"],
+    "nvidia-ai-blog": ["4", "nvidia-ai-blog", "nvidia ai blog", "nvidia"],
     "techcrunch": ["6", "techcrunch"],
-    "the-verge": ["7", "the-verge"],
-    "ars-technica": ["8", "ars-technica"],
-    "hacker-news": ["9", "hacker-news"],
-    "github-trending": ["10", "github-trending"],
-    "reddit-machinelearning": ["11", "reddit-machinelearning"],
-    "mit-technology-review": ["13", "mit-tech-review", "mit-technology-review"],
-    "mit-tech-review": ["13", "mit-tech-review", "mit-technology-review"],
-    "google-deepmind": ["5", "google-deepmind"],
-    "wired-technology": ["12", "wired-technology"],
+    "the-verge": ["7", "the-verge", "the verge"],
+    "ars-technica": ["8", "ars-technica", "ars technica"],
+    "hacker-news": ["9", "hacker-news", "hacker news"],
+    "github-trending": ["10", "github-trending", "github trending"],
+    "reddit-machinelearning": ["11", "reddit-machinelearning", "reddit machinelearning"],
+    "mit-technology-review": ["13", "mit-tech-review", "mit tech review", "mit technology review", "mit-technology-review"],
+    "mit-tech-review": ["13", "mit-tech-review", "mit tech review", "mit technology review", "mit-technology-review"],
+    "google-deepmind": ["5", "google-deepmind", "google deepmind"],
+    "wired-technology": ["12", "wired-technology", "wired technology"],
 }
 
 
@@ -94,6 +98,7 @@ class PersonalizationService:
                 Source.slug.in_(list(search_terms)),
                 cast(Source.id, String).in_(list(search_terms)),
                 func.lower(Source.name).in_(list(search_terms)),
+                func.replace(func.lower(Source.name), " ", "-").in_(list(search_terms)),
             ),
             Source.enabled == True,
             Source.is_deleted == False,
@@ -190,6 +195,7 @@ class PersonalizationService:
                         Source.slug.in_(list(search_terms)),
                         cast(Source.id, String).in_(list(search_terms)),
                         func.lower(Source.name).in_(list(search_terms)),
+                        func.replace(func.lower(Source.name), " ", "-").in_(list(search_terms)),
                     ),
                     Source.enabled == True,
                     Source.is_deleted == False,
@@ -243,12 +249,14 @@ class PersonalizationService:
                         Source.slug.in_(list(search_terms)),
                         cast(Source.id, String).in_(list(search_terms)),
                         func.lower(Source.name).in_(list(search_terms)),
+                        func.replace(func.lower(Source.name), " ", "-").in_(list(search_terms)),
                     ),
                     Source.enabled == True,
                     Source.is_deleted == False,
                 )
                 res = await self.db.execute(slug_stmt)
                 followed_source_ids = list(res.scalars().all())
+
 
         if not followed_source_ids:
             return {
