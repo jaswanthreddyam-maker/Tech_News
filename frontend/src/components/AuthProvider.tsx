@@ -8,15 +8,25 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const { loginUser, setRestoringSession, setAuthRefreshSuppressUntil } = useAppStore();
 
   useEffect(() => {
+    // Gate 1: Only attempt session restore if user previously logged in
+    const hadSession = typeof window !== "undefined" && localStorage.getItem("has_session") === "true";
+    if (!hadSession) {
+      setRestoringSession(false);
+      return;
+    }
+
+    // Gate 2: Skip if refresh is currently suppressed (e.g. after a recent 401)
+    const suppressUntil = useAppStore.getState().authRefreshSuppressUntil;
+    if (suppressUntil && suppressUntil > Date.now()) {
+      setRestoringSession(false);
+      return;
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-
       controller.abort();
       setRestoringSession(false);
-      
-      // Suppress subsequent refresh attempts for 5 minutes
-      const suppressUntil = Date.now() + 300000;
-      setAuthRefreshSuppressUntil(suppressUntil);
+      setAuthRefreshSuppressUntil(Date.now() + 300000);
     }, 3000);
 
     const initializeSession = async () => {
@@ -36,20 +46,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             loginUser(data.user, data.access_token);
           }
         } else {
-
           if (response.status === 401 || response.status === 403) {
-            const suppressUntil = Date.now() + 300000;
-            setAuthRefreshSuppressUntil(suppressUntil);
+            // Refresh token is invalid/expired — clear session marker and suppress
+            localStorage.removeItem("has_session");
+            setAuthRefreshSuppressUntil(Date.now() + 300000);
           }
         }
       } catch (e: any) {
-        if (e.name === "AbortError") {
-
-        } else {
-
+        if (e.name !== "AbortError") {
+          setAuthRefreshSuppressUntil(Date.now() + 300000);
         }
-        const suppressUntil = Date.now() + 300000;
-        setAuthRefreshSuppressUntil(suppressUntil);
       } finally {
         clearTimeout(timeoutId);
         setRestoringSession(false);
