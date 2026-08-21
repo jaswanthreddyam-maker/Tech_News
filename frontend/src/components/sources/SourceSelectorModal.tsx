@@ -109,7 +109,6 @@ export function SourceSelectorModal({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search sources (Google, OpenAI, Anthropic, NVIDIA...)"
                 className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.05] border border-white/10 text-sm font-sans placeholder:text-muted-foreground/50 text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
-                autoFocus
               />
               {searchQuery && (
                 <button
