@@ -6,6 +6,8 @@ import { MotionScales } from "@/design-system/motion/tokens";
 import ReactMarkdown from "react-markdown";
 import { apiClient } from "@/lib/api/client";
 import { AiStarsIcon } from "@/components/common/icons/AiStarsIcon";
+import { useAuthGate } from "@/hooks/useAuthGate";
+import { FeatureCapability } from "@/lib/auth/features";
 
 interface SourceItem {
   title: string;
@@ -92,6 +94,7 @@ const customMarkdownComponents = {
 };
 
 export function GlobalAssistant() {
+  const { requireAuthentication } = useAuthGate();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -161,6 +164,10 @@ export function GlobalAssistant() {
 
   const executeQuery = async (userPrompt: string) => {
     if (!userPrompt.trim() || isGenerating) return;
+
+    if (!requireAuthentication(FeatureCapability.AI_PERSONAL_ASSISTANT)) {
+      return;
+    }
 
     setIsGenerating(true);
     setErrorMessage(null);

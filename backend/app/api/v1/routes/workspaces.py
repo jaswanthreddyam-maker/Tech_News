@@ -7,12 +7,20 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.chat.schemas import OwnerType
-from app.api.deps import resolve_owner
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.user import User
 from app.services.workspace_service import WorkspaceService
 
 logger = logging.getLogger("tech_news.api.v1.workspaces")
 router = APIRouter(tags=["Workspaces"])
+
+
+async def resolve_owner(
+    current_user: User = Depends(get_current_user),
+) -> tuple[OwnerType, str]:
+    """Strict authenticated owner resolver for workspaces."""
+    return OwnerType.USER, str(current_user.id)
 
 
 # --- Schemas ---
@@ -95,7 +103,7 @@ async def get_workspace(
         "name": ws.name,
         "description": ws.description,
         "created_at": ws.created_at,
-        "articles": [{"article_id": a.article_id, "title": a.article.title} for a in ws.articles],
+        "articles": [{"article_id": a.article_id, "title": getattr(getattr(a, "article", None), "title", str(a.article_id))} for a in ws.articles],
         "conversations": [{"conversation_id": c.conversation_id} for c in ws.conversations],
         "notes": [
             {"id": n.id, "content": n.content, "created_at": n.created_at, "updated_at": n.updated_at} for n in ws.notes

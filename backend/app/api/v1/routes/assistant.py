@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.assistant.assistant_service import PersonalAssistantService
 from app.ai.chat.schemas import OwnerType
-from app.api.deps import resolve_owner
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.conversation import ConversationSession
 from app.models.memory import ConversationEpisode
+from app.models.user import User
 
 logger = logging.getLogger("tech_news.api.v1.assistant")
 router = APIRouter(tags=["Assistant"])
@@ -24,25 +25,23 @@ class AssistantQueryRequest(BaseModel):
     conversation_id: str | None = None
 
 
-def _verify_session_owner(session: ConversationSession, owner_type: OwnerType, owner_id: str) -> bool:
-    meta = session.metadata_json or {}
-    if meta.get("owner_id") == owner_id:
+def _verify_session_owner(session: ConversationSession, user_id: int) -> bool:
+    if session.user_id is not None and session.user_id == user_id:
         return True
-    try:
-        if session.user_id is not None and session.user_id == int(owner_id):
-            return True
-    except ValueError:
-        pass
+    meta = session.metadata_json or {}
+    if meta.get("owner_id") == str(user_id):
+        return True
     return False
 
 
 @router.post("/query")
 async def query_assistant(
     body: AssistantQueryRequest,
-    owner_info: tuple[OwnerType, str] = Depends(resolve_owner),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    owner_type, owner_id = owner_info
+    owner_type = OwnerType.USER
+    owner_id = str(current_user.id)
     conv_id = body.conversation_id
 
     if conv_id:
@@ -51,15 +50,14 @@ async def query_assistant(
         res = await db.execute(stmt)
         session = res.scalar_one_or_none()
 
-        if not session or not _verify_session_owner(session, owner_type, owner_id):
+        if not session or not _verify_session_owner(session, current_user.id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     else:
         # Auto-create new conversation session in short-lived transaction
         conv_id = f"ast_conv_{uuid.uuid4().hex[:12]}"
-        user_id_val = int(owner_id) if owner_id.isdigit() else None
         session = ConversationSession(
             conversation_id=conv_id,
-            user_id=user_id_val,
+            user_id=current_user.id,
             status="ACTIVE",
             metadata_json={
                 "owner_type": owner_type.value,
@@ -74,10 +72,9 @@ async def query_assistant(
 
     # Create User Episode in short-lived transaction
     message_id = f"ast_msg_{uuid.uuid4().hex[:12]}"
-    user_id_val = int(owner_id) if owner_id.isdigit() else None
     user_episode = ConversationEpisode(
         conversation_id=conv_id,
-        user_id=user_id_val,
+        user_id=current_user.id,
         role="user",
         message=body.query,
         metadata_json={
@@ -119,15 +116,15 @@ async def query_assistant(
 
 @router.get("/conversations")
 async def list_assistant_conversations(
-    owner_info: tuple[OwnerType, str] = Depends(resolve_owner),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    owner_type, owner_id = owner_info
-    stmt = select(ConversationSession).order_by(ConversationSession.updated_at.desc())
+    stmt = select(ConversationSession).where(
+        (ConversationSession.user_id == current_user.id)
+    ).order_by(ConversationSession.updated_at.desc())
     res = await db.execute(stmt)
-    sessions = res.scalars().all()
+    user_sessions = res.scalars().all()
 
-    user_sessions = [s for s in sessions if _verify_session_owner(s, owner_type, owner_id)]
     return {
         "conversations": [
             {
@@ -145,15 +142,14 @@ async def list_assistant_conversations(
 @router.get("/conversations/{conversation_id}")
 async def get_assistant_conversation(
     conversation_id: str,
-    owner_info: tuple[OwnerType, str] = Depends(resolve_owner),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    owner_type, owner_id = owner_info
     stmt = select(ConversationSession).where(ConversationSession.conversation_id == conversation_id)
     res = await db.execute(stmt)
     session = res.scalar_one_or_none()
 
-    if not session or not _verify_session_owner(session, owner_type, owner_id):
+    if not session or not _verify_session_owner(session, current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
     ep_stmt = (

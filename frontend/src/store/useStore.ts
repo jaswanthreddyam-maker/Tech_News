@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import type { Article } from "../services/api/news";
+import { FeatureCapability } from "@/lib/auth/features";
+import { sessionManager } from "@/lib/session/sessionManager";
+
+import { clearUserQueryCache } from "@/lib/queryClient";
 
 export interface User {
   id: number;
@@ -7,6 +11,12 @@ export interface User {
   email: string;
   role: string;
   permissions: string[];
+}
+
+export interface AuthGateModalState {
+  isOpen: boolean;
+  feature: FeatureCapability | null;
+  returnUrl: string | null;
 }
 
 interface AppState {
@@ -34,6 +44,11 @@ interface AppState {
   setRestoringSession: (loading: boolean) => void;
   authRefreshSuppressUntil: number | null;
   setAuthRefreshSuppressUntil: (time: number | null) => void;
+
+  // Auth Gate Modal State
+  authGate: AuthGateModalState;
+  openAuthGate: (feature: FeatureCapability, returnUrl?: string) => void;
+  closeAuthGate: () => void;
 
   // Administrative Authentication Session (backward compat)
   isAdminAuthenticated: boolean;
@@ -76,32 +91,67 @@ export const useAppStore = create<AppState>((set) => ({
   setRestoringSession: (loading) => set({ isRestoringSession: loading }),
   authRefreshSuppressUntil: null,
   setAuthRefreshSuppressUntil: (time) => set({ authRefreshSuppressUntil: time }),
-  loginUser: (user, accessToken) =>
+
+  // Auth Gate Modal State
+  authGate: {
+    isOpen: false,
+    feature: null,
+    returnUrl: null,
+  },
+  openAuthGate: (feature: FeatureCapability, returnUrl?: string) =>
+    set({
+      authGate: {
+        isOpen: true,
+        feature,
+        returnUrl: returnUrl || (typeof window !== "undefined" ? window.location.pathname + window.location.search : "/"),
+      },
+    }),
+  closeAuthGate: () =>
+    set({
+      authGate: {
+        isOpen: false,
+        feature: null,
+        returnUrl: null,
+      },
+    }),
+
+  loginUser: (user, accessToken) => {
+    sessionManager.setSession(accessToken);
     set({
       user,
       accessToken,
       isAdminAuthenticated: true,
       adminToken: accessToken,
-    }),
-  logoutUser: () =>
+      authGate: { isOpen: false, feature: null, returnUrl: null },
+    });
+  },
+  logoutUser: () => {
+    sessionManager.clearSession();
+    clearUserQueryCache();
     set({
       user: null,
       accessToken: null,
       isAdminAuthenticated: false,
       adminToken: null,
       authRefreshSuppressUntil: Date.now() + 300000, // suppress refresh storms for 5 min
-    }),
+    });
+  },
 
   // Legacy admin token management — maps to user session for backward compat
   isAdminAuthenticated: false,
   adminToken: null,
-  loginAdmin: (token) =>
-    set({ isAdminAuthenticated: true, adminToken: token, accessToken: token }),
-  logoutAdmin: () =>
+  loginAdmin: (token) => {
+    sessionManager.setSession(token);
+    set({ isAdminAuthenticated: true, adminToken: token, accessToken: token });
+  },
+  logoutAdmin: () => {
+    sessionManager.clearSession();
+    clearUserQueryCache();
     set({
       isAdminAuthenticated: false,
       adminToken: null,
       accessToken: null,
       user: null,
-    }),
+    });
+  },
 }));

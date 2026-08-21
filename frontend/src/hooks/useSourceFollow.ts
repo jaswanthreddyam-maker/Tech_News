@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { useAppStore } from "@/store/useStore";
+import { useAuthGate } from "@/hooks/useAuthGate";
+import { FeatureCapability } from "@/lib/auth/features";
 import { Article } from "@/lib/api/types";
 
 export interface SourceItem {
@@ -24,66 +26,12 @@ export interface FollowingFeedResponse {
   total: number;
 }
 
-const LOCAL_STORAGE_KEY = "tnt_followed_sources";
-
-function getLocalFollowedSourceSlugs(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    // Support strings directly and filter out invalid/empty tokens
-    return parsed
-      .map((item) => (typeof item === "string" ? item.trim() : String(item)))
-      .filter((slug) => slug.length > 0);
-  } catch {
-    return [];
-  }
-}
-
-function setLocalFollowedSourceSlugs(slugs: string[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slugs));
-  } catch {
-    // Ignore localStorage write failures
-  }
-}
-
 export function useSourceFollow() {
   const { user } = useAppStore();
+  const { requireAuthentication } = useAuthGate();
   const queryClient = useQueryClient();
-  const [localFollowedSlugs, setLocalFollowedSlugs] = useState<string[]>([]);
-  const [, startTransition] = useTransition();
 
-  // Load guest follows from localStorage on mount
-  useEffect(() => {
-    setLocalFollowedSlugs(getLocalFollowedSourceSlugs());
-  }, []);
-
-  // Sync guest follows into DB upon user login
-  useEffect(() => {
-    if (!user) return;
-    const guestSlugs = getLocalFollowedSourceSlugs();
-    if (guestSlugs.length > 0) {
-      apiFetch("/users/me/following/sources/sync", {
-        method: "POST",
-        body: JSON.stringify({ source_slugs: guestSlugs }),
-      })
-        .then(() => {
-          localStorage.removeItem(LOCAL_STORAGE_KEY);
-          setLocalFollowedSlugs([]);
-          queryClient.invalidateQueries({ queryKey: ["sources"] });
-          queryClient.invalidateQueries({ queryKey: ["following-feed"] });
-        })
-        .catch(() => {
-          // Ignore sync network errors on transient drop
-        });
-    }
-  }, [user, queryClient]);
-
-  // 1. Fetch available sources
+  // 1. Fetch available sources (authenticated receives true is_following, guest receives false)
   const {
     data: sourcesData,
     isLoading: isSourcesLoading,
@@ -98,46 +46,33 @@ export function useSourceFollow() {
     staleTime: 60_000,
   });
 
-  // Calculate effective is_following per source (DB for logged-in, localStorage for guest)
-  const sources: SourceItem[] = (sourcesData || []).map((s) => {
-    const isFollowing = user ? s.is_following : localFollowedSlugs.includes(s.slug);
-    return { ...s, is_following: isFollowing };
-  });
+  const sources: SourceItem[] = (sourcesData || []).map((s) => ({
+    ...s,
+    is_following: user ? !!s.is_following : false,
+  }));
 
   const followedSources = sources.filter((s) => s.is_following);
   const followedCount = followedSources.length;
 
-  // Active followed source slugs
-  const activeFollowedSlugs = user
-    ? followedSources.map((s) => s.slug)
-    : localFollowedSlugs;
-
-  // 2. Fetch Following Feed
+  // 2. Fetch Following Feed (only for authenticated users with followed sources)
   const {
     data: feedData,
     isLoading: isFeedLoading,
     error: feedError,
     refetch: refetchFeed,
   } = useQuery({
-    queryKey: ["following-feed", user?.id ?? "guest", activeFollowedSlugs.sort().join(",")],
+    queryKey: ["following-feed", user?.id ?? "guest", followedSources.map((s) => s.slug).sort().join(",")],
     queryFn: async (): Promise<FollowingFeedResponse> => {
-      if (activeFollowedSlugs.length === 0) {
+      if (!user || followedCount === 0) {
         return { items: [], followed_sources_count: 0, total: 0 };
       }
-
-      if (user) {
-        return await apiFetch<FollowingFeedResponse>("/following/feed");
-      } else {
-        const queryParams = activeFollowedSlugs
-          .map((slug) => `source_slugs=${encodeURIComponent(slug)}`)
-          .join("&");
-        return await apiFetch<FollowingFeedResponse>(`/following/feed?${queryParams}`);
-      }
+      return await apiFetch<FollowingFeedResponse>("/following/feed");
     },
     staleTime: 30_000,
+    enabled: !!user,
   });
 
-  // 3. Toggle Follow Mutation with Snapshot Rollback
+  // 3. Toggle Follow Mutation (Strict Authenticated Endpoint)
   const toggleFollowMutation = useMutation({
     mutationFn: async ({
       sourceSlug,
@@ -146,18 +81,6 @@ export function useSourceFollow() {
       sourceSlug: string;
       currentlyFollowing: boolean;
     }) => {
-      if (!user) {
-        // Guest mode: update localStorage
-        const current = getLocalFollowedSourceSlugs();
-        const next = currentlyFollowing
-          ? current.filter((s) => s !== sourceSlug)
-          : Array.from(new Set([...current, sourceSlug]));
-        setLocalFollowedSlugs(next);
-        setLocalFollowedSourceSlugs(next);
-        return { is_following: !currentlyFollowing, source_slug: sourceSlug };
-      }
-
-      // Logged-in mode: call authenticated API by slug
       if (currentlyFollowing) {
         return await apiFetch<{ is_following: boolean }>(
           `/users/me/following/sources/${encodeURIComponent(sourceSlug)}`,
@@ -178,44 +101,43 @@ export function useSourceFollow() {
       // Snapshot previous sources cache
       const prevSources = queryClient.getQueryData<SourceItem[]>(["sources", user?.id ?? "guest"]);
 
-      // Optimistically update sources cache
-      queryClient.setQueryData<SourceItem[]>(["sources", user?.id ?? "guest"], (old) => {
-        if (!old) return old;
-        return old.map((s) =>
-          s.slug === sourceSlug ? { ...s, is_following: !currentlyFollowing } : s
+      // Optimistically update
+      if (prevSources) {
+        queryClient.setQueryData<SourceItem[]>(
+          ["sources", user?.id ?? "guest"],
+          prevSources.map((s) =>
+            s.slug === sourceSlug ? { ...s, is_following: !currentlyFollowing } : s
+          )
         );
-      });
+      }
 
       return { prevSources };
     },
-    onError: (_err, _vars, context) => {
-      // Restore previous state snapshot on error
+    onError: (_err, _variables, context) => {
+      // Rollback on network/auth failure
       if (context?.prevSources) {
         queryClient.setQueryData(["sources", user?.id ?? "guest"], context.prevSources);
       }
     },
     onSettled: () => {
-      startTransition(() => {
-        queryClient.invalidateQueries({ queryKey: ["sources"] });
-        queryClient.invalidateQueries({ queryKey: ["following-feed"] });
-      });
+      queryClient.invalidateQueries({ queryKey: ["sources"] });
+      queryClient.invalidateQueries({ queryKey: ["following-feed"] });
     },
   });
 
-  const toggleFollow = useCallback(
-    (sourceSlug: string) => {
-      let currentlyFollowing = false;
-      if (user) {
-        const source = sources.find((s) => s.slug === sourceSlug);
-        currentlyFollowing = source ? source.is_following : false;
-      } else {
-        const current = getLocalFollowedSourceSlugs();
-        currentlyFollowing = current.includes(sourceSlug);
-      }
-      toggleFollowMutation.mutate({ sourceSlug, currentlyFollowing });
-    },
-    [user, sources, toggleFollowMutation]
-  );
+  const toggleFollow = async (sourceSlug: string) => {
+    if (!requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
+      return;
+    }
+    const currentSource = sources.find((s) => s.slug === sourceSlug);
+    const currentlyFollowing = currentSource ? currentSource.is_following : false;
+
+    try {
+      await toggleFollowMutation.mutateAsync({ sourceSlug, currentlyFollowing });
+    } catch {
+      // Handled in onError rollback
+    }
+  };
 
   return {
     sources,

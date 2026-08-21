@@ -9,15 +9,11 @@ from app.ai.chat.conversation_registry import ConversationRegistry
 from app.ai.chat.conversation_service import ConversationService
 from app.ai.chat.memory import MemoryManager
 from app.ai.chat.schemas import ComparisonContext, ConversationMetadata, ConversationMode, OwnerType
-from app.api.deps import resolve_owner
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.user import User
 
 router = APIRouter()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -62,11 +58,11 @@ class ConversationListResponse(BaseModel):
 @router.post("/conversations", response_model=CreateConversationResponse)
 async def create_conversation(
     body: CreateConversationRequest,
-    response: Response,
-    owner_info: tuple[OwnerType, str] = Depends(resolve_owner),
+    current_user: User = Depends(get_current_user),
 ):
     """Explicitly creates a new conversation and returns its ID."""
-    owner_type, owner_id = owner_info
+    owner_type = OwnerType.USER
+    owner_id = str(current_user.id)
     registry = ConversationRegistry()
     conversation_id = str(uuid.uuid4())
 
@@ -79,16 +75,14 @@ async def create_conversation(
         workspace_id=body.workspace_id,
     )
 
-    if owner_type == OwnerType.ANONYMOUS:
-        response.set_cookie(key="client_id", value=owner_id, httponly=True, samesite="lax")
-
     return CreateConversationResponse(conversation_id=conversation_id, metadata=meta)
 
 
 @router.get("/conversations", response_model=ConversationListResponse)
-async def list_conversations(owner_info: tuple[OwnerType, str] = Depends(resolve_owner)):
-    """Lists conversations for the current user (authenticated or anonymous)."""
-    owner_type, owner_id = owner_info
+async def list_conversations(current_user: User = Depends(get_current_user)):
+    """Lists conversations for the authenticated user."""
+    owner_type = OwnerType.USER
+    owner_id = str(current_user.id)
     registry = ConversationRegistry()
 
     conversations = await registry.list_conversations(owner_type=owner_type, owner_id=owner_id, limit=50)
@@ -96,9 +90,13 @@ async def list_conversations(owner_info: tuple[OwnerType, str] = Depends(resolve
 
 
 @router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str, owner_info: tuple[OwnerType, str] = Depends(resolve_owner)):
+async def get_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """Retrieves conversation metadata and full message history."""
-    owner_type, owner_id = owner_info
+    owner_type = OwnerType.USER
+    owner_id = str(current_user.id)
     registry = ConversationRegistry()
 
     # Ownership validation
@@ -121,10 +119,11 @@ async def get_conversation(conversation_id: str, owner_info: tuple[OwnerType, st
 async def rename_conversation(
     conversation_id: str,
     body: RenameRequest,
-    owner_info: tuple[OwnerType, str] = Depends(resolve_owner),
+    current_user: User = Depends(get_current_user),
 ):
     """Manually renames a conversation."""
-    owner_type, owner_id = owner_info
+    owner_type = OwnerType.USER
+    owner_id = str(current_user.id)
     registry = ConversationRegistry()
 
     is_owner = await registry.validate_ownership(conversation_id, owner_type, owner_id)
@@ -139,9 +138,13 @@ async def rename_conversation(
 
 
 @router.delete("/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str, owner_info: tuple[OwnerType, str] = Depends(resolve_owner)):
+async def delete_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """Deletes a conversation and all associated Redis data."""
-    owner_type, owner_id = owner_info
+    owner_type = OwnerType.USER
+    owner_id = str(current_user.id)
     registry = ConversationRegistry()
 
     is_owner = await registry.validate_ownership(conversation_id, owner_type, owner_id)
@@ -158,14 +161,15 @@ async def delete_conversation(conversation_id: str, owner_info: tuple[OwnerType,
 @router.post("/stream")
 async def chat_stream(
     body: ChatStreamRequest,
-    owner_info: tuple[OwnerType, str] = Depends(resolve_owner),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Streams the conversational AI response using Server-Sent Events (SSE).
     Requires an existing conversation_id from POST /conversations.
     """
-    owner_type, owner_id = owner_info
+    owner_type = OwnerType.USER
+    owner_id = str(current_user.id)
     registry = ConversationRegistry()
 
     # Validate ownership

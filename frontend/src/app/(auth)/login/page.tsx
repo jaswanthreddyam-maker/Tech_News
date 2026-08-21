@@ -8,6 +8,7 @@ import { useAppStore, User } from "@/store/useStore";
 import { canAccessAdmin } from "@/lib/auth/permissions";
 import { apiFetch, APIClientError } from "@/services/api";
 import { Mail, Lock, ShieldCheck } from "lucide-react";
+import { sanitizeReturnUrl } from "@/lib/auth/safeReturnUrl";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
@@ -41,12 +42,19 @@ export default function LoginPage() {
     setMounted(true);
   }, []);
 
+  const getReturnUrl = useCallback(() => {
+    if (typeof window === "undefined") return "/";
+    const params = new URLSearchParams(window.location.search);
+    const candidate = params.get("returnUrl") || params.get("redirect") || params.get("next");
+    return sanitizeReturnUrl(candidate);
+  }, []);
+
   // If already authenticated, redirect
   useEffect(() => {
     if (mounted && user) {
-      router.push("/");
+      router.push(getReturnUrl());
     }
-  }, [mounted, user, router]);
+  }, [mounted, user, router, getReturnUrl]);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -64,7 +72,7 @@ export default function LoginPage() {
       });
 
       loginUser(data.user, data.access_token);
-      router.push("/");
+      router.push(getReturnUrl());
     } catch (err: any) {
       if (err instanceof APIClientError) {
         if (err.status === 401) {
@@ -93,7 +101,7 @@ export default function LoginPage() {
         body: JSON.stringify({ credential: credentialResponse.credential }),
       });
       loginUser(data.user, data.access_token);
-      router.push("/");
+      router.push(getReturnUrl());
     } catch (err: any) {
       setError(err.message || "Google authentication failed.");
     } finally {

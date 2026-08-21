@@ -141,7 +141,7 @@ async def test_adversarial_source_attribution_and_following(db_session, cleanup_
     service = PersonalizationService(db_session)
 
     # 5. User follows ONLY OpenAI via canonical slug
-    await service.follow_source(user_id=user.id, source_ref="openai")
+    await service.follow_source(user_id=user.id, source_slug="openai")
 
     # 6. Fetch Following Feed
     feed = await service.get_source_following_feed(user_id=user.id)

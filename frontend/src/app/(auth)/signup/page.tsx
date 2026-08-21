@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAppStore } from "@/store/useStore";
 import { canAccessAdmin } from "@/lib/auth/permissions";
 import { sessionManager } from "@/lib/session/sessionManager";
+import { sanitizeReturnUrl } from "@/lib/auth/safeReturnUrl";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -31,10 +32,17 @@ export default function SignupPage() {
     setMounted(true);
   }, []);
 
+  const getReturnUrl = () => {
+    if (typeof window === "undefined") return "/";
+    const params = new URLSearchParams(window.location.search);
+    const candidate = params.get("returnUrl") || params.get("redirect") || params.get("next");
+    return sanitizeReturnUrl(candidate);
+  };
+
   // Redirect if already logged in
   useEffect(() => {
     if (mounted && user) {
-      router.push("/");
+      router.push(getReturnUrl());
     }
   }, [mounted, user, router]);
 
@@ -97,7 +105,7 @@ export default function SignupPage() {
       setShowWelcomeToast(true);
       setTimeout(() => setProgressWidth(100), 50);
       setTimeout(() => {
-        router.push("/");
+        router.push(getReturnUrl());
       }, 2500);
     } catch (err: any) {
       if (err.status === 409 || err.message?.includes("Email already registered")) {

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.core.security import decode_access_token
+from app.core.security import get_current_user
 from app.models.user import User
 from app.briefing.models import DailyBriefingSubscriber, DailyBriefingDelivery, can_transition
 from app.briefing.service import (
@@ -20,46 +20,6 @@ from app.briefing.service import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/briefing", tags=["Daily Briefing"])
-
-
-# ---------------------------------------------------------------------------
-# Auth helper — optional with hard error on bad JWT
-# ---------------------------------------------------------------------------
-
-async def get_optional_user(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
-    """
-    Returns the authenticated User if a valid Bearer token is present.
-    - No Authorization header  → None (anonymous subscriber allowed)
-    - Valid Bearer token       → User object
-    - Authorization present but invalid/expired → raises 401 (no silent downgrade)
-    """
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return None
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Authorization format. Expected: Bearer <token>",
-        )
-    token = auth_header[7:]
-    try:
-        payload = decode_access_token(token)
-    except HTTPException:
-        raise  # Propagate 401 — don't silently downgrade
-    user_id_str = payload.get("sub")
-    if not user_id_str:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject.")
-    
-    try:
-        user_id_val = int(user_id_str) if str(user_id_str).isdigit() else None
-        user = await db.get(User, user_id_val) if user_id_val is not None else None
-    except ValueError:
-        user = None
-
-    return user
 
 
 # ---------------------------------------------------------------------------
@@ -89,23 +49,20 @@ class VerifyEmailRequest(BaseModel):
 
 @router.get("/preferences")
 async def get_briefing_preferences(
-    email: str = Query("user@example.com", description="Subscriber email"),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get preferences and last delivery telemetry for a Daily Briefing subscriber."""
-    # Authenticated: look up by user_id first, fall back to email
-    subscriber = None
-    if current_user:
-        stmt = select(DailyBriefingSubscriber).where(
-            DailyBriefingSubscriber.user_id == str(current_user.id)
-        )
-        res = await db.execute(stmt)
-        subscriber = res.scalar_one_or_none()
+    """Get preferences and last delivery telemetry for authenticated subscriber."""
+    # Look up by user_id first, fall back to current_user.email
+    stmt = select(DailyBriefingSubscriber).where(
+        DailyBriefingSubscriber.user_id == str(current_user.id)
+    )
+    res = await db.execute(stmt)
+    subscriber = res.scalar_one_or_none()
 
     if not subscriber:
         subscriber = await DailyBriefingService.get_or_create_subscriber(
-            db, email=email, user_id=str(current_user.id) if current_user else None
+            db, email=current_user.email, user_id=str(current_user.id)
         )
         await db.commit()
 
@@ -149,16 +106,15 @@ async def get_briefing_preferences(
 async def update_briefing_preferences(
     req: PreferenceUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update preferences for Daily Briefing. Binds to authenticated user if JWT present."""
-    user_id = str(current_user.id) if current_user else None
+    """Update preferences for Daily Briefing. Derived strictly from authenticated user."""
     subscriber = await DailyBriefingService.get_or_create_subscriber(
-        db, email=req.email, user_id=user_id
+        db, email=req.email or current_user.email, user_id=str(current_user.id)
     )
 
-    # Bind user if authenticated and not yet bound
-    if current_user and not subscriber.user_id:
+    # Bind user if not yet bound
+    if not subscriber.user_id:
         await DailyBriefingService.bind_user_to_subscriber(db, subscriber, str(current_user.id))
 
     subscriber.delivery_time = req.delivery_time
@@ -199,9 +155,12 @@ async def update_briefing_preferences(
 async def request_email_verification(
     req: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Dispatch a verification email to the subscriber's address."""
-    subscriber = await DailyBriefingService.get_or_create_subscriber(db, email=req.email)
+    """Dispatch a verification email to the authenticated subscriber's address."""
+    subscriber = await DailyBriefingService.get_or_create_subscriber(
+        db, email=req.email or current_user.email, user_id=str(current_user.id)
+    )
     if subscriber.email_verified_at:
         return {"status": "already_verified", "message": "Email is already verified."}
 
@@ -294,10 +253,12 @@ async def unsubscribe(
 async def send_test_briefing(
     req: TestBriefingRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Trigger an immediate test briefing dispatch to the given email."""
+    """Trigger an immediate test briefing dispatch to the authenticated user's email."""
     try:
-        result = await DailyBriefingService.send_test_briefing(db, email=req.email)
+        target_email = req.email or current_user.email
+        result = await DailyBriefingService.send_test_briefing(db, email=target_email)
         await db.commit()
         return result
     except Exception as e:

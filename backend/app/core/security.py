@@ -2,6 +2,7 @@ import json
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 import bcrypt
 import jwt
@@ -190,6 +191,7 @@ async def _load_user_permissions(db: AsyncSession, user_id: int, role_id: int | 
 
 async def get_current_user(
     request: Request,
+    db: Any = None,
 ) -> User:
     """
     Extract Bearer token from Authorization header, decode JWT,
@@ -225,11 +227,16 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    from app.core.database import AsyncSessionLocal
-    async with AsyncSessionLocal() as db:
+    if db is not None:
         stmt = select(User).options(selectinload(User.role)).where(User.id == user_id)
         result = await db.execute(stmt)
         user = result.scalars().first()
+    else:
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).options(selectinload(User.role)).where(User.id == user_id)
+            result = await session.execute(stmt)
+            user = result.scalars().first()
 
     if user is None:
         raise HTTPException(
@@ -249,40 +256,16 @@ async def get_current_user(
 
 async def get_current_user_optional(
     request: Request,
+    db: Any = None,
 ) -> User | None:
     """
     Extract Bearer token and return User if valid, otherwise return None.
     Uses a transient DB connection to avoid leaking sessions in StreamingResponses.
     """
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return None
-
-    token = auth_header.split(" ", 1)[1]
     try:
-        payload = decode_access_token(token)
+        return await get_current_user(request, db=db)
     except HTTPException:
         return None
-
-    user_id_str = payload.get("sub")
-    if user_id_str is None:
-        return None
-
-    try:
-        user_id = int(user_id_str)
-    except (ValueError, TypeError):
-        return None
-
-    from app.core.database import AsyncSessionLocal
-    async with AsyncSessionLocal() as db:
-        stmt = select(User).options(selectinload(User.role)).where(User.id == user_id)
-        result = await db.execute(stmt)
-        user = result.scalars().first()
-
-    if user is None or user.status != "active":
-        return None
-
-    return user
 
 
 def require_role(*role_names: str):

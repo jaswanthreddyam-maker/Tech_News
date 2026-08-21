@@ -11,6 +11,8 @@ import { useLoadingState } from "@/design-system/hooks/useLoadingState";
 import { Article } from "@/lib/api/types";
 import { ArticleLink } from "@/domains/article/ArticleLink";
 import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
+import { useAuthGate } from "@/hooks/useAuthGate";
+import { FeatureCapability } from "@/lib/auth/features";
 
 /** Apple / Arc Signature Easing Curve */
 const EASE_CUBIC = [0.16, 1, 0.3, 1] as const;
@@ -29,8 +31,18 @@ function formatTime(dateStr?: string | null): string {
 }
 
 export function BreakingNews() {
-  const [activeTab, setActiveTab] = useState<"latest" | "following">("following");
+  const { isAuthenticated, requireAuthentication } = useAuthGate();
+  const [activeTab, setActiveTab] = useState<"latest" | "following">("latest");
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
+
+  // Switch to following if user is authenticated and has followed sources
+  useEffect(() => {
+    if (isAuthenticated) {
+      setActiveTab("following");
+    } else {
+      setActiveTab("latest");
+    }
+  }, [isAuthenticated]);
 
   // 1. Latest Chronological Stream (with real-time SSE additions)
   const { data: breakingData, isLoading: isLatestLoading, error: latestError } = useBreaking();
@@ -48,6 +60,13 @@ export function BreakingNews() {
     toggleFollow,
     isToggling,
   } = useSourceFollow();
+
+  const handleOpenSourceModal = () => {
+    if (!requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
+      return;
+    }
+    setIsSourceModalOpen(true);
+  };
 
   // All available sources (using default fallbacks if API is loading or network is slow)
   const allAvailableSources = sources && sources.length > 0 ? sources : FALLBACK_SOURCES;
@@ -137,7 +156,12 @@ export function BreakingNews() {
           <button
             type="button"
             id="tab-following"
-            onClick={() => setActiveTab("following")}
+            onClick={() => {
+              if (!requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
+                return;
+              }
+              setActiveTab("following");
+            }}
             className={`px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
               activeTab === "following"
                 ? "bg-white/10 text-foreground border border-white/20 shadow-sm"
@@ -170,7 +194,7 @@ export function BreakingNews() {
                 <button
                   key={source.slug}
                   type="button"
-                  onClick={() => setIsSourceModalOpen(true)}
+                  onClick={handleOpenSourceModal}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/10 text-xs font-mono font-medium text-foreground border border-white/10 transition-all cursor-pointer group"
                   title="Click to manage source"
                 >
@@ -179,7 +203,7 @@ export function BreakingNews() {
                 </button>
               ))
             ) : (
-              <span className="text-xs font-mono text-muted-foreground/70">
+              <span className="text-xs font-mono text-muted-foreground/60">
                 No sources followed yet.
               </span>
             )}
@@ -187,9 +211,8 @@ export function BreakingNews() {
 
           <button
             type="button"
-            id="btn-manage-sources"
-            onClick={() => setIsSourceModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-mono font-semibold text-foreground border border-white/10 transition-all cursor-pointer"
+            onClick={handleOpenSourceModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-mono font-semibold text-foreground border border-white/10 transition-all cursor-pointer"
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-primary" />
             <span>{followedSources.length === 0 ? "+ Add sources" : "Manage Sources →"}</span>
@@ -242,7 +265,11 @@ export function BreakingNews() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => toggleFollow(source.slug)}
+                  onClick={() => {
+                    if (requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
+                      toggleFollow(source.slug);
+                    }
+                  }}
                   disabled={isToggling}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono font-semibold text-foreground transition-all cursor-pointer"
                 >
@@ -255,7 +282,7 @@ export function BreakingNews() {
 
           <button
             type="button"
-            onClick={() => setIsSourceModalOpen(true)}
+            onClick={handleOpenSourceModal}
             className="text-xs font-mono font-semibold text-primary hover:underline cursor-pointer"
           >
             Browse all sources →
@@ -276,7 +303,7 @@ export function BreakingNews() {
           </div>
           <button
             type="button"
-            onClick={() => setIsSourceModalOpen(true)}
+            onClick={handleOpenSourceModal}
             className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-mono font-semibold text-foreground border border-white/10 transition-all cursor-pointer"
           >
             Follow more sources →

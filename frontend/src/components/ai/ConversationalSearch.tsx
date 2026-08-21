@@ -9,6 +9,8 @@ import { EmptyState, EmptyIllustration } from '@/components/common/EmptyState';
 import { MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import { ArticleLink } from "@/domains/article/ArticleLink";
+import { useAuthGate } from '@/hooks/useAuthGate';
+import { FeatureCapability } from '@/lib/auth/features';
 
 interface ConversationalSearchProps {
   conversationId: string | null;
@@ -34,6 +36,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
   hideModeSelector = false,
   showOpenFullChat = false,
 }) => {
+  const { requireAuthentication } = useAuthGate();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { messages, isLoading, mode, title, setMode, sendMessage, stopGeneration, capabilityError, checkCapability } =
     useConversation(conversationId, initialMode, articleId);
@@ -55,6 +58,9 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuthentication(FeatureCapability.AI_ARTICLE_CHAT)) {
+      return;
+    }
     if (input.trim() && !isLoading) {
       sendMessage(input);
       setInput('');
@@ -69,17 +75,18 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
   };
 
   const handleFollowUp = (question: string) => {
+    if (!requireAuthentication(FeatureCapability.AI_ARTICLE_CHAT)) {
+      return;
+    }
     sendMessage(question);
   };
 
   const handleCompareSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuthentication(FeatureCapability.AI_ARTICLE_CHAT)) {
+      return;
+    }
     if (contextA.trim() && contextB.trim() && !isLoading) {
-      // Temporarily switch mode to COMPARISON just for this request if needed, 
-      // but if the user wants linear flow, we leave the mode alone and just send context_a and context_b.
-      // Wait, the backend uses `mode` to route to ComparisonRetrievalStrategy. We MUST set mode to COMPARISON.
-      // We can temporarily set the mode, send the message, and let the hook handle it, or just 
-      // let the user stay in COMPARISON mode, but the input UI resets to standard chat.
       const originalMode = mode;
       setMode('COMPARISON');
       sendMessage(`Compare ${contextA} vs ${contextB}`, 
@@ -391,6 +398,9 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
               <m.button
                 key={i}
                 onClick={() => {
+                  if (!requireAuthentication(FeatureCapability.AI_ARTICLE_CHAT)) {
+                    return;
+                  }
                   setContextA(articleTitle || 'This Article');
                   setContextB(kw);
                   setShowComparePanel(true);

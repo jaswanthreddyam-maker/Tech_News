@@ -48,7 +48,7 @@ class WorkspaceService:
         stmt = (
             select(Workspace)
             .options(
-                selectinload(Workspace.articles).selectinload(WorkspaceArticle.article),
+                selectinload(Workspace.articles),
                 selectinload(Workspace.conversations),
                 selectinload(Workspace.notes),
             )

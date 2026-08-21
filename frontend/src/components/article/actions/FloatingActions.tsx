@@ -16,7 +16,8 @@ import { m, useReducedMotion } from "framer-motion";
 import { MotionScales } from "@/design-system/motion/tokens";
 import { useNavigationType } from "@/hooks/useNavigationType";
 import { DURATION, EASING, REVEAL_DELAYS } from "@/design-system/motion/tokens";
-
+import { useAuthGate } from "@/hooks/useAuthGate";
+import { FeatureCapability } from "@/lib/auth/features";
 
 interface FloatingActionsProps {
   url: string;
@@ -33,34 +34,43 @@ const iconBtnClass =
 
 export function FloatingActions({ url, title, articleId }: FloatingActionsProps) {
   const { toast } = useToast();
+  const { isAuthenticated, requireAuthentication } = useAuthGate();
   const [isSaved, setIsSaved] = React.useState(false);
   const shouldReduceMotion = useReducedMotion();
 
   React.useEffect(() => {
-    import("@/lib/session/sessionManager").then(({ sessionManager }) => {
-      if (articleId && sessionManager.getAccessToken()) {
-        apiFetch<string[]>("/me/saved")
-          .then((res) => {
-            setIsSaved(res.includes(articleId));
-          })
-          .catch(() => {});
-      }
-    });
-  }, [articleId]);
+    if (isAuthenticated && articleId) {
+      apiFetch<any[]>("/me/saved")
+        .then((savedList) => {
+          if (Array.isArray(savedList)) {
+            const exists = savedList.some(
+              (item: any) => String(item.article_id || item.id) === String(articleId)
+            );
+            setIsSaved(exists);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuthenticated, articleId]);
 
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({ title, url });
-      } catch {
-        // User cancelled — do nothing
-      }
+      } catch {}
     } else {
-      await handleCopy();
+      await navigator.clipboard.writeText(url);
+      toast({
+        title: "Link copied",
+        description: "Article URL copied to clipboard.",
+      });
     }
   };
 
   const handleSave = async () => {
+    if (!requireAuthentication(FeatureCapability.SAVED_ARTICLES)) {
+      return;
+    }
     if (!articleId) {
       toast({ title: "Cannot save", description: "Article ID not found." });
       return;
@@ -77,19 +87,18 @@ export function FloatingActions({ url, title, articleId }: FloatingActionsProps)
           : "Article removed from saved list.",
       });
     } catch {
-      // Optimistic local toggle as fallback
-      const next = !isSaved;
-      setIsSaved(next);
       toast({
-        title: next ? "Bookmarked locally" : "Bookmark removed",
-        description: next
-          ? "Saved locally — sign in to sync across devices."
-          : "Removed from bookmarks.",
+        title: "Bookmark Error",
+        description: "Failed to update bookmark.",
+        variant: "destructive",
       });
     }
   };
 
   const handleWorkspace = async () => {
+    if (!requireAuthentication(FeatureCapability.WORKSPACES)) {
+      return;
+    }
     if (!articleId) {
       toast({ title: "Cannot add", description: "Article ID not found." });
       return;
@@ -119,8 +128,9 @@ export function FloatingActions({ url, title, articleId }: FloatingActionsProps)
       });
     } catch {
       toast({
-        title: "Workspace",
-        description: "Coming soon — workspace sync is not yet available.",
+        title: "Workspace Error",
+        description: "Failed to add article to workspace.",
+        variant: "destructive",
       });
     }
   };

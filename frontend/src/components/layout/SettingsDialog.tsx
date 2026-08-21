@@ -12,6 +12,8 @@ import { Mail, Send, Sparkles, ExternalLink } from "lucide-react";
 import { Sliders2Icon } from "@/components/common/icons/Sliders2Icon";
 import { getBriefingPreferences, updateBriefingPreferences, sendTestBriefing } from "@/lib/api/briefing";
 import { useAppStore } from "@/store/useStore";
+import { useAuthGate } from "@/hooks/useAuthGate";
+import { FeatureCapability } from "@/lib/auth/features";
 
 interface SettingsDialogProps {
   open?: boolean;
@@ -21,6 +23,7 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, trigger }: SettingsDialogProps) {
   const { user } = useAppStore();
+  const { isAuthenticated, requireAuthentication } = useAuthGate();
   const [enabled, setEnabled] = React.useState(false);
   const [email, setEmail] = React.useState(user?.email || "");
   const [isSendingTest, setIsSendingTest] = React.useState(false);
@@ -34,7 +37,7 @@ export function SettingsDialog({ open, onOpenChange, trigger }: SettingsDialogPr
   }, [user?.email, email]);
 
   React.useEffect(() => {
-    if (open && email) {
+    if (open && isAuthenticated && email) {
       getBriefingPreferences(email)
         .then((pref) => {
           if (pref) {
@@ -44,7 +47,7 @@ export function SettingsDialog({ open, onOpenChange, trigger }: SettingsDialogPr
         })
         .catch(() => {});
     }
-  }, [open, email]);
+  }, [open, isAuthenticated, email]);
 
   const showStatus = (msg: string) => {
     setStatusMsg(msg);
@@ -52,6 +55,9 @@ export function SettingsDialog({ open, onOpenChange, trigger }: SettingsDialogPr
   };
 
   const handleToggleSync = async () => {
+    if (!requireAuthentication(FeatureCapability.AI_DAILY_BRIEFING)) {
+      return;
+    }
     if (!email) {
       showStatus("Please enter your email first.");
       return;
@@ -77,6 +83,9 @@ export function SettingsDialog({ open, onOpenChange, trigger }: SettingsDialogPr
   };
 
   const handleSendTest = async () => {
+    if (!requireAuthentication(FeatureCapability.AI_DAILY_BRIEFING)) {
+      return;
+    }
     if (!email) {
       showStatus("Please enter your email first.");
       return;

@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   authors: [{ name: "Tech News Today Team" }],
 };
 
+import { AuthenticationGateModal } from "@/components/auth/AuthenticationGateModal";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -56,6 +58,7 @@ export default function RootLayout({
                                   <WelcomeOverlay>
                                     {children}
                                   </WelcomeOverlay>
+                                  <AuthenticationGateModal />
                                   <Toaster />
                                 </AnimationProvider>
                               </PersonalizationProvider>
