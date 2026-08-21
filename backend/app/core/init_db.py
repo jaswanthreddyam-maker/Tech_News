@@ -462,13 +462,22 @@ async def main():
 
             # --- Seed Sources ---
             for source_data in SOURCES:
-                existing = await session.execute(select(Source).where(Source.name == source_data["name"]))
+                existing = await session.execute(
+                    select(Source).where(
+                        or_(
+                            Source.name == source_data["name"],
+                            Source.url == source_data["url"],
+                            Source.slug == source_data["slug"],
+                        )
+                    )
+                )
                 src = existing.scalars().first()
                 if src is None:
                     src = Source(**source_data)
                     session.add(src)
                     logger.info(f"Created source: {source_data['name']}")
                 else:
+                    src.name = source_data["name"]
                     src.url = source_data["url"]
                     src.method = source_data["method"]
                     src.slug = source_data.get("slug")

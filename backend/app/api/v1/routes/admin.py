@@ -361,6 +361,19 @@ async def run_migrations(current_user: User = Depends(require_role("super_admin"
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
+@router.post("/diagnostic/sync-sources")
+async def sync_sources_diagnostic(current_user: User = Depends(require_role("super_admin"))):
+    """
+    Sync canonical source slugs, categories, descriptions, and logos into production DB.
+    """
+    try:
+        from app.core.init_db import main as init_db_main
+        await init_db_main()
+        return {"status": "success", "message": "Canonical sources synced successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @router.get("/diagnostic/db-truth")
 async def get_db_truth(db: AsyncSession = Depends(get_db)):
     """
