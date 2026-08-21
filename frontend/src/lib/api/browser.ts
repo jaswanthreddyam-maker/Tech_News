@@ -92,17 +92,20 @@ export class BrowserTransport implements ApiTransport {
         callerSignal.removeEventListener("abort", handleCallerAbort);
       }
 
-      // Handle 401 Silent Refresh
+      // Handle 401 Silent Refresh (with suppress-window guard to prevent cascading storms)
       if (response.status === 401 && !_isRetryAfterRefresh && token) {
-        const refreshed = await attemptTokenRefresh();
-        if (refreshed) {
-          // Retry the original request
-          return this.fetch(endpoint, {
-            ...options,
-            _isRetryAfterRefresh: true,
-          } as any);
+        const currentState = useAppStore.getState();
+        const suppressed = currentState.authRefreshSuppressUntil && currentState.authRefreshSuppressUntil > Date.now();
+        if (!suppressed) {
+          const refreshed = await attemptTokenRefresh();
+          if (refreshed) {
+            // Retry the original request
+            return this.fetch(endpoint, {
+              ...options,
+              _isRetryAfterRefresh: true,
+            } as any);
+          }
         }
-        const { useAppStore } = require("@/store/useStore");
         useAppStore.getState().logoutUser();
       }
 

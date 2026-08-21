@@ -35,6 +35,42 @@ SLUG_ALIASES = {
     "wired-technology": ["12", "wired-technology", "wired technology"],
 }
 
+# Build reverse lookup: from any alias value → canonical slug (first key that isn't a duplicate)
+_ID_TO_CANONICAL: dict[str, str] = {}
+for _canon_key, _aliases in SLUG_ALIASES.items():
+    # Only register from the primary canonical key (skip duplicate reverse entries like "google-blog")
+    if "-" not in _canon_key or _canon_key not in SLUG_ALIASES.get(_canon_key.split("-")[0], []):
+        for _alias in _aliases:
+            if _alias not in _ID_TO_CANONICAL:
+                _ID_TO_CANONICAL[_alias] = _canon_key
+
+
+def _canonical_slug(source) -> str:
+    """
+    Derive a canonical, human-readable slug for a Source entity.
+    Priority: SLUG_ALIASES reverse lookup → name-based derivation → raw slug → str(id).
+    """
+    import re
+    raw_slug = (source.slug or "").strip().lower()
+    name = (source.name or "").strip()
+
+    # 1. Check if raw_slug or str(id) maps to a known canonical via SLUG_ALIASES
+    for candidate in [raw_slug, str(source.id)]:
+        if candidate in _ID_TO_CANONICAL:
+            return _ID_TO_CANONICAL[candidate]
+
+    # 2. Check if the raw slug is already a valid canonical key
+    if raw_slug and raw_slug in SLUG_ALIASES:
+        return raw_slug
+
+    # 3. Derive from source name: "Google Blog" → "google-blog"
+    if name:
+        derived = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        if derived:
+            return derived
+
+    # 4. Fallback
+    return raw_slug or str(source.id)
 
 class PersonalizationService:
     def __init__(self, db: AsyncSession):
@@ -69,7 +105,7 @@ class PersonalizationService:
             {
                 "id": s.id,
                 "name": s.name,
-                "slug": s.slug or str(s.id),
+                "slug": _canonical_slug(s),
                 "category": s.category,
                 "description": s.description,
                 "logo_url": s.logo_url,

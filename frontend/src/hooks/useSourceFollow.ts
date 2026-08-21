@@ -36,7 +36,7 @@ function getLocalFollowedSourceSlugs(): string[] {
     // Support strings directly and filter out invalid/empty tokens
     return parsed
       .map((item) => (typeof item === "string" ? item.trim() : String(item)))
-      .filter((slug) => slug.length > 0 && isNaN(Number(slug)));
+      .filter((slug) => slug.length > 0);
   } catch {
     return [];
   }
