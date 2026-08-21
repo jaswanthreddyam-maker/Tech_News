@@ -12,11 +12,18 @@ from app.schemas.sources import FollowingFeedResponse, SourceItem, SourceSyncReq
 from app.services.personalization_service import PersonalizationService
 
 logger = logging.getLogger("tech_news.sources")
-router = APIRouter()
+
+sources_router = APIRouter()
+following_router = APIRouter()
+user_following_router = APIRouter()
 
 
-@router.get("/sources", response_model=StandardResponse[list[SourceItem]])
-@router.get("", response_model=StandardResponse[list[SourceItem]])
+# ---------------------------------------------------------------------------
+# 1. Sources Catalog Endpoints (/api/v1/sources)
+# ---------------------------------------------------------------------------
+
+
+@sources_router.get("", response_model=StandardResponse[list[SourceItem]])
 async def list_sources(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
@@ -31,9 +38,13 @@ async def list_sources(
     return StandardResponse(correlation_id="sources-list", data=sources)
 
 
-@router.get("/users/me/following/sources", response_model=StandardResponse[list[int]])
-@router.get("/sources/me", response_model=StandardResponse[list[int]])
-@router.get("/me", response_model=StandardResponse[list[int]])
+# ---------------------------------------------------------------------------
+# 2. User Source Following Endpoints (/api/v1/users/me/following/sources)
+# ---------------------------------------------------------------------------
+
+
+@user_following_router.get("/sources", response_model=StandardResponse[list[int]])
+@sources_router.get("/me", response_model=StandardResponse[list[int]])
 async def get_my_followed_sources(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -46,9 +57,8 @@ async def get_my_followed_sources(
     return StandardResponse(correlation_id="my-followed-sources", data=source_ids)
 
 
-@router.post("/users/me/following/sources/{source_id}", response_model=StandardResponse[dict])
-@router.post("/sources/{source_id}/follow", response_model=StandardResponse[dict])
-@router.post("/{source_id}/follow", response_model=StandardResponse[dict])
+@user_following_router.post("/sources/{source_id}", response_model=StandardResponse[dict])
+@sources_router.post("/{source_id}/follow", response_model=StandardResponse[dict])
 async def follow_source(
     source_id: int,
     db: AsyncSession = Depends(get_db),
@@ -71,9 +81,8 @@ async def follow_source(
         )
 
 
-@router.delete("/users/me/following/sources/{source_id}", response_model=StandardResponse[dict])
-@router.delete("/sources/{source_id}/follow", response_model=StandardResponse[dict])
-@router.delete("/{source_id}/follow", response_model=StandardResponse[dict])
+@user_following_router.delete("/sources/{source_id}", response_model=StandardResponse[dict])
+@sources_router.delete("/{source_id}/follow", response_model=StandardResponse[dict])
 async def unfollow_source(
     source_id: int,
     db: AsyncSession = Depends(get_db),
@@ -90,9 +99,8 @@ async def unfollow_source(
     )
 
 
-@router.post("/users/me/following/sources/sync", response_model=StandardResponse[list[int]])
-@router.post("/sources/sync", response_model=StandardResponse[list[int]])
-@router.post("/sync", response_model=StandardResponse[list[int]])
+@user_following_router.post("/sources/sync", response_model=StandardResponse[list[int]])
+@sources_router.post("/sync", response_model=StandardResponse[list[int]])
 async def sync_guest_follows(
     payload: SourceSyncRequest,
     db: AsyncSession = Depends(get_db),
@@ -106,9 +114,13 @@ async def sync_guest_follows(
     return StandardResponse(correlation_id="sync-guest-follows", data=all_followed)
 
 
-@router.get("/feed", response_model=StandardResponse[FollowingFeedResponse])
-@router.get("/users/me/following/feed", response_model=StandardResponse[FollowingFeedResponse])
-@router.get("/following/feed", response_model=StandardResponse[FollowingFeedResponse])
+# ---------------------------------------------------------------------------
+# 3. Following Feed Endpoints (/api/v1/following/feed & /api/v1/users/me/following/feed)
+# ---------------------------------------------------------------------------
+
+
+@following_router.get("/feed", response_model=StandardResponse[FollowingFeedResponse])
+@user_following_router.get("/feed", response_model=StandardResponse[FollowingFeedResponse])
 async def get_following_feed(
     source_ids: Annotated[list[int] | None, Query()] = None,
     limit: int = 30,
