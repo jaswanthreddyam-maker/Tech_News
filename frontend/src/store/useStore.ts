@@ -89,6 +89,7 @@ export const useAppStore = create<AppState>((set) => ({
       accessToken: null,
       isAdminAuthenticated: false,
       adminToken: null,
+      authRefreshSuppressUntil: Date.now() + 300000, // suppress refresh storms for 5 min
     }),
 
   // Legacy admin token management — maps to user session for backward compat

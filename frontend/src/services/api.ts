@@ -147,17 +147,21 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
 
         // Silent 401 refresh interceptor: attempt token refresh once
         // Only attempt refresh if the original request had an auth token
-        // (prevents cascading failures for unauthenticated guest requests)
+        // AND we are not in a suppress window (prevents cascading failures)
         if (response.status === 401 && !_isRetryAfterRefresh && token) {
-          const refreshed = await attemptTokenRefresh();
-          if (refreshed) {
-            // Retry the original request with the new token
-            return apiFetch<T>(endpoint, {
-              ...options,
-              _isRetryAfterRefresh: true,
-            });
+          const currentState = useAppStore.getState();
+          const suppressed = currentState.authRefreshSuppressUntil && currentState.authRefreshSuppressUntil > Date.now();
+          if (!suppressed) {
+            const refreshed = await attemptTokenRefresh();
+            if (refreshed) {
+              // Retry the original request with the new token
+              return apiFetch<T>(endpoint, {
+                ...options,
+                _isRetryAfterRefresh: true,
+              });
+            }
           }
-          // Refresh failed — log out user and throw
+          // Refresh failed or suppressed — log out user and throw
           useAppStore.getState().logoutUser();
         }
 
