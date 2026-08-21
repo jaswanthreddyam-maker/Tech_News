@@ -56,7 +56,27 @@ async def lifespan(app: FastAPI):
     if not redis_ok:
         logger.warning("Redis connection validation failed. Cache services compromised.")
 
-    # 1.1 Seed canonical sources and feature flags
+    # 1.1 Auto-run Alembic schema migrations & seed canonical sources
+    try:
+        import subprocess
+        import os
+
+        ini_path = os.path.join(os.getcwd(), "alembic.ini")
+        if os.path.exists(ini_path):
+            mig_res = subprocess.run(
+                ["alembic", "-c", ini_path, "upgrade", "head"],
+                capture_output=True,
+                text=True,
+            )
+            if mig_res.returncode == 0:
+                logger.info(f"Alembic startup migration success: {mig_res.stdout.strip()}")
+            else:
+                logger.warning(f"Alembic startup migration stderr: {mig_res.stderr.strip()}")
+        else:
+            logger.warning(f"alembic.ini not found at {ini_path}")
+    except Exception as mig_err:
+        logger.warning(f"Startup migration runner notice: {mig_err}")
+
     try:
         from app.core.init_db import main as init_db_main
         await init_db_main()
