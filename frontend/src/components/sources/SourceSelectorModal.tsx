@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { AnimatePresence, m } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Search, X, Check, Building2, Newspaper, Users, Plus } from "lucide-react";
 import { SourceItem } from "@/hooks/useSourceFollow";
 
@@ -92,7 +92,7 @@ export function SourceSelectorModal({
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
           {/* Backdrop */}
-          <m.div
+          <motion.div
             key="modal-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -103,7 +103,7 @@ export function SourceSelectorModal({
           />
 
           {/* Modal Card */}
-          <m.div
+          <motion.div
             key="modal-card"
             initial={{ opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -221,7 +221,7 @@ export function SourceSelectorModal({
                 Done
               </button>
             </div>
-          </m.div>
+          </motion.div>
         </div>
       )}
     </AnimatePresence>
