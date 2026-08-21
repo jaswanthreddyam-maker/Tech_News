@@ -21,10 +21,15 @@ export function NotificationDropdown() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
-          <Bell className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-9 w-9 rounded-full border border-white/10 bg-white/[0.04] text-foreground hover:border-white/25 hover:bg-white/[0.08] transition-all"
+          aria-label="Notifications"
+        >
+          <Bell className="h-4 w-4 text-foreground" />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-red-500 text-[8px] text-white">
+            <span className="absolute top-1.5 right-1.5 flex h-2 w-2 items-center justify-center rounded-full bg-primary animate-pulse">
               <span className="sr-only">New notifications</span>
             </span>
           )}

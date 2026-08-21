@@ -224,8 +224,11 @@ export function Navbar() {
               <Search className="h-4 w-4" />
             </Button>
 
-            <NotificationDropdown />
-            <UserMenu />
+            {/* User Controls Capsule */}
+            <div className="flex items-center gap-1.5 p-0.5 rounded-full bg-white/[0.03] border border-white/[0.08] backdrop-blur-xl">
+              <NotificationDropdown />
+              <UserMenu />
+            </div>
 
             {/* Mobile Menu Toggle */}
             {navLinks.length > 0 && (
