@@ -28,10 +28,10 @@ export interface BriefingUpdateRequest {
 }
 
 export async function getBriefingPreferences(
-  email: string = "jeshu@example.com"
+  email?: string
 ): Promise<BriefingPreferences> {
   return apiFetch<BriefingPreferences>("/briefing/preferences", {
-    params: { email },
+    params: email ? { email } : undefined,
   });
 }
 

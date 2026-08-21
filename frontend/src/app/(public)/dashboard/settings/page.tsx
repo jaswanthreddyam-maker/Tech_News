@@ -14,6 +14,7 @@ import {
   sendTestBriefing,
   sendVerificationEmail,
 } from "@/lib/api/briefing";
+import { useAppStore } from "@/store/useStore";
 
 const AVAILABLE_TOPICS = [
   { id: "artificial-intelligence", label: "AI & Neural Systems" },
@@ -35,8 +36,9 @@ function formatDeliveryTime(isoString?: string | null): string {
 }
 
 export default function SettingsPage() {
+  const { user } = useAppStore();
   const [enabled, setEnabled] = useState(false);
-  const [email, setEmail] = useState("jeshu@example.com");
+  const [email, setEmail] = useState(user?.email || "");
   const [emailVerified, setEmailVerified] = useState(false);
   const [deliveryTime, setDeliveryTime] = useState("08:00");
   const [timezone, setTimezone] = useState("Asia/Kolkata");
@@ -58,14 +60,20 @@ export default function SettingsPage() {
     stories_count?: number;
   } | null>(null);
 
+  useEffect(() => {
+    if (user?.email && !email) {
+      setEmail(user.email);
+    }
+  }, [user?.email, email]);
+
   // Load preferences on mount
   useEffect(() => {
     async function loadData() {
       try {
-        const pref = await getBriefingPreferences("jeshu@example.com");
+        const pref = await getBriefingPreferences(user?.email || undefined);
         if (pref) {
           setEnabled(pref.enabled);
-          setEmail(pref.email);
+          if (pref.email) setEmail(pref.email);
           setEmailVerified(pref.email_verified);
           setDeliveryTime(pref.delivery_time || "08:00");
           setTimezone(pref.timezone || "Asia/Kolkata");
