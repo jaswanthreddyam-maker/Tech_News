@@ -18,35 +18,49 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+
     # 1. Add slug, description, logo_url to sources
-    op.add_column('sources', sa.Column('slug', sa.String(length=100), nullable=True))
-    op.add_column('sources', sa.Column('description', sa.Text(), nullable=True))
-    op.add_column('sources', sa.Column('logo_url', sa.String(length=500), nullable=True))
-    op.create_index(op.f('ix_sources_slug'), 'sources', ['slug'], unique=True)
+    source_cols = [col['name'] for col in inspector.get_columns('sources')]
+    if 'slug' not in source_cols:
+        op.add_column('sources', sa.Column('slug', sa.String(length=100), nullable=True))
+    if 'description' not in source_cols:
+        op.add_column('sources', sa.Column('description', sa.Text(), nullable=True))
+    if 'logo_url' not in source_cols:
+        op.add_column('sources', sa.Column('logo_url', sa.String(length=500), nullable=True))
+
+    source_idxs = [idx['name'] for idx in inspector.get_indexes('sources')]
+    if 'ix_sources_slug' not in source_idxs:
+        op.create_index(op.f('ix_sources_slug'), 'sources', ['slug'], unique=True)
 
     # 2. Create followed_sources table
-    op.create_table(
-        'followed_sources',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('source_id', sa.Integer(), nullable=False),
-        sa.Column('followed_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(['source_id'], ['sources.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('user_id', 'source_id', name='uq_followed_source'),
-    )
-    op.create_index(op.f('ix_followed_sources_id'), 'followed_sources', ['id'], unique=False)
-    op.create_index(op.f('ix_followed_sources_user_id'), 'followed_sources', ['user_id'], unique=False)
-    op.create_index(op.f('ix_followed_sources_source_id'), 'followed_sources', ['source_id'], unique=False)
+    tables = inspector.get_table_names()
+    if 'followed_sources' not in tables:
+        op.create_table(
+            'followed_sources',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('user_id', sa.Integer(), nullable=False),
+            sa.Column('source_id', sa.Integer(), nullable=False),
+            sa.Column('followed_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.ForeignKeyConstraint(['source_id'], ['sources.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('user_id', 'source_id', name='uq_followed_source'),
+        )
+        op.create_index(op.f('ix_followed_sources_id'), 'followed_sources', ['id'], unique=False)
+        op.create_index(op.f('ix_followed_sources_user_id'), 'followed_sources', ['user_id'], unique=False)
+        op.create_index(op.f('ix_followed_sources_source_id'), 'followed_sources', ['source_id'], unique=False)
 
     # 3. Create composite index on processed_articles for fast source following feed resolution
-    op.create_index(
-        'ix_processed_articles_source_published',
-        'processed_articles',
-        ['source_id', sa.text('published_at DESC')],
-        unique=False,
-    )
+    article_idxs = [idx['name'] for idx in inspector.get_indexes('processed_articles')]
+    if 'ix_processed_articles_source_published' not in article_idxs:
+        op.create_index(
+            'ix_processed_articles_source_published',
+            'processed_articles',
+            ['source_id', sa.text('published_at DESC')],
+            unique=False,
+        )
 
 
 def downgrade() -> None:

@@ -16,19 +16,26 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "processed_articles",
-        sa.Column("is_expired", sa.Boolean(), server_default="false", nullable=False),
-    )
-    op.add_column(
-        "processed_articles",
-        sa.Column("expired_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_index(
-        "idx_processed_articles_is_expired",
-        "processed_articles",
-        ["is_expired"],
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [col['name'] for col in inspector.get_columns('processed_articles')]
+    if 'is_expired' not in columns:
+        op.add_column(
+            "processed_articles",
+            sa.Column("is_expired", sa.Boolean(), server_default="false", nullable=False),
+        )
+    if 'expired_at' not in columns:
+        op.add_column(
+            "processed_articles",
+            sa.Column("expired_at", sa.DateTime(timezone=True), nullable=True),
+        )
+    indexes = [idx['name'] for idx in inspector.get_indexes('processed_articles')]
+    if 'idx_processed_articles_is_expired' not in indexes:
+        op.create_index(
+            "idx_processed_articles_is_expired",
+            "processed_articles",
+            ["is_expired"],
+        )
 
 
 def downgrade() -> None:
