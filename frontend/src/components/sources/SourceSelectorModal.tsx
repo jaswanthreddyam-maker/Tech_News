@@ -99,7 +99,7 @@ export function SourceSelectorModal({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[1] bg-black/60 backdrop-blur-sm"
           />
 
           {/* Modal Card */}
@@ -109,7 +109,7 @@ export function SourceSelectorModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
             transition={{ duration: 0.25, ease: EASE_CUBIC }}
-            className="relative w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-10"
+            className="relative w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-[2]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="source-selector-title"
