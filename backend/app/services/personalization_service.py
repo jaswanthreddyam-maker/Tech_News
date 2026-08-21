@@ -14,6 +14,24 @@ from app.schemas.news import ArticleCard
 logger = logging.getLogger(__name__)
 
 
+SLUG_ALIASES = {
+    "google": ["3", "google-blog", "google"],
+    "openai": ["1", "openai-blog", "openai"],
+    "anthropic": ["2", "anthropic-news", "anthropic"],
+    "nvidia": ["4", "nvidia-ai-blog", "nvidia"],
+    "techcrunch": ["6", "techcrunch"],
+    "the-verge": ["7", "the-verge"],
+    "ars-technica": ["8", "ars-technica"],
+    "hacker-news": ["9", "hacker-news"],
+    "github-trending": ["10", "github-trending"],
+    "reddit-machinelearning": ["11", "reddit-machinelearning"],
+    "mit-technology-review": ["13", "mit-tech-review", "mit-technology-review"],
+    "mit-tech-review": ["13", "mit-tech-review", "mit-technology-review"],
+    "google-deepmind": ["5", "google-deepmind"],
+    "wired-technology": ["12", "wired-technology"],
+}
+
+
 class PersonalizationService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -60,19 +78,28 @@ class PersonalizationService:
 
     async def _resolve_source_by_slug(self, source_slug: str) -> Source | None:
         """
-        Resolves an active Source entity strictly by its canonical slug.
-        Numeric ID fallback is strictly forbidden.
+        Resolves an active Source entity by its canonical slug, ID, or alias.
         """
         if not source_slug or not isinstance(source_slug, str):
             return None
-        normalized_slug = source_slug.strip().lower()
+        normalized = source_slug.strip().lower()
+        search_terms = {normalized}
+        for k, v in SLUG_ALIASES.items():
+            if normalized == k or normalized in v:
+                search_terms.update(v)
+                search_terms.add(k)
+
         stmt = select(Source).where(
-            Source.slug == normalized_slug,
+            or_(
+                Source.slug.in_(list(search_terms)),
+                cast(Source.id, String).in_(list(search_terms)),
+                func.lower(Source.name).in_(list(search_terms)),
+            ),
             Source.enabled == True,
             Source.is_deleted == False,
         )
         res = await self.db.execute(stmt)
-        return res.scalar_one_or_none()
+        return res.scalars().first()
 
     async def follow_source(self, user_id: int, source_slug: str) -> bool:
         """
@@ -151,8 +178,19 @@ class PersonalizationService:
         if source_slugs:
             normalized_slugs = [s.strip().lower() for s in source_slugs if s and isinstance(s, str)]
             if normalized_slugs:
+                search_terms = set(normalized_slugs)
+                for s in normalized_slugs:
+                    for k, v in SLUG_ALIASES.items():
+                        if s == k or s in v:
+                            search_terms.update(v)
+                            search_terms.add(k)
+
                 stmt = select(Source.id).where(
-                    Source.slug.in_(normalized_slugs),
+                    or_(
+                        Source.slug.in_(list(search_terms)),
+                        cast(Source.id, String).in_(list(search_terms)),
+                        func.lower(Source.name).in_(list(search_terms)),
+                    ),
                     Source.enabled == True,
                     Source.is_deleted == False,
                 )
@@ -193,12 +231,24 @@ class PersonalizationService:
         elif guest_source_slugs:
             normalized_slugs = [s.strip().lower() for s in guest_source_slugs if s and isinstance(s, str)]
             if normalized_slugs:
+                search_terms = set(normalized_slugs)
+                for s in normalized_slugs:
+                    for k, v in SLUG_ALIASES.items():
+                        if s == k or s in v:
+                            search_terms.update(v)
+                            search_terms.add(k)
+
                 slug_stmt = select(Source.id).where(
-                    Source.slug.in_(normalized_slugs),
+                    or_(
+                        Source.slug.in_(list(search_terms)),
+                        cast(Source.id, String).in_(list(search_terms)),
+                        func.lower(Source.name).in_(list(search_terms)),
+                    ),
                     Source.enabled == True,
                     Source.is_deleted == False,
                 )
-                followed_source_ids = list((await self.db.execute(slug_stmt)).scalars().all())
+                res = await self.db.execute(slug_stmt)
+                followed_source_ids = list(res.scalars().all())
 
         if not followed_source_ids:
             return {
