@@ -16,7 +16,7 @@ export function RelatedStories() {
   const { data, isLoading, isError, error, refetch } = useRecommendations({ limit: 4, enabled });
   const loadingLevel = useLoadingState(isLoading);
 
-  if (!enabled) return null;
+  if (!enabled || (!isLoading && (!data || data.length === 0))) return null;
 
   const resourceState: AsyncResourceState<RecommendedArticle[]> = {
     state: isLoading ? "loading" : isError ? "error" : (!data || data.length === 0) ? "empty" : "success",

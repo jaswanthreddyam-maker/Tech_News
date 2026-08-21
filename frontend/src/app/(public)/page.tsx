@@ -154,17 +154,6 @@ export default async function HomePage() {
         </SectionErrorBoundary>
       </Container>
 
-      {/* Related Stories Spatial Grid */}
-      <Container size="wide" className={SPACING.SECTION_GAP_XL}>
-        <SectionErrorBoundary
-          fallback={<Skeleton className="w-full h-[600px]" />}
-        >
-          <Suspense fallback={<Skeleton className="w-full h-[600px]" />}>
-            <RelatedStories />
-          </Suspense>
-        </SectionErrorBoundary>
-      </Container>
-
       {/* Newsletter Spatial Object */}
       <Container size="wide" className={SPACING.SECTION_GAP_L}>
         <SectionErrorBoundary
