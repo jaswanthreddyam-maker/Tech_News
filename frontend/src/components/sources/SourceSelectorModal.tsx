@@ -9,24 +9,24 @@ interface SourceSelectorModalProps {
   isOpen: boolean;
   onClose: () => void;
   sources: SourceItem[];
-  onToggleFollow: (sourceId: number) => void;
+  onToggleFollow: (sourceSlug: string) => void;
   isToggling?: boolean;
 }
 
 const EASE_CUBIC = [0.16, 1, 0.3, 1] as const;
 
 export const FALLBACK_SOURCES: SourceItem[] = [
-  { id: 1, name: "Google Blog", slug: "google", category: "official", description: "Official news, research, and announcements from Google.", logo_url: null, url: "https://blog.google/rss/", credibility_score: 0.95, is_following: false },
-  { id: 2, name: "OpenAI Blog", slug: "openai", category: "official", description: "Frontier AI research, product updates, and system cards from OpenAI.", logo_url: null, url: "https://openai.com/news/rss.xml", credibility_score: 0.95, is_following: false },
-  { id: 3, name: "Anthropic News", slug: "anthropic", category: "official", description: "Claude model releases, safety alignment, and frontier research from Anthropic.", logo_url: null, url: "https://www.anthropic.com/news/rss", credibility_score: 0.95, is_following: false },
-  { id: 4, name: "NVIDIA AI Blog", slug: "nvidia", category: "official", description: "GPU architectures, CUDA, accelerated computing, and deep learning from NVIDIA.", logo_url: null, url: "https://blogs.nvidia.com/feed/", credibility_score: 0.95, is_following: false },
-  { id: 5, name: "Microsoft Blog", slug: "microsoft", category: "official", description: "Official news, Azure AI infrastructure, and engineering updates from Microsoft.", logo_url: null, url: "https://blogs.microsoft.com/feed/", credibility_score: 0.95, is_following: false },
-  { id: 6, name: "Meta Newsroom", slug: "meta", category: "official", description: "Open source AI models (Llama), PyTorch, and reality labs research from Meta.", logo_url: null, url: "https://about.fb.com/news/feed/", credibility_score: 0.95, is_following: false },
-  { id: 7, name: "Apple Newsroom", slug: "apple", category: "official", description: "Official hardware, software, Apple Silicon, and OS platform releases.", logo_url: null, url: "https://www.apple.com/newsroom/rss-feed.rss", credibility_score: 0.95, is_following: false },
-  { id: 8, name: "TechCrunch", slug: "techcrunch", category: "editorial", description: "Breaking technology journalism, startup funding, and venture capital reporting.", logo_url: null, url: "https://techcrunch.com/feed/", credibility_score: 0.9, is_following: false },
-  { id: 9, name: "The Verge", slug: "the-verge", category: "editorial", description: "Technology culture, reviews, gadget analysis, and tech policy reporting.", logo_url: null, url: "https://www.theverge.com/rss/index.xml", credibility_score: 0.9, is_following: false },
-  { id: 10, name: "Ars Technica", slug: "ars-technica", category: "editorial", description: "Deep technical analysis, cybersecurity, science, and computing architecture.", logo_url: null, url: "https://feeds.arstechnica.com/arstechnica/index", credibility_score: 0.92, is_following: false },
-  { id: 11, name: "MIT Technology Review", slug: "mit-technology-review", category: "editorial", description: "Authoritative reporting on commercial, political, and social impact of tech.", logo_url: null, url: "https://www.technologyreview.com/feed/", credibility_score: 0.94, is_following: false },
+  { slug: "google", name: "Google Blog", category: "official", description: "Official news, research, and announcements from Google.", logo_url: null, url: "https://blog.google/rss/", credibility_score: 0.95, is_following: false },
+  { slug: "openai", name: "OpenAI Blog", category: "official", description: "Frontier AI research, product updates, and system cards from OpenAI.", logo_url: null, url: "https://openai.com/news/rss.xml", credibility_score: 0.95, is_following: false },
+  { slug: "anthropic", name: "Anthropic News", category: "official", description: "Claude model releases, safety alignment, and frontier research from Anthropic.", logo_url: null, url: "https://www.anthropic.com/news/rss", credibility_score: 0.95, is_following: false },
+  { slug: "nvidia", name: "NVIDIA AI Blog", category: "official", description: "GPU architectures, CUDA, accelerated computing, and deep learning from NVIDIA.", logo_url: null, url: "https://blogs.nvidia.com/feed/", credibility_score: 0.95, is_following: false },
+  { slug: "microsoft", name: "Microsoft Blog", category: "official", description: "Official news, Azure AI infrastructure, and engineering updates from Microsoft.", logo_url: null, url: "https://blogs.microsoft.com/feed/", credibility_score: 0.95, is_following: false },
+  { slug: "meta", name: "Meta Newsroom", category: "official", description: "Open source AI models (Llama), PyTorch, and reality labs research from Meta.", logo_url: null, url: "https://about.fb.com/news/feed/", credibility_score: 0.95, is_following: false },
+  { slug: "apple", name: "Apple Newsroom", category: "official", description: "Official hardware, software, Apple Silicon, and OS platform releases.", logo_url: null, url: "https://www.apple.com/newsroom/rss-feed.rss", credibility_score: 0.95, is_following: false },
+  { slug: "techcrunch", name: "TechCrunch", category: "editorial", description: "Breaking technology journalism, startup funding, and venture capital reporting.", logo_url: null, url: "https://techcrunch.com/feed/", credibility_score: 0.9, is_following: false },
+  { slug: "the-verge", name: "The Verge", category: "editorial", description: "Technology culture, reviews, gadget analysis, and tech policy reporting.", logo_url: null, url: "https://www.theverge.com/rss/index.xml", credibility_score: 0.9, is_following: false },
+  { slug: "ars-technica", name: "Ars Technica", category: "editorial", description: "Deep technical analysis, cybersecurity, science, and computing architecture.", logo_url: null, url: "https://feeds.arstechnica.com/arstechnica/index", credibility_score: 0.92, is_following: false },
+  { slug: "mit-technology-review", name: "MIT Technology Review", category: "editorial", description: "Authoritative reporting on commercial, political, and social impact of tech.", logo_url: null, url: "https://www.technologyreview.com/feed/", credibility_score: 0.94, is_following: false },
 ];
 
 export function SourceSelectorModal({
@@ -99,59 +99,57 @@ export function SourceSelectorModal({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md cursor-pointer"
-            aria-hidden="true"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
           />
 
-          {/* Modal Window */}
+          {/* Modal Card */}
           <m.div
-            key="modal-window"
+            key="modal-card"
+            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ duration: 0.25, ease: EASE_CUBIC }}
+            className="relative w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-10"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="modal-sources-title"
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ duration: 0.25, ease: EASE_CUBIC }}
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-zinc-950 border border-white/20 shadow-2xl shadow-black/90 overflow-hidden z-10"
+            aria-labelledby="source-selector-title"
           >
             {/* Header */}
-            <div className="flex items-start justify-between p-6 border-b border-white/10 bg-white/[0.02]">
-              <div className="space-y-1 pr-6">
-                <h3 id="modal-sources-title" className="text-xl sm:text-2xl font-sans font-bold tracking-tight text-foreground">
-                  Follow Technology Sources
-                </h3>
-                <p className="text-xs text-muted-foreground font-mono">
-                  Choose the official newsrooms and editorial publishers to include in your feed.
+            <div className="p-6 border-b border-neutral-800/80 flex items-center justify-between gap-4">
+              <div>
+                <h2 id="source-selector-title" className="text-xl font-bold text-neutral-100 tracking-tight">
+                  Follow Authoritative Sources
+                </h2>
+                <p className="text-sm text-neutral-400 mt-1">
+                  Select primary technology engineering blogs and editorial publishers for your feed.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all cursor-pointer"
+                className="p-2 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                 aria-label="Close dialog"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Search Bar */}
-            <div className="p-4 sm:px-6 border-b border-white/10 bg-white/[0.01]">
-              <div className="relative flex items-center w-full">
-                <Search className="absolute left-3.5 w-4 h-4 text-muted-foreground/60 pointer-events-none" />
+            {/* Search Input */}
+            <div className="p-4 border-b border-neutral-800/50 bg-neutral-900/50">
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                 <input
                   type="text"
+                  placeholder="Search sources by name or description..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search sources (Google, OpenAI, Anthropic, NVIDIA...)"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.05] border border-white/10 text-sm font-sans placeholder:text-muted-foreground/50 text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 bg-neutral-800/60 border border-neutral-700/60 rounded-xl text-neutral-100 placeholder-neutral-500 text-sm focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-colors"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-3 p-1 rounded-md text-muted-foreground hover:text-foreground cursor-pointer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-200"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -159,103 +157,66 @@ export function SourceSelectorModal({
               </div>
             </div>
 
-            {/* Sources List Content */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 divide-y divide-white/5">
+            {/* Sources List by Categories */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
               {filteredSources.length === 0 ? (
-                <div className="py-12 text-center space-y-2">
-                  <p className="text-sm font-medium text-foreground">No sources matched &ldquo;{searchQuery}&rdquo;</p>
-                  <p className="text-xs text-muted-foreground font-mono">Try searching by company or publisher name.</p>
+                <div className="py-12 text-center">
+                  <p className="text-neutral-400 text-sm">No sources found matching &ldquo;{searchQuery}&rdquo;</p>
                 </div>
               ) : (
                 <>
-                  {/* Official Newsrooms */}
                   {officialSources.length > 0 && (
-                    <div className="space-y-3 pt-3 first:pt-0">
-                      <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground/80">
-                        <Building2 className="w-3.5 h-3.5 text-primary/80" />
-                        <span>Official Company Newsrooms</span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-2">
-                        {officialSources.map((source) => (
-                          <SourceRow
-                            key={source.id}
-                            source={source}
-                            onToggleFollow={onToggleFollow}
-                            isToggling={isToggling}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <CategorySection
+                      title="Official Engineering & Research"
+                      icon={<Building2 className="w-4 h-4 text-amber-400" />}
+                      sources={officialSources}
+                      onToggleFollow={onToggleFollow}
+                      isToggling={isToggling}
+                    />
                   )}
 
-                  {/* Major Tech Publications */}
                   {editorialSources.length > 0 && (
-                    <div className="space-y-3 pt-5">
-                      <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground/80">
-                        <Newspaper className="w-3.5 h-3.5 text-emerald-400/80" />
-                        <span>Major Tech Publications</span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-2">
-                        {editorialSources.map((source) => (
-                          <SourceRow
-                            key={source.id}
-                            source={source}
-                            onToggleFollow={onToggleFollow}
-                            isToggling={isToggling}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <CategorySection
+                      title="Editorial & Journalism"
+                      icon={<Newspaper className="w-4 h-4 text-sky-400" />}
+                      sources={editorialSources}
+                      onToggleFollow={onToggleFollow}
+                      isToggling={isToggling}
+                    />
                   )}
 
-                  {/* Community Feeds */}
                   {communitySources.length > 0 && (
-                    <div className="space-y-3 pt-5">
-                      <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground/80">
-                        <Users className="w-3.5 h-3.5 text-indigo-400/80" />
-                        <span>Community Discussions</span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-2">
-                        {communitySources.map((source) => (
-                          <SourceRow
-                            key={source.id}
-                            source={source}
-                            onToggleFollow={onToggleFollow}
-                            isToggling={isToggling}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <CategorySection
+                      title="Community & Research Hubs"
+                      icon={<Users className="w-4 h-4 text-emerald-400" />}
+                      sources={communitySources}
+                      onToggleFollow={onToggleFollow}
+                      isToggling={isToggling}
+                    />
                   )}
 
-                  {/* Other Sources */}
                   {otherSources.length > 0 && (
-                    <div className="space-y-3 pt-5">
-                      <div className="grid grid-cols-1 gap-2">
-                        {otherSources.map((source) => (
-                          <SourceRow
-                            key={source.id}
-                            source={source}
-                            onToggleFollow={onToggleFollow}
-                            isToggling={isToggling}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <CategorySection
+                      title="Other Sources"
+                      icon={<Building2 className="w-4 h-4 text-purple-400" />}
+                      sources={otherSources}
+                      onToggleFollow={onToggleFollow}
+                      isToggling={isToggling}
+                    />
                   )}
                 </>
               )}
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 bg-white/[0.02]">
-              <span className="text-xs font-mono text-muted-foreground/70">
-                {effectiveSources.filter((s) => s.is_following).length} followed
+            <div className="p-4 border-t border-neutral-800 bg-neutral-900/90 flex items-center justify-between">
+              <span className="text-xs text-neutral-500">
+                Following {effectiveSources.filter((s) => s.is_following).length} of {effectiveSources.length} sources
               </span>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-mono font-semibold text-foreground border border-white/10 transition-all cursor-pointer"
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-xl transition-colors shadow-sm"
               >
                 Done
               </button>
@@ -267,30 +228,61 @@ export function SourceSelectorModal({
   );
 }
 
-function SourceRow({
-  source,
-  onToggleFollow,
-  isToggling,
-}: {
-  source: SourceItem;
-  onToggleFollow: (id: number) => void;
+interface CategorySectionProps {
+  title: string;
+  icon: React.ReactNode;
+  sources: SourceItem[];
+  onToggleFollow: (sourceSlug: string) => void;
   isToggling?: boolean;
-}) {
+}
+
+function CategorySection({ title, icon, sources, onToggleFollow, isToggling }: CategorySectionProps) {
   return (
-    <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 hover:border-white/10 transition-all group">
-      <div className="flex flex-col gap-0.5 pr-4">
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+        {icon}
+        <span>{title}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {sources.map((source) => (
+          <SourceCard
+            key={source.slug}
+            source={source}
+            onToggleFollow={onToggleFollow}
+            isToggling={isToggling}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface SourceCardProps {
+  source: SourceItem;
+  onToggleFollow: (sourceSlug: string) => void;
+  isToggling?: boolean;
+}
+
+function SourceCard({ source, onToggleFollow, isToggling }: SourceCardProps) {
+  return (
+    <div
+      className={`p-3.5 rounded-xl border transition-all flex items-start justify-between gap-3 ${
+        source.is_following
+          ? "bg-amber-500/5 border-amber-500/30 text-neutral-100"
+          : "bg-neutral-800/40 hover:bg-neutral-800/70 border-neutral-800/80 text-neutral-300"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-sans font-semibold text-foreground group-hover:text-primary transition-colors">
-            {source.name}
-          </span>
+          <span className="font-semibold text-sm truncate text-neutral-100">{source.name}</span>
           {source.category === "official" && (
-            <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
               Official
             </span>
           )}
         </div>
         {source.description && (
-          <p className="text-xs text-muted-foreground/75 font-sans line-clamp-1">
+          <p className="text-xs text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
             {source.description}
           </p>
         )}
@@ -298,13 +290,14 @@ function SourceRow({
 
       <button
         type="button"
-        onClick={() => onToggleFollow(source.id)}
+        onClick={() => onToggleFollow(source.slug)}
         disabled={isToggling}
-        className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
+        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
           source.is_following
-            ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
-            : "bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground border border-white/10"
+            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
+            : "bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
         }`}
+        aria-pressed={source.is_following}
       >
         {source.is_following ? (
           <>

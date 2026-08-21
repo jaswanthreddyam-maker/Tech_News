@@ -47,7 +47,7 @@ class PersonalizationService:
             {
                 "id": s.id,
                 "name": s.name,
-                "slug": s.slug,
+                "slug": s.slug or str(s.id),
                 "category": s.category,
                 "description": s.description,
                 "logo_url": s.logo_url,
@@ -58,39 +58,53 @@ class PersonalizationService:
             for s in sources
         ]
 
-    async def follow_source(self, user_id: int, source_id: int) -> bool:
+    async def _resolve_source_by_slug(self, source_slug: str) -> Source | None:
         """
-        Idempotently follow an active source.
-        Raises ValueError if the source does not exist or is inactive/deleted.
+        Resolves an active Source entity strictly by its canonical slug.
+        Numeric ID fallback is strictly forbidden.
         """
-        source_stmt = select(Source).where(
-            Source.id == source_id,
+        if not source_slug or not isinstance(source_slug, str):
+            return None
+        normalized_slug = source_slug.strip().lower()
+        stmt = select(Source).where(
+            Source.slug == normalized_slug,
             Source.enabled == True,
             Source.is_deleted == False,
         )
-        source_res = await self.db.execute(source_stmt)
-        source = source_res.scalar_one_or_none()
+        res = await self.db.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def follow_source(self, user_id: int, source_slug: str) -> bool:
+        """
+        Idempotently follow an active source strictly by canonical slug.
+        Raises ValueError if the source does not exist or is inactive/deleted.
+        """
+        source = await self._resolve_source_by_slug(source_slug)
         if not source:
-            raise ValueError(f"Source with id {source_id} does not exist or is inactive.")
+            raise ValueError(f"Source with slug '{source_slug}' does not exist or is inactive.")
 
         existing_stmt = select(FollowedSource).where(
             FollowedSource.user_id == user_id,
-            FollowedSource.source_id == source_id,
+            FollowedSource.source_id == source.id,
         )
         existing = (await self.db.execute(existing_stmt)).scalar_one_or_none()
         if not existing:
-            new_follow = FollowedSource(user_id=user_id, source_id=source_id)
+            new_follow = FollowedSource(user_id=user_id, source_id=source.id)
             self.db.add(new_follow)
             await self.db.commit()
         return True
 
-    async def unfollow_source(self, user_id: int, source_id: int) -> bool:
+    async def unfollow_source(self, user_id: int, source_slug: str) -> bool:
         """
-        Idempotently unfollow a source.
+        Idempotently unfollow a source strictly by canonical slug.
         """
+        source = await self._resolve_source_by_slug(source_slug)
+        if not source:
+            return False
+
         stmt = select(FollowedSource).where(
             FollowedSource.user_id == user_id,
-            FollowedSource.source_id == source_id,
+            FollowedSource.source_id == source.id,
         )
         res = await self.db.execute(stmt)
         record = res.scalar_one_or_none()
@@ -112,53 +126,79 @@ class PersonalizationService:
         res = await self.db.execute(stmt)
         return list(res.scalars().all())
 
-    async def sync_guest_follows(self, user_id: int, source_ids: list[int]) -> list[int]:
-        """
-        Bulk merge guest follows from client localStorage into the user's account upon sign-in.
-        """
-        if not source_ids:
-            return await self.get_followed_source_ids(user_id)
-
-        valid_sources_stmt = select(Source.id).where(
-            Source.id.in_(source_ids),
-            Source.enabled == True,
-            Source.is_deleted == False,
+    async def get_followed_source_slugs(self, user_id: int) -> list[str]:
+        stmt = (
+            select(Source.slug)
+            .join(FollowedSource, FollowedSource.source_id == Source.id)
+            .where(
+                FollowedSource.user_id == user_id,
+                Source.enabled == True,
+                Source.is_deleted == False,
+            )
         )
-        valid_ids = set((await self.db.execute(valid_sources_stmt)).scalars().all())
+        res = await self.db.execute(stmt)
+        return [s for s in res.scalars().all() if s]
 
-        existing_stmt = select(FollowedSource.source_id).where(FollowedSource.user_id == user_id)
-        existing_ids = set((await self.db.execute(existing_stmt)).scalars().all())
+    async def sync_guest_follows(
+        self,
+        user_id: int,
+        source_slugs: list[str] | None = None,
+    ) -> list[str]:
+        """
+        Bulk merge guest follows (canonical slugs) into the user's account upon sign-in.
+        Returns the updated list of followed source slugs.
+        """
+        if source_slugs:
+            normalized_slugs = [s.strip().lower() for s in source_slugs if s and isinstance(s, str)]
+            if normalized_slugs:
+                stmt = select(Source.id).where(
+                    Source.slug.in_(normalized_slugs),
+                    Source.enabled == True,
+                    Source.is_deleted == False,
+                )
+                res = await self.db.execute(stmt)
+                target_ids = set(res.scalars().all())
 
-        new_ids = valid_ids - existing_ids
-        for s_id in new_ids:
-            self.db.add(FollowedSource(user_id=user_id, source_id=s_id))
+                if target_ids:
+                    existing_stmt = select(FollowedSource.source_id).where(
+                        FollowedSource.user_id == user_id,
+                        FollowedSource.source_id.in_(target_ids),
+                    )
+                    existing_ids = set((await self.db.execute(existing_stmt)).scalars().all())
 
-        if new_ids:
-            await self.db.commit()
+                    new_ids = target_ids - existing_ids
+                    for s_id in new_ids:
+                        self.db.add(FollowedSource(user_id=user_id, source_id=s_id))
 
-        return list(existing_ids | new_ids)
+                    if new_ids:
+                        await self.db.commit()
+
+        return await self.get_followed_source_slugs(user_id)
 
     async def get_source_following_feed(
         self,
         user_id: int | None = None,
-        guest_source_ids: list[int] | None = None,
+        guest_source_slugs: list[str] | None = None,
         limit: int = 30,
         offset: int = 0,
     ) -> dict:
         """
         Returns articles published strictly by the user's followed sources,
         ordered chronologically (published_at DESC, id DESC).
+        Invariant: FOLLOWED_SOURCE_IDS = ∅ => feed = [] (never fallback to latest/global).
         """
         followed_source_ids = []
         if user_id:
             followed_source_ids = await self.get_followed_source_ids(user_id)
-        elif guest_source_ids:
-            valid_sources_stmt = select(Source.id).where(
-                Source.id.in_(guest_source_ids),
-                Source.enabled == True,
-                Source.is_deleted == False,
-            )
-            followed_source_ids = list((await self.db.execute(valid_sources_stmt)).scalars().all())
+        elif guest_source_slugs:
+            normalized_slugs = [s.strip().lower() for s in guest_source_slugs if s and isinstance(s, str)]
+            if normalized_slugs:
+                slug_stmt = select(Source.id).where(
+                    Source.slug.in_(normalized_slugs),
+                    Source.enabled == True,
+                    Source.is_deleted == False,
+                )
+                followed_source_ids = list((await self.db.execute(slug_stmt)).scalars().all())
 
         if not followed_source_ids:
             return {

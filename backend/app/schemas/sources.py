@@ -1,23 +1,23 @@
-from datetime import datetime
-from pydantic import BaseModel
+from typing import Optional
+from pydantic import BaseModel, Field
 
 from app.schemas.news import ArticleCard
 
 
 class SourceItem(BaseModel):
-    id: int
+    id: Optional[int] = None
+    slug: str = Field(..., description="Canonical URL-safe source identifier (e.g. 'openai')")
     name: str
-    slug: str | None = None
     category: str
-    description: str | None = None
-    logo_url: str | None = None
+    description: Optional[str] = None
+    logo_url: Optional[str] = None
     url: str
     credibility_score: int = 50
     is_following: bool = False
 
 
 class SourceSyncRequest(BaseModel):
-    source_ids: list[int]
+    source_slugs: list[str] = Field(..., description="List of canonical source slugs to synchronize")
 
 
 class FollowingFeedResponse(BaseModel):

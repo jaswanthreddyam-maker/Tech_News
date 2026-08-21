@@ -56,27 +56,7 @@ async def lifespan(app: FastAPI):
     if not redis_ok:
         logger.warning("Redis connection validation failed. Cache services compromised.")
 
-    # 1.1 Run automatic Alembic database schema migrations
-    try:
-        import asyncio
-        import os
-        from alembic import command
-        from alembic.config import Config
-
-        def _run_alembic_upgrade():
-            alembic_ini_path = os.path.join(os.path.dirname(__file__), "alembic.ini")
-            if not os.path.exists(alembic_ini_path):
-                alembic_ini_path = os.path.join(os.getcwd(), "alembic.ini")
-            if os.path.exists(alembic_ini_path):
-                cfg = Config(alembic_ini_path)
-                command.upgrade(cfg, "head")
-
-        await asyncio.to_thread(_run_alembic_upgrade)
-        logger.info("Alembic database migrations applied successfully to head.")
-    except Exception as e:
-        logger.warning(f"Startup Alembic upgrade notice: {e}")
-
-    # 1.2 Seed canonical sources and feature flags
+    # 1.1 Seed canonical sources and feature flags
     try:
         from app.core.init_db import main as init_db_main
         await init_db_main()

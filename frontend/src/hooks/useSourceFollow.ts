@@ -7,9 +7,9 @@ import { useAppStore } from "@/store/useStore";
 import { Article } from "@/lib/api/types";
 
 export interface SourceItem {
-  id: number;
+  id?: number;
+  slug: string;
   name: string;
-  slug: string | null;
   category: string;
   description: string | null;
   logo_url: string | null;
@@ -26,55 +26,59 @@ export interface FollowingFeedResponse {
 
 const LOCAL_STORAGE_KEY = "tnt_followed_sources";
 
-function getLocalFollowedSourceIds(): number[] {
+function getLocalFollowedSourceSlugs(): string[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(Number).filter((n) => !isNaN(n)) : [];
+    if (!Array.isArray(parsed)) return [];
+    // Support strings directly and filter out invalid/empty tokens
+    return parsed
+      .map((item) => (typeof item === "string" ? item.trim() : String(item)))
+      .filter((slug) => slug.length > 0 && isNaN(Number(slug)));
   } catch {
     return [];
   }
 }
 
-function setLocalFollowedSourceIds(ids: number[]) {
+function setLocalFollowedSourceSlugs(slugs: string[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(ids));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slugs));
   } catch {
-    // Ignore localStorage errors
+    // Ignore localStorage write failures
   }
 }
 
 export function useSourceFollow() {
   const { user } = useAppStore();
   const queryClient = useQueryClient();
-  const [localFollowedIds, setLocalFollowedIds] = useState<number[]>([]);
+  const [localFollowedSlugs, setLocalFollowedSlugs] = useState<string[]>([]);
   const [, startTransition] = useTransition();
 
   // Load guest follows from localStorage on mount
   useEffect(() => {
-    setLocalFollowedIds(getLocalFollowedSourceIds());
+    setLocalFollowedSlugs(getLocalFollowedSourceSlugs());
   }, []);
 
   // Sync guest follows into DB upon user login
   useEffect(() => {
     if (!user) return;
-    const guestIds = getLocalFollowedSourceIds();
-    if (guestIds.length > 0) {
+    const guestSlugs = getLocalFollowedSourceSlugs();
+    if (guestSlugs.length > 0) {
       apiFetch("/users/me/following/sources/sync", {
         method: "POST",
-        body: JSON.stringify({ source_ids: guestIds }),
+        body: JSON.stringify({ source_slugs: guestSlugs }),
       })
         .then(() => {
           localStorage.removeItem(LOCAL_STORAGE_KEY);
-          setLocalFollowedIds([]);
+          setLocalFollowedSlugs([]);
           queryClient.invalidateQueries({ queryKey: ["sources"] });
           queryClient.invalidateQueries({ queryKey: ["following-feed"] });
         })
         .catch(() => {
-          // Ignore sync errors on network drops
+          // Ignore sync network errors on transient drop
         });
     }
   }, [user, queryClient]);
@@ -96,17 +100,17 @@ export function useSourceFollow() {
 
   // Calculate effective is_following per source (DB for logged-in, localStorage for guest)
   const sources: SourceItem[] = (sourcesData || []).map((s) => {
-    const isFollowing = user ? s.is_following : localFollowedIds.includes(s.id);
+    const isFollowing = user ? s.is_following : localFollowedSlugs.includes(s.slug);
     return { ...s, is_following: isFollowing };
   });
 
   const followedSources = sources.filter((s) => s.is_following);
   const followedCount = followedSources.length;
 
-  // Active followed source IDs
-  const activeFollowedIds = user
-    ? followedSources.map((s) => s.id)
-    : localFollowedIds;
+  // Active followed source slugs
+  const activeFollowedSlugs = user
+    ? followedSources.map((s) => s.slug)
+    : localFollowedSlugs;
 
   // 2. Fetch Following Feed
   const {
@@ -115,57 +119,80 @@ export function useSourceFollow() {
     error: feedError,
     refetch: refetchFeed,
   } = useQuery({
-    queryKey: ["following-feed", user?.id ?? "guest", activeFollowedIds.sort().join(",")],
+    queryKey: ["following-feed", user?.id ?? "guest", activeFollowedSlugs.sort().join(",")],
     queryFn: async (): Promise<FollowingFeedResponse> => {
-      if (activeFollowedIds.length === 0) {
+      if (activeFollowedSlugs.length === 0) {
         return { items: [], followed_sources_count: 0, total: 0 };
       }
 
       if (user) {
         return await apiFetch<FollowingFeedResponse>("/following/feed");
       } else {
-        const queryParams = activeFollowedIds.map((id) => `source_ids=${id}`).join("&");
+        const queryParams = activeFollowedSlugs
+          .map((slug) => `source_slugs=${encodeURIComponent(slug)}`)
+          .join("&");
         return await apiFetch<FollowingFeedResponse>(`/following/feed?${queryParams}`);
       }
     },
     staleTime: 30_000,
   });
 
-  // 3. Toggle Follow Mutation
+  // 3. Toggle Follow Mutation with Snapshot Rollback
   const toggleFollowMutation = useMutation({
-    mutationFn: async ({ sourceId, currentlyFollowing }: { sourceId: number; currentlyFollowing: boolean }) => {
+    mutationFn: async ({
+      sourceSlug,
+      currentlyFollowing,
+    }: {
+      sourceSlug: string;
+      currentlyFollowing: boolean;
+    }) => {
       if (!user) {
         // Guest mode: update localStorage
-        const current = getLocalFollowedSourceIds();
+        const current = getLocalFollowedSourceSlugs();
         const next = currentlyFollowing
-          ? current.filter((id) => id !== sourceId)
-          : [...current, sourceId];
-        setLocalFollowedIds(next);
-        setLocalFollowedSourceIds(next);
-        return { is_following: !currentlyFollowing, source_id: sourceId };
+          ? current.filter((s) => s !== sourceSlug)
+          : [...current, sourceSlug];
+        setLocalFollowedSlugs(next);
+        setLocalFollowedSourceSlugs(next);
+        return { is_following: !currentlyFollowing, source_slug: sourceSlug };
       }
 
-      // Logged-in mode: call authenticated API
+      // Logged-in mode: call authenticated API by slug
       if (currentlyFollowing) {
-        return await apiFetch<{ is_following: boolean }>(`/users/me/following/sources/${sourceId}`, {
-          method: "DELETE",
-        });
+        return await apiFetch<{ is_following: boolean }>(
+          `/users/me/following/sources/${encodeURIComponent(sourceSlug)}`,
+          { method: "DELETE" }
+        );
       } else {
-        return await apiFetch<{ is_following: boolean }>(`/users/me/following/sources/${sourceId}`, {
-          method: "POST",
-        });
+        return await apiFetch<{ is_following: boolean }>(
+          `/users/me/following/sources/${encodeURIComponent(sourceSlug)}`,
+          { method: "POST" }
+        );
       }
     },
-    onMutate: async ({ sourceId, currentlyFollowing }) => {
-      // Cancel outgoing refetches
+    onMutate: async ({ sourceSlug, currentlyFollowing }) => {
+      // Cancel outgoing refetches so they don't overwrite optimistic update
       await queryClient.cancelQueries({ queryKey: ["sources"] });
       await queryClient.cancelQueries({ queryKey: ["following-feed"] });
 
+      // Snapshot previous sources cache
+      const prevSources = queryClient.getQueryData<SourceItem[]>(["sources", user?.id ?? "guest"]);
+
       // Optimistically update sources cache
-      queryClient.setQueryData(["sources", user?.id ?? "guest"], (old: SourceItem[] | undefined) => {
+      queryClient.setQueryData<SourceItem[]>(["sources", user?.id ?? "guest"], (old) => {
         if (!old) return old;
-        return old.map((s) => (s.id === sourceId ? { ...s, is_following: !currentlyFollowing } : s));
+        return old.map((s) =>
+          s.slug === sourceSlug ? { ...s, is_following: !currentlyFollowing } : s
+        );
       });
+
+      return { prevSources };
+    },
+    onError: (_err, _vars, context) => {
+      // Restore previous state snapshot on error
+      if (context?.prevSources) {
+        queryClient.setQueryData(["sources", user?.id ?? "guest"], context.prevSources);
+      }
     },
     onSettled: () => {
       startTransition(() => {
@@ -176,10 +203,10 @@ export function useSourceFollow() {
   });
 
   const toggleFollow = useCallback(
-    (sourceId: number) => {
-      const source = sources.find((s) => s.id === sourceId);
+    (sourceSlug: string) => {
+      const source = sources.find((s) => s.slug === sourceSlug);
       const currentlyFollowing = source ? source.is_following : false;
-      toggleFollowMutation.mutate({ sourceId, currentlyFollowing });
+      toggleFollowMutation.mutate({ sourceSlug, currentlyFollowing });
     },
     [sources, toggleFollowMutation]
   );

@@ -47,5 +47,5 @@ RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Default command for Railway FastAPI service (overridden by worker/beat service start commands)
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 2"]
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 2"]
 

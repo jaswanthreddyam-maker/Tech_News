@@ -4,10 +4,10 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select
 
-from app.models.article import ArticleReadModel, Category, ProcessedArticle, RawArticle
+from app.models.article import ArticleReadModel, Category, ProcessedArticle
 from app.models.followed_source import FollowedSource
 from app.models.source import Source
-from app.models.user import Role, User
+from app.models.user import User
 from app.services.personalization_service import PersonalizationService
 
 
@@ -23,13 +23,13 @@ async def cleanup_sources_test_data(db_session):
 async def test_adversarial_source_attribution_and_following(db_session, cleanup_sources_test_data):
     """
     CRITICAL INVARIANT TEST:
-    Following a source means following articles published by that source (source_id).
+    Following a source by slug means following articles published strictly by that source (source_id).
     Entity mentions, keyword mentions, or topic matching must NEVER cause an article
     from an unfollowed publisher to appear in the Following feed.
     """
     now = datetime.now(timezone.utc)
 
-    # 1. Create or get test User
+    # 1. Create test User
     user = User(
         name="Test Follower",
         email=f"follower_{int(now.timestamp())}@example.com",
@@ -69,7 +69,6 @@ async def test_adversarial_source_attribution_and_following(db_session, cleanup_
         db_session.add(tc_source)
         await db_session.flush()
 
-    # Category
     cat_res = await db_session.execute(select(Category).limit(1))
     cat = cat_res.scalars().first()
     cat_id = cat.id if cat else 1
@@ -141,8 +140,8 @@ async def test_adversarial_source_attribution_and_following(db_session, cleanup_
 
     service = PersonalizationService(db_session)
 
-    # 5. User follows ONLY OpenAI
-    await service.follow_source(user_id=user.id, source_id=openai_source.id)
+    # 5. User follows ONLY OpenAI via canonical slug
+    await service.follow_source(user_id=user.id, source_ref="openai")
 
     # 6. Fetch Following Feed
     feed = await service.get_source_following_feed(user_id=user.id)
@@ -178,7 +177,7 @@ async def get_or_create_source(db_session, slug: str, name: str, category: str =
 @pytest.mark.asyncio
 async def test_follow_idempotency_and_unfollow(db_session, cleanup_sources_test_data):
     """
-    Test that following a source is strictly idempotent and unfollowing cleans up gracefully.
+    Test that following a source by slug is strictly idempotent and unfollowing cleans up gracefully.
     """
     now = datetime.now(timezone.utc)
     user = User(
@@ -198,12 +197,12 @@ async def test_follow_idempotency_and_unfollow(db_session, cleanup_sources_test_
 
     service = PersonalizationService(db_session)
 
-    # Follow 1st time
-    res1 = await service.follow_source(user.id, source.id)
+    # Follow 1st time by slug
+    res1 = await service.follow_source(user.id, source.slug)
     assert res1 is True
 
-    # Follow 2nd time (idempotent)
-    res2 = await service.follow_source(user.id, source.id)
+    # Follow 2nd time by slug (idempotent)
+    res2 = await service.follow_source(user.id, source.slug)
     assert res2 is True
 
     # Verify only 1 record in DB
@@ -212,8 +211,8 @@ async def test_follow_idempotency_and_unfollow(db_session, cleanup_sources_test_
     )).scalars().all()
     assert len(follow_records) == 1
 
-    # Unfollow
-    res3 = await service.unfollow_source(user.id, source.id)
+    # Unfollow by slug
+    res3 = await service.unfollow_source(user.id, source.slug)
     assert res3 is False
 
     # Verify 0 records in DB
@@ -223,7 +222,7 @@ async def test_follow_idempotency_and_unfollow(db_session, cleanup_sources_test_
     assert len(follow_records) == 0
 
     # Unfollow again (idempotent no-op)
-    res4 = await service.unfollow_source(user.id, source.id)
+    res4 = await service.unfollow_source(user.id, source.slug)
     assert res4 is False
 
 
@@ -280,7 +279,7 @@ async def test_source_lifecycle_exclusion(db_session, cleanup_sources_test_data)
     await db_session.commit()
 
     service = PersonalizationService(db_session)
-    await service.follow_source(user.id, test_source.id)
+    await service.follow_source(user.id, test_source.slug)
 
     # Feed while enabled: contains article
     feed = await service.get_source_following_feed(user.id)
@@ -297,13 +296,13 @@ async def test_source_lifecycle_exclusion(db_session, cleanup_sources_test_data)
 
     # Public list_sources excludes disabled source
     sources_list = await service.list_sources(user.id)
-    assert test_source.id not in [s["id"] for s in sources_list]
+    assert test_source.slug not in [s["slug"] for s in sources_list]
 
 
 @pytest.mark.asyncio
 async def test_guest_sync_and_feed(db_session, cleanup_sources_test_data):
     """
-    Test guest following with source_ids query parameter and login sync.
+    Test guest following with source_slugs query parameter and login sync.
     """
     now = datetime.now(timezone.utc)
     user = User(
@@ -326,19 +325,19 @@ async def test_guest_sync_and_feed(db_session, cleanup_sources_test_data):
         name=f"Guest S2 {int(now.timestamp())}",
         url=f"https://guests2-{int(now.timestamp())}.com/rss",
     )
-    active_sources = [s1.id, s2.id]
+    active_slugs = [s1.slug, s2.slug]
 
     service = PersonalizationService(db_session)
 
-    # 1. Guest feed query using source_ids
-    guest_feed = await service.get_source_following_feed(guest_source_ids=active_sources)
-    assert guest_feed["followed_sources_count"] == len(active_sources)
+    # 1. Guest feed query using source_slugs
+    guest_feed = await service.get_source_following_feed(guest_source_slugs=active_slugs)
+    assert guest_feed["followed_sources_count"] == len(active_slugs)
 
     # 2. Login sync merges guest follows into user's DB records
-    synced = await service.sync_guest_follows(user.id, active_sources)
-    for s_id in active_sources:
-        assert s_id in synced
+    synced_slugs = await service.sync_guest_follows(user.id, source_slugs=active_slugs)
+    for slug in active_slugs:
+        assert slug in synced_slugs
 
     # 3. Authenticated feed returns articles from the merged follows
     auth_feed = await service.get_source_following_feed(user_id=user.id)
-    assert auth_feed["followed_sources_count"] == len(active_sources)
+    assert auth_feed["followed_sources_count"] == len(active_slugs)

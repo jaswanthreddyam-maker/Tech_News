@@ -168,7 +168,7 @@ export function BreakingNews() {
             {followedSources.length > 0 ? (
               followedSources.map((source) => (
                 <button
-                  key={source.id}
+                  key={source.slug}
                   type="button"
                   onClick={() => setIsSourceModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/10 text-xs font-mono font-medium text-foreground border border-white/10 transition-all cursor-pointer group"
@@ -217,7 +217,7 @@ export function BreakingNews() {
         /* Case A Empty State: 0 Sources Followed */
         <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl bg-white/[0.02] border border-white/10 space-y-6">
           <div className="space-y-2 max-w-md">
-            <h3 className="text-lg sm:text-xl font-sans font-bold text-foreground">
+            <h3 className="text-lg sm:xl font-sans font-bold text-foreground">
               Stay close to the companies shaping technology
             </h3>
             <p className="text-xs font-mono text-muted-foreground/80 leading-relaxed">
@@ -229,7 +229,7 @@ export function BreakingNews() {
           <div className="w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
             {suggestedSources.map((source) => (
               <div
-                key={source.id}
+                key={source.slug}
                 className="flex items-center justify-between p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 transition-all"
               >
                 <div className="flex flex-col">
@@ -242,7 +242,7 @@ export function BreakingNews() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => toggleFollow(source.id)}
+                  onClick={() => toggleFollow(source.slug)}
                   disabled={isToggling}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono font-semibold text-foreground transition-all cursor-pointer"
                 >
