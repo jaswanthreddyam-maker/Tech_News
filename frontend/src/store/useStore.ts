@@ -123,6 +123,7 @@ export const useAppStore = create<AppState>((set) => ({
       isAdminAuthenticated: true,
       adminToken: accessToken,
       authGate: { isOpen: false, feature: null, returnUrl: null },
+      authRefreshSuppressUntil: null,
     });
   },
   logoutUser: () => {

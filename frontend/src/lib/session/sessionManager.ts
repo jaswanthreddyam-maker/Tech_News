@@ -23,6 +23,7 @@ export const sessionManager = {
     tokenExpiresAt = Date.now() + (expiresInSeconds * 1000);
     if (typeof window !== "undefined") {
       localStorage.setItem("has_session", "true");
+      localStorage.setItem("session_event", `login_${Date.now()}`);
     }
   },
 
@@ -31,6 +32,7 @@ export const sessionManager = {
     tokenExpiresAt = null;
     if (typeof window !== "undefined") {
       localStorage.removeItem("has_session");
+      localStorage.setItem("session_event", `logout_${Date.now()}`);
     }
   },
 
