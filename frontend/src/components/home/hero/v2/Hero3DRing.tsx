@@ -207,6 +207,7 @@ export function Hero3DRing() {
           } else {
             // Handoff executes directly from animation completion
             isArrivingRef.current = false;
+            smoothedRotationRef.current = rotationRef.current + dragOffsetRef.current;
             setLocalArrivalFinished(true);
             setContextArrivalFinished(true);
             if (typeof window !== "undefined") {
@@ -267,6 +268,7 @@ export function Hero3DRing() {
 
   // Continuous Museum Exhibit Turntable Rotation Engine
   const ambientRotationRef = useRef<number>(0);
+  const smoothedRotationRef = useRef<number>(rotation);
 
   useEffect(() => {
     if (!localArrivalFinished) return;
@@ -278,14 +280,21 @@ export function Hero3DRing() {
       const dt = Math.min(0.033, (now - lastTime) / 1000);
       lastTime = now;
 
-      // 4.5 degrees per second -> slow, cinematic, museum-exhibit spin
+      // 1.2 degrees per second -> slow, cinematic, museum-exhibit spin
       if (!isDragging && interactionMode === "idle") {
-        ambientRotationRef.current += 4.5 * dt;
+        ambientRotationRef.current += 1.2 * dt;
       }
 
       if (ringRef.current && !isArrivingRef.current) {
-        const netRotation = rotationRef.current + dragOffsetRef.current - ambientRotationRef.current;
-        ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netRotation}deg)`;
+        const targetRotation = rotationRef.current + dragOffsetRef.current - ambientRotationRef.current;
+        if (isDragging) {
+          smoothedRotationRef.current = targetRotation;
+        } else {
+          // Zero-velocity dampened exponential spring lerp (~600ms smooth easing)
+          const lerpFactor = 1 - Math.exp(-7.0 * dt);
+          smoothedRotationRef.current += (targetRotation - smoothedRotationRef.current) * lerpFactor;
+        }
+        ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${smoothedRotationRef.current}deg)`;
       }
 
       ambientRafId = requestAnimationFrame(animateAmbient);
@@ -390,7 +399,7 @@ export function Hero3DRing() {
             style={{
               transformStyle: "preserve-3d",
               transform: `translateZ(-${radius}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${sceneRotation}deg)`,
-              transition: isDragging || !isTransitionEnabled ? "none" : `transform ${RING_CONFIG.TRANSITION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`,
+              transition: "none",
               willChange: "transform",
             }}
           >

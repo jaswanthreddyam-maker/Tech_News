@@ -13,9 +13,9 @@ import {
 const HeroSceneContext = createContext<HeroSceneContextType | undefined>(undefined);
 
 const PLAYBACK_CONFIG = {
-  TOTAL_RING_CYCLE_MS: 35000,
-  MIN_STEP_INTERVAL_MS: 2500,
-  TRANSITION_DURATION_MS: 450,
+  TOTAL_RING_CYCLE_MS: 90000,
+  MIN_STEP_INTERVAL_MS: 8000,
+  TRANSITION_DURATION_MS: 600,
 };
 
 import { MediaService } from "@/domains/article/media";
