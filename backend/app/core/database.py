@@ -84,11 +84,40 @@ def configure_database_pool(pool_size: int, max_overflow: int):
         "pool_size": pool_size,
         "max_overflow": max_overflow,
     })
+    # Remove NullPool if it was set
+    engine_kwargs.pop("poolclass", None)
     
     new_engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
     async_engine = new_engine
     AsyncSessionLocal.configure(bind=new_engine)
     logger.info(f"Database connection pool configured with pool_size={pool_size}, max_overflow={max_overflow}")
+
+
+def configure_database_nullpool():
+    """Use NullPool for Celery workers — no persistent connections.
+    
+    Each query creates a fresh connection and releases it immediately.
+    This prevents connection accumulation across multiple forked workers
+    that share a limited pgBouncer session-mode pool (e.g. Supabase 15-conn limit).
+    """
+    global async_engine
+    if is_testing:
+        return
+
+    nullpool_kwargs = {
+        "pool_pre_ping": True,
+        "echo": False,
+        "future": True,
+        "poolclass": NullPool,
+        "connect_args": {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+        },
+    }
+    new_engine = create_async_engine(settings.DATABASE_URL, **nullpool_kwargs)
+    async_engine = new_engine
+    AsyncSessionLocal.configure(bind=new_engine)
+    logger.info("Database connection pool configured with NullPool (no persistent connections)")
 
 
 # Dynamic Dependency Injection for API routes
