@@ -14,16 +14,17 @@ export function Newsletter() {
     e.preventDefault();
     if (!email) return;
 
-    setStatus("loading");
-    setErrorMessage("");
-
     try {
       const baseUrl = typeof window !== "undefined" ? "" : getApiBaseUrl();
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
       
-      // Subscribe directly to the Daily AI Briefing delivery engine
+      // Subscribe directly to the canonical Daily AI Briefing delivery engine
       const briefingRes = await fetch(`${baseUrl}/api/v1/briefing/preferences`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           email,
           enabled: true,
@@ -33,13 +34,6 @@ export function Newsletter() {
           topics: ["artificial-intelligence", "technology", "cybersecurity"]
         })
       });
-
-      // Best-effort sync with newsletter table
-      fetch(`${baseUrl}/api/v1/newsletter/subscribe`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      }).catch(() => {});
 
       if (!briefingRes.ok) {
         const data = await briefingRes.json().catch(() => ({}));

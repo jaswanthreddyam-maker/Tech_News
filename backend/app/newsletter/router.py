@@ -131,20 +131,49 @@ async def esp_webhook(
     
     return {"status": "ok"}
 
+from app.core.security import apply_rate_limit, get_current_user
+from app.models.user import User
+
 # --- Editorial Endpoints ---
 
+@router.get("/stats", response_model=NewsletterStatsResponse)
+async def get_newsletter_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    repo = NewsletterRepository(db)
+    stats = await repo.get_stats()
+    
+    total = stats.total_subscribers
+    confirmed = stats.confirmed_subscribers
+    unsubscribed = stats.unsubscribed
+    
+    rate = 0.0
+    active_base = total - unsubscribed
+    if active_base > 0:
+        rate = (confirmed / active_base) * 100
+        
+    return NewsletterStatsResponse(
+        total_subscribers=total,
+        pending_subscribers=stats.pending_subscribers,
+        confirmed_subscribers=confirmed,
+        unsubscribed=stats.unsubscribed,
+        confirmation_rate=round(rate, 1),
+        new_today=0
+    )
+
 @router.get("/briefings", response_model=list[BriefingSchema])
-async def get_briefings(db: AsyncSession = Depends(get_db)):
+async def get_briefings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
     from app.newsletter.models import NewsletterBriefing
     
     stmt = select(NewsletterBriefing).order_by(NewsletterBriefing.created_at.desc())
     result = await db.execute(stmt)
     briefings = result.scalars().all()
     
-    # Normally we'd use selectinload on versions, but they aren't mapped with relationship() here.
-    # We will fetch versions separately or just return the briefings.
     from app.newsletter.models import NewsletterBriefingVersion
     for b in briefings:
         v_stmt = select(NewsletterBriefingVersion).where(NewsletterBriefingVersion.briefing_id == b.id).order_by(NewsletterBriefingVersion.version_number.desc())
@@ -154,7 +183,10 @@ async def get_briefings(db: AsyncSession = Depends(get_db)):
     return briefings
 
 @router.get("/campaigns", response_model=list[CampaignSchema])
-async def get_campaigns(db: AsyncSession = Depends(get_db)):
+async def get_campaigns(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     from sqlalchemy import select
     from app.newsletter.models import NewsletterCampaign
     stmt = select(NewsletterCampaign).order_by(NewsletterCampaign.created_at.desc())
@@ -162,7 +194,11 @@ async def get_campaigns(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 @router.get("/campaigns/{campaign_id}/analytics", response_model=CampaignAnalyticsSchema)
-async def get_campaign_analytics(campaign_id: int, db: AsyncSession = Depends(get_db)):
+async def get_campaign_analytics(
+    campaign_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     from sqlalchemy import select
     from app.newsletter.models import CampaignAnalyticsProjection
     stmt = select(CampaignAnalyticsProjection).where(CampaignAnalyticsProjection.campaign_id == campaign_id)
@@ -176,11 +212,11 @@ async def get_campaign_analytics(campaign_id: int, db: AsyncSession = Depends(ge
 async def update_draft_briefing(
     id: int,
     payload: BriefingUpdateRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     service = NewsletterService(db)
-    # In production, extract editor_id from JWT token via dependency
-    editor_id = "editor-1" 
+    editor_id = str(current_user.id)
     result = await service.update_briefing(id, payload.title, payload.content_html, payload.content_text, editor_id)
     await db.commit()
     return result
@@ -189,7 +225,8 @@ async def update_draft_briefing(
 async def approve_briefing(
     id: int,
     payload: BriefingApprovalRequest | None = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     service = NewsletterService(db)
     scheduled_at = payload.scheduled_at if payload else None
@@ -202,7 +239,8 @@ async def approve_briefing(
 @router.post("/briefings/{id}/reject")
 async def reject_briefing(
     id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     service = NewsletterService(db)
     success = await service.reject_briefing(id)
@@ -214,7 +252,8 @@ async def reject_briefing(
 @router.post("/briefings/{id}/archive")
 async def archive_briefing(
     id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     service = NewsletterService(db)
     success = await service.archive_briefing(id)

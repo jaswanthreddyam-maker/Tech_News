@@ -13,7 +13,8 @@ class DailyBriefingRenderer:
         items: List[Dict[str, Any]],
         subscriber_email: str,
         click_url_builder: Any,
-        unsubscribe_url: str
+        unsubscribe_url: str,
+        settings_url: str = "/settings",
     ) -> Dict[str, str]:
         item_count = len(items)
         headline_title = f"{item_count} stories worth knowing today" if item_count != 5 else "5 stories worth knowing today"
@@ -44,10 +45,10 @@ class DailyBriefingRenderer:
         for item in items:
             rank_str = f"{item['rank']:02d}"
             click_url = click_url_builder(item['article_id'], item['url'])
-            safe_title = html.escape(item['headline'])
-            safe_why = html.escape(item['why_it_matters'])
-            safe_cat = html.escape(item['category'])
-            safe_source = html.escape(item['source'])
+            safe_title = html.escape(str(item.get('headline') or 'Technology Update'))
+            safe_why = html.escape(str(item.get('why_it_matters') or ''))
+            safe_cat = html.escape(str(item.get('category') or 'Technology'))
+            safe_source = html.escape(str(item.get('source') or 'Tech News'))
 
             items_html += f"""
             <!-- Story Card -->
@@ -125,7 +126,7 @@ class DailyBriefingRenderer:
                             <div style="margin-top: 8px;">
                                 <a href="{unsubscribe_url}" style="color: #9ca3af; text-decoration: underline;">Unsubscribe from Daily Briefing</a>
                                 &nbsp;•&nbsp;
-                                <a href="http://localhost:3000/settings" style="color: #9ca3af; text-decoration: underline;">Notification Settings</a>
+                                <a href="{settings_url}" style="color: #9ca3af; text-decoration: underline;">Notification Settings</a>
                             </div>
                         </td>
                     </tr>

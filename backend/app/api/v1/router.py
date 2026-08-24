@@ -33,7 +33,6 @@ from app.api.v1.routes import (
     webhooks,
     sources,
 )
-from app.newsletter.router import router as newsletter_router
 
 from app.api.v1.routes import stories, lifecycle, calendar, admin_editorial, admin_events
 
@@ -77,6 +76,5 @@ api_router.include_router(funnels.router, prefix="/funnels", tags=["Growth"])
 api_router.include_router(cohorts.router, prefix="/cohorts", tags=["Growth"])
 api_router.include_router(intelligence.router, prefix="/intelligence", tags=["Intelligence"])
 api_router.include_router(briefing_routes.router)
-api_router.include_router(newsletter_router, prefix="/newsletter", tags=["Newsletter"])
 api_router.include_router(webhooks.router)
 

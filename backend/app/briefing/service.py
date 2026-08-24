@@ -9,11 +9,17 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, and_, delete, func, cast, String
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.briefing.models import (
     DailyBriefingSubscriber, DailyBriefingEdition, DailyBriefingItem,
     DailyBriefingDelivery, BriefingDeliveryStatus,
+)
+from app.briefing.contracts import (
+    EDITION_MAX_CAPACITY,
+    matches_preferred_topics,
 )
 from app.briefing.selector import DailyBriefingSelector
 from app.briefing.enricher import BriefingEnricher
@@ -24,16 +30,27 @@ from app.core.events.models import EventOutbox
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Maximum items a global edition ever contains.
-# Subscriber story_count preference is applied at render/dispatch time.
+# Secrets & Base URLs
 # ---------------------------------------------------------------------------
-EDITION_MAX_CAPACITY = 10
 
-SECRET_KEY = os.getenv("SECRET_KEY", "technews_daily_briefing_secure_hmac_secret_key_2026")
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+def get_secret_key() -> str:
+    secret = getattr(settings, "SECRET_KEY", None) or os.getenv("SECRET_KEY")
+    if settings.effective_environment == "production":
+        if not secret or secret == "technews_daily_briefing_secure_hmac_secret_key_2026":
+            raise RuntimeError("Production SECRET_KEY must be explicitly and securely configured.")
+    return secret or "technews_daily_briefing_secure_hmac_secret_key_2026"
+
+
+def get_public_web_base_url() -> str:
+    return getattr(settings, "PUBLIC_WEB_BASE_URL", None) or os.getenv("PUBLIC_WEB_BASE_URL", "http://localhost:3000")
+
+
+def get_api_base_url() -> str:
+    return getattr(settings, "API_BASE_URL", None) or os.getenv("API_BASE_URL", "http://localhost:8000")
+
 
 # ---------------------------------------------------------------------------
-# Token utilities
+# Cryptographic Token utilities (Full 256-bit HMAC-SHA256)
 # ---------------------------------------------------------------------------
 
 def hash_token(raw_token: str) -> str:
@@ -41,10 +58,11 @@ def hash_token(raw_token: str) -> str:
 
 
 def _sign_payload(payload_data: dict) -> str:
-    """Sign a dict payload → base64url-payload.signature string."""
+    """Sign a dict payload → base64url-payload.signature string with full 256-bit SHA256 HMAC."""
     json_bytes = json.dumps(payload_data, separators=(",", ":")).encode("utf-8")
     b64_payload = base64.urlsafe_b64encode(json_bytes).decode("utf-8").rstrip("=")
-    sig = hmac.new(SECRET_KEY.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+    secret = get_secret_key()
+    sig = hmac.new(secret.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{b64_payload}.{sig}"
 
 
@@ -55,7 +73,8 @@ def _verify_signed_token(token: str) -> Optional[Dict[str, Any]]:
         if len(parts) != 2:
             return None
         b64_payload, sig = parts[0], parts[1]
-        expected_sig = hmac.new(SECRET_KEY.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+        secret = get_secret_key()
+        expected_sig = hmac.new(secret.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected_sig):
             return None
         padded = b64_payload + "=" * (-len(b64_payload) % 4)
@@ -83,21 +102,25 @@ def verify_signed_click_token(token: str) -> Optional[Dict[str, Any]]:
 
 
 def create_signed_verification_token(subscriber_id: int, email: str) -> str:
+    now = datetime.now(timezone.utc)
     return _sign_payload({
         "type": "verify",
         "sid": subscriber_id,
-        "email": email,
-        "exp": int((datetime.now(timezone.utc) + timedelta(hours=24)).timestamp()),
+        "email": email.strip().lower(),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=24)).timestamp()),
     })
 
 
 def create_signed_unsubscribe_token(subscriber_id: int, email: str) -> str:
     """Create a long-lived signed unsubscribe token (90 days)."""
+    now = datetime.now(timezone.utc)
     return _sign_payload({
         "type": "unsub",
         "sid": subscriber_id,
-        "email": email,
-        "exp": int((datetime.now(timezone.utc) + timedelta(days=90)).timestamp()),
+        "email": email.strip().lower(),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(days=90)).timestamp()),
     })
 
 
@@ -136,14 +159,51 @@ def is_delivery_due(subscriber: "DailyBriefingSubscriber", now_utc: datetime, wi
 
 class DailyBriefingService:
     """
-    Core domain service for Daily Briefing: subscriber management, edition
-    generation (always at max capacity), delivery dispatch, verification,
-    unsubscribe, and timezone-aware scheduling.
+    Canonical domain service for Daily Briefing: subscriber management with user_id
+    ownership, singleton edition generation, fault-isolated parallel enrichment,
+    deterministic idempotency, and multi-day signed unsubscribe verification.
     """
 
     # ------------------------------------------------------------------
-    # Subscriber management
+    # Subscriber management (User ownership bound)
     # ------------------------------------------------------------------
+
+    @classmethod
+    async def get_subscriber_for_user(
+        cls,
+        db: AsyncSession,
+        user_id: str,
+        email: Optional[str] = None,
+    ) -> DailyBriefingSubscriber:
+        """
+        Lookup or create a subscriber strictly bounded by authenticated user_id.
+        User A cannot mutate or select User B's subscriber.
+        """
+        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.user_id == str(user_id))
+        res = await db.execute(stmt)
+        subscriber = res.scalar_one_or_none()
+
+        if subscriber:
+            return subscriber
+
+        # If email provided, check if an unowned subscriber exists for that email
+        if email:
+            email_clean = email.strip().lower()
+            stmt_email = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.email == email_clean)
+            res_email = await db.execute(stmt_email)
+            existing = res_email.scalar_one_or_none()
+            if existing:
+                if not existing.user_id:
+                    existing.user_id = str(user_id)
+                    await db.flush()
+                    return existing
+                elif existing.user_id == str(user_id):
+                    return existing
+                # If existing is bound to another user, do not hijack it
+
+        # Create new subscriber for this user
+        subscriber_email = (email or f"user_{user_id}@technewstoday.local").strip().lower()
+        return await cls.get_or_create_subscriber(db, email=subscriber_email, user_id=str(user_id))
 
     @classmethod
     async def get_or_create_subscriber(
@@ -158,44 +218,31 @@ class DailyBriefingService:
         subscriber = res.scalar_one_or_none()
 
         if not subscriber:
-            # Unsubscribe token: raw token is emailed; only hash stored in DB
-            raw_unsub_token = f"unsub_{email_clean}_{os.urandom(12).hex()}"
-            subscriber = DailyBriefingSubscriber(
-                user_id=user_id,
-                email=email_clean,
-                enabled=False,  # Requires email verification
-                delivery_time="08:00",
-                timezone="Asia/Kolkata",
-                story_count=5,
-                topics=["artificial-intelligence", "technology", "cybersecurity"],
-                unsubscribe_token_hash=hash_token(raw_unsub_token),
-            )
-            db.add(subscriber)
-            await db.flush()
+            try:
+                async with db.begin_nested():
+                    subscriber = DailyBriefingSubscriber(
+                        user_id=user_id,
+                        email=email_clean,
+                        enabled=False,  # Requires email verification
+                        delivery_time="08:00",
+                        timezone="Asia/Kolkata",
+                        story_count=5,
+                        topics=["artificial-intelligence", "technology", "cybersecurity"],
+                        unsubscribe_token_hash=f"unsub_{hash_token(email_clean)}",
+                    )
+                    db.add(subscriber)
+                    await db.flush()
+            except IntegrityError:
+                # Concurrent insert race rescue
+                stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.email == email_clean)
+                res = await db.execute(stmt)
+                subscriber = res.scalar_one()
 
         elif user_id and not subscriber.user_id:
-            # Bind authenticated user to existing subscriber if not already bound
-            subscriber.user_id = user_id
+            subscriber.user_id = str(user_id)
             await db.flush()
 
         return subscriber
-
-    @classmethod
-    async def bind_user_to_subscriber(
-        cls,
-        db: AsyncSession,
-        subscriber: "DailyBriefingSubscriber",
-        user_id: str,
-    ) -> None:
-        """Associate an authenticated user account with a subscriber record."""
-        if subscriber.user_id and subscriber.user_id != user_id:
-            logger.warning(
-                f"Subscriber {subscriber.id} already bound to user {subscriber.user_id}; "
-                f"attempted rebind to {user_id} ignored."
-            )
-            return
-        subscriber.user_id = user_id
-        await db.flush()
 
     # ------------------------------------------------------------------
     # Email verification
@@ -207,13 +254,14 @@ class DailyBriefingService:
         db: AsyncSession,
         subscriber: "DailyBriefingSubscriber",
     ) -> None:
-        """Generate a signed verification token, store its hash, and dispatch the verification email."""
+        """Generate a signed verification token and dispatch the verification email."""
         raw_token = create_signed_verification_token(subscriber.id, subscriber.email)
         subscriber.verification_token_hash = hash_token(raw_token)
         subscriber.verification_expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
         await db.flush()
 
-        verify_url = f"{BASE_URL}/api/v1/briefing/verify?token={raw_token}"
+        api_url = get_api_base_url()
+        verify_url = f"{api_url}/api/v1/briefing/verify?token={raw_token}"
         provider = get_email_provider()
         payload = EmailPayload(
             to=subscriber.email,
@@ -250,18 +298,13 @@ class DailyBriefingService:
             return None
 
         subscriber_id = data.get("sid")
-        token_hash = hash_token(raw_token)
+        token_email = (data.get("email") or "").strip().lower()
 
-        stmt = select(DailyBriefingSubscriber).where(
-            and_(
-                DailyBriefingSubscriber.id == subscriber_id,
-                DailyBriefingSubscriber.verification_token_hash == token_hash,
-            )
-        )
+        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.id == subscriber_id)
         res = await db.execute(stmt)
         subscriber = res.scalar_one_or_none()
 
-        if not subscriber:
+        if not subscriber or subscriber.email.strip().lower() != token_email:
             return None
 
         subscriber.email_verified_at = datetime.now(timezone.utc)
@@ -272,7 +315,7 @@ class DailyBriefingService:
         return subscriber
 
     # ------------------------------------------------------------------
-    # Unsubscribe
+    # Deterministic Multi-Day Unsubscribe
     # ------------------------------------------------------------------
 
     @classmethod
@@ -282,26 +325,21 @@ class DailyBriefingService:
         raw_token: str,
     ) -> Optional["DailyBriefingSubscriber"]:
         """
-        Validate raw HMAC-signed unsubscribe token (from email URL).
-        Hashes it server-side to compare against stored unsubscribe_token_hash.
+        Validate signed unsubscribe token. Does not depend on a single mutable DB hash,
+        enabling past emails (up to 90 days) to remain valid for unsubscription.
         """
         data = _verify_signed_token(raw_token)
         if not data or data.get("type") != "unsub":
             return None
 
         subscriber_id = data.get("sid")
-        token_hash = hash_token(raw_token)
+        token_email = (data.get("email") or "").strip().lower()
 
-        stmt = select(DailyBriefingSubscriber).where(
-            and_(
-                DailyBriefingSubscriber.id == subscriber_id,
-                DailyBriefingSubscriber.unsubscribe_token_hash == token_hash,
-            )
-        )
+        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.id == subscriber_id)
         res = await db.execute(stmt)
         subscriber = res.scalar_one_or_none()
 
-        if not subscriber:
+        if not subscriber or subscriber.email.strip().lower() != token_email:
             return None
 
         subscriber.enabled = False
@@ -310,7 +348,7 @@ class DailyBriefingService:
         return subscriber
 
     # ------------------------------------------------------------------
-    # Edition (always generated at EDITION_MAX_CAPACITY = 10)
+    # Canonical Edition Generation (Concurrency-Safe Singleton)
     # ------------------------------------------------------------------
 
     @classmethod
@@ -320,12 +358,11 @@ class DailyBriefingService:
         edition_date: Optional[str] = None,
     ) -> "DailyBriefingEdition":
         """
-        Get today's edition or create/re-evaluate it.
-
+        Get today's edition or create it.
         INVARIANTS:
-        1. Existing editions with items > 0 OR successful SENT/DELIVERED deliveries are immutable.
-        2. Existing 0-item editions with NO successful deliveries are re-evaluated against selector.
-        3. Newly generated 0-story selections do not poison future runs.
+        1. Existing editions with items > 0 OR SENT deliveries are immutable.
+        2. Existing 0-item editions with NO sent deliveries are re-evaluated.
+        3. Concurrency safe: simultaneous workers do not crash with duplicate key errors.
         """
         if not edition_date:
             edition_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -359,7 +396,7 @@ class DailyBriefingService:
             if len(items) > 0 or sent_count > 0:
                 return edition
 
-        # Always generate at maximum capacity — subscriber preference is applied later
+        # Always generate at maximum capacity — subscriber preference is applied at delivery
         selected_articles = await DailyBriefingSelector.select_top_stories(
             db, limit=EDITION_MAX_CAPACITY
         )
@@ -372,14 +409,22 @@ class DailyBriefingService:
 
         if not edition:
             edition_status = "PUBLISHED" if enriched_data else "EMPTY"
-            edition = DailyBriefingEdition(
-                edition_date=edition_date,
-                selection_hash=selection_hash,
-                algorithm_version="v2.2",
-                status=edition_status,
-            )
-            db.add(edition)
-            await db.flush()
+            try:
+                async with db.begin_nested():
+                    edition = DailyBriefingEdition(
+                        edition_date=edition_date,
+                        selection_hash=selection_hash,
+                        algorithm_version="v2.2",
+                        status=edition_status,
+                    )
+                    db.add(edition)
+                    await db.flush()
+            except IntegrityError:
+                # Concurrent worker insert race rescue
+                stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date)
+                res = await db.execute(stmt)
+                edition = res.scalar_one()
+                return edition
         else:
             edition.selection_hash = selection_hash
             edition.status = "PUBLISHED" if enriched_data else "EMPTY"
@@ -405,11 +450,12 @@ class DailyBriefingService:
         await db.flush()
         edition.loaded_items = item_models
 
-        # Transactional outbox event only for non-empty edition generation
+        # Transactional outbox event with explicit schema versioning
         if item_models:
             outbox_event = EventOutbox(
-                event_type="DailyBriefingGenerated",
+                event_type="DailyBriefingEditionGenerated",
                 payload={
+                    "schema_version": 1,
                     "edition_id": edition.id,
                     "edition_date": edition.edition_date,
                     "story_count": len(item_models),
@@ -427,7 +473,7 @@ class DailyBriefingService:
         return edition
 
     # ------------------------------------------------------------------
-    # Dispatch
+    # Dispatch & Personalization Projection
     # ------------------------------------------------------------------
 
     @classmethod
@@ -439,11 +485,7 @@ class DailyBriefingService:
         is_test: bool = False,
     ) -> "DailyBriefingDelivery":
         """
-        Dispatch (or re-dispatch for test) one delivery.
-
-        - Non-test sends require email_verified_at to be set.
-        - Edition always has up to 10 items; subscriber receives items[:story_count].
-        - Click tracking uses our signed route; provider webhooks do not count clicks.
+        Dispatch one delivery with topic affinity projection and deterministic idempotency.
         """
         if not is_test and not subscriber.email_verified_at:
             raise ValueError(
@@ -475,23 +517,34 @@ class DailyBriefingService:
             )
 
         if existing_delivery and is_test:
-            # Reuse existing record for re-send (avoids UNIQUE constraint violation)
             delivery = existing_delivery
             delivery.status = BriefingDeliveryStatus.QUEUED
             delivery.provider_idempotency_key = idempotency_key
         else:
-            delivery = DailyBriefingDelivery(
-                edition_id=edition.id,
-                subscriber_id=subscriber.id,
-                email=subscriber.email,
-                status=BriefingDeliveryStatus.QUEUED,
-                provider_idempotency_key=idempotency_key,
-                stories_delivered=subscriber.story_count,
-            )
-            db.add(delivery)
-        await db.flush()
+            try:
+                async with db.begin_nested():
+                    delivery = DailyBriefingDelivery(
+                        edition_id=edition.id,
+                        subscriber_id=subscriber.id,
+                        email=subscriber.email,
+                        status=BriefingDeliveryStatus.QUEUED,
+                        provider_idempotency_key=idempotency_key,
+                        stories_delivered=subscriber.story_count,
+                    )
+                    db.add(delivery)
+                    await db.flush()
+            except IntegrityError:
+                # Concurrent delivery insert race rescue
+                stmt_check = select(DailyBriefingDelivery).where(
+                    and_(
+                        DailyBriefingDelivery.edition_id == edition.id,
+                        DailyBriefingDelivery.subscriber_id == subscriber.id,
+                    )
+                )
+                res_check = await db.execute(stmt_check)
+                return res_check.scalar_one()
 
-        # Load edition items
+        # Load canonical edition items
         items = getattr(edition, "loaded_items", [])
         if not items:
             stmt_items = (
@@ -502,13 +555,17 @@ class DailyBriefingService:
             items_res = await db.execute(stmt_items)
             items = list(items_res.scalars().all())
 
-        # Apply subscriber preference slice — this is where story_count matters
-        items = items[:subscriber.story_count]
-        delivery.stories_delivered = len(items)
+        # Topic Personalization Projection (Preserving Global Editorial Rank)
+        preferred_topics = subscriber.topics or []
+        matched_items = [it for it in items if matches_preferred_topics(it.category, preferred_topics)]
+        unmatched_items = [it for it in items if it not in matched_items]
+        personalized_items = (matched_items + unmatched_items)[:subscriber.story_count]
+
+        delivery.stories_delivered = len(personalized_items)
 
         items_dict = [
             {
-                "rank": it.rank,
+                "rank": idx,
                 "article_id": it.article_id,
                 "headline": it.headline,
                 "why_it_matters": it.why_it_matters,
@@ -517,17 +574,19 @@ class DailyBriefingService:
                 "url": it.url or f"/articles/{it.article_id}",
                 "read_time": it.read_time,
             }
-            for it in items
+            for idx, it in enumerate(personalized_items, 1)
         ]
+
+        api_url = get_api_base_url()
+        web_url = get_public_web_base_url()
 
         def click_url_builder(art_id: str, target_url: str) -> str:
             signed_token = create_signed_click_token(delivery.id, art_id, target_url)
-            return f"{BASE_URL}/api/v1/briefing/click/{signed_token}"
+            return f"{api_url}/api/v1/briefing/click/{signed_token}"
 
-        # Unsubscribe URL uses a freshly signed raw token (hash stored in DB)
         raw_unsub_token = create_signed_unsubscribe_token(subscriber.id, subscriber.email)
-        subscriber.unsubscribe_token_hash = hash_token(raw_unsub_token)
-        unsubscribe_url = f"{BASE_URL}/api/v1/briefing/unsubscribe?token={raw_unsub_token}"
+        unsubscribe_url = f"{api_url}/api/v1/briefing/unsubscribe?token={raw_unsub_token}"
+        settings_url = f"{web_url}/dashboard/settings"
 
         rendered = DailyBriefingRenderer.render_email(
             edition_date=edition.edition_date,
@@ -535,6 +594,7 @@ class DailyBriefingService:
             subscriber_email=subscriber.email,
             click_url_builder=click_url_builder,
             unsubscribe_url=unsubscribe_url,
+            settings_url=settings_url,
         )
 
         email_payload = EmailPayload(
@@ -565,7 +625,7 @@ class DailyBriefingService:
         return delivery
 
     # ------------------------------------------------------------------
-    # Test send (bypasses verification gate)
+    # Test send
     # ------------------------------------------------------------------
 
     @classmethod
@@ -573,13 +633,21 @@ class DailyBriefingService:
         cls,
         db: AsyncSession,
         email: str,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        subscriber = await cls.get_or_create_subscriber(db, email=email)
-        # Auto-verify for test dispatch so UI is immediately usable in dev
+        email_clean = email.strip().lower()
+        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.email == email_clean)
+        res = await db.execute(stmt)
+        subscriber = res.scalar_one_or_none()
+
+        if not subscriber:
+            subscriber = await cls.get_or_create_subscriber(db, email=email_clean, user_id=user_id)
+
         if not subscriber.email_verified_at:
-            subscriber.email_verified_at = datetime.now(timezone.utc)
-            subscriber.enabled = True
-            await db.flush()
+            raise ValueError(
+                f"Cannot send test briefing to {subscriber.email}: email is not verified. "
+                "Please verify your email first."
+            )
 
         edition = await cls.get_or_create_daily_edition(db)
         delivery = await cls.dispatch_delivery(
@@ -587,7 +655,7 @@ class DailyBriefingService:
         )
         return {
             "status": "success",
-            "message": f"Test briefing for {edition.edition_date} dispatched to {email}.",
+            "message": f"Test briefing for {edition.edition_date} dispatched to {email_clean}.",
             "delivery_id": delivery.id,
             "provider_message_id": delivery.provider_message_id,
             "delivery_status": delivery.status,
@@ -604,21 +672,16 @@ class DailyBriefingService:
         db: AsyncSession,
         now_utc: Optional[datetime] = None,
     ) -> Dict[str, int]:
-        """
-        Find all enabled, verified subscribers whose local delivery_time
-        falls within the current 5-minute window and dispatch today's edition.
-        UNIQUE(subscriber_id, edition_id) ensures idempotency on repeated calls.
-        """
         if now_utc is None:
             now_utc = datetime.now(timezone.utc)
 
         edition_date = now_utc.strftime("%Y-%m-%d")
 
-        # Get/create today's edition (always at max capacity)
+        # Get/create today's edition
         edition = await cls.get_or_create_daily_edition(db, edition_date=edition_date)
         await db.flush()
 
-        # Load eligible subscribers
+        # Load eligible subscribers (Strict: enabled, verified, not unsubscribed)
         stmt = select(DailyBriefingSubscriber).where(
             and_(
                 DailyBriefingSubscriber.enabled == True,

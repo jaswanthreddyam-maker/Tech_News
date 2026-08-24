@@ -1,8 +1,10 @@
 import logging
+import re
 from typing import List, Optional
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,11 +13,12 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.briefing.models import DailyBriefingSubscriber, DailyBriefingDelivery, can_transition
+from app.briefing.models import DailyBriefingSubscriber, DailyBriefingDelivery
+from app.briefing.contracts import VALID_TOPICS
 from app.briefing.service import (
     DailyBriefingService,
     verify_signed_click_token,
-    hash_token,
+    get_public_web_base_url,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,24 +26,56 @@ router = APIRouter(prefix="/briefing", tags=["Daily Briefing"])
 
 
 # ---------------------------------------------------------------------------
-# Request schemas
+# Request schemas with Strict Validation
 # ---------------------------------------------------------------------------
 
 class PreferenceUpdateRequest(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
     enabled: bool = True
-    delivery_time: str = "08:00"
-    timezone: str = "Asia/Kolkata"
-    story_count: int = 5
-    topics: List[str] = ["artificial-intelligence", "technology", "cybersecurity"]
+    delivery_time: str = Field(default="08:00", description="Local delivery time in HH:MM format")
+    timezone: str = Field(default="Asia/Kolkata", description="Valid IANA timezone identifier")
+    story_count: int = Field(default=5, ge=1, le=10, description="Stories count in daily briefing")
+    topics: List[str] = Field(
+        default=["artificial-intelligence", "technology", "cybersecurity"],
+        description="List of preferred technology topic slugs"
+    )
+
+    @field_validator("delivery_time")
+    @classmethod
+    def validate_time_format(cls, v: str) -> str:
+        if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", v):
+            raise ValueError("delivery_time must be in valid HH:MM 24-hour format (e.g. '08:00', '18:30')")
+        return v
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_iana_timezone(cls, v: str) -> str:
+        try:
+            ZoneInfo(v)
+            return v
+        except ZoneInfoNotFoundError:
+            raise ValueError(f"'{v}' is not a recognized IANA timezone identifier (e.g. 'America/New_York', 'Asia/Kolkata')")
+
+    @field_validator("story_count")
+    @classmethod
+    def validate_story_count(cls, v: int) -> int:
+        if v not in (3, 5, 10):
+            return 5 if v < 8 else 10
+        return v
+
+    @field_validator("topics")
+    @classmethod
+    def validate_topics_subset(cls, v: List[str]) -> List[str]:
+        cleaned = [t.strip().lower() for t in v if t.strip().lower() in VALID_TOPICS]
+        return cleaned if cleaned else ["technology"]
 
 
 class TestBriefingRequest(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
 
 
 class VerifyEmailRequest(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
 
 
 # ---------------------------------------------------------------------------
@@ -52,19 +87,11 @@ async def get_briefing_preferences(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get preferences and last delivery telemetry for authenticated subscriber."""
-    # Look up by user_id first, fall back to current_user.email
-    stmt = select(DailyBriefingSubscriber).where(
-        DailyBriefingSubscriber.user_id == str(current_user.id)
+    """Get preferences and last delivery telemetry strictly for authenticated subscriber."""
+    subscriber = await DailyBriefingService.get_subscriber_for_user(
+        db, user_id=str(current_user.id), email=current_user.email
     )
-    res = await db.execute(stmt)
-    subscriber = res.scalar_one_or_none()
-
-    if not subscriber:
-        subscriber = await DailyBriefingService.get_or_create_subscriber(
-            db, email=current_user.email, user_id=str(current_user.id)
-        )
-        await db.commit()
+    await db.commit()
 
     # Last delivery telemetry
     stmt_del = (
@@ -108,33 +135,42 @@ async def update_briefing_preferences(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update preferences for Daily Briefing. Derived strictly from authenticated user."""
-    subscriber = await DailyBriefingService.get_or_create_subscriber(
-        db, email=req.email or current_user.email, user_id=str(current_user.id)
+    """
+    Save Daily Briefing preferences for authenticated user.
+    INVARIANTS:
+    1. Resolves subscriber exclusively by current_user.id (prevents hijacking).
+    2. Zero verification bypass: does NOT auto-verify unverified emails.
+    """
+    subscriber = await DailyBriefingService.get_subscriber_for_user(
+        db, user_id=str(current_user.id), email=current_user.email
     )
-
-    # Bind user if not yet bound
-    if not subscriber.user_id:
-        await DailyBriefingService.bind_user_to_subscriber(db, subscriber, str(current_user.id))
 
     subscriber.delivery_time = req.delivery_time
     subscriber.timezone = req.timezone
     subscriber.story_count = req.story_count
     subscriber.topics = req.topics
 
+    verification_needed = False
     if req.enabled:
-        subscriber.enabled = True
-        if not subscriber.email_verified_at:
-            subscriber.email_verified_at = datetime.now(timezone.utc)
+        if subscriber.email_verified_at is not None:
+            subscriber.enabled = True
+        else:
+            subscriber.enabled = False
+            verification_needed = True
     else:
         subscriber.enabled = False
 
     await db.commit()
     await db.refresh(subscriber)
 
+    message = "Daily Briefing preferences saved."
+    if verification_needed:
+        message = "Preferences saved. Please verify your email to activate daily delivery."
+
     return {
         "status": "success",
-        "message": "Daily Briefing preferences saved.",
+        "message": message,
+        "verification_required": verification_needed,
         "preferences": {
             "email": subscriber.email,
             "email_verified": subscriber.email_verified_at is not None,
@@ -148,7 +184,7 @@ async def update_briefing_preferences(
 
 
 # ---------------------------------------------------------------------------
-# POST /verify-email  — send verification email
+# POST /verify-email
 # ---------------------------------------------------------------------------
 
 @router.post("/verify-email")
@@ -157,9 +193,9 @@ async def request_email_verification(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Dispatch a verification email to the authenticated subscriber's address."""
-    subscriber = await DailyBriefingService.get_or_create_subscriber(
-        db, email=req.email or current_user.email, user_id=str(current_user.id)
+    """Dispatch a verification email strictly to the authenticated subscriber's address."""
+    subscriber = await DailyBriefingService.get_subscriber_for_user(
+        db, user_id=str(current_user.id), email=current_user.email
     )
     if subscriber.email_verified_at:
         return {"status": "already_verified", "message": "Email is already verified."}
@@ -189,17 +225,21 @@ async def verify_email(
             detail="Invalid or expired verification link.",
         )
     await db.commit()
+    web_url = get_public_web_base_url()
     return HTMLResponse(
-        content=f"""
-<!DOCTYPE html>
+        content=f"""<!DOCTYPE html>
 <html>
 <head><title>Email Verified — Tech News Today</title></head>
 <body style="font-family:monospace;background:#0a0a0a;color:#e5e5e5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-  <div style="text-align:center;max-width:400px">
-    <div style="font-size:48px">✓</div>
+  <div style="text-align:center;max-width:400px;padding:32px;background:#12151e;border-radius:16px;border:1px solid rgba(255,255,255,0.1)">
+    <div style="font-size:48px;color:#10b981">✓</div>
     <h1 style="color:#ffffff;font-size:24px;margin:16px 0 8px">Email Verified</h1>
-    <p style="color:#a3a3a3;font-size:14px">Your Daily Briefing subscription for <strong>{subscriber.email}</strong> is now active.</p>
-    <a href="http://localhost:3000/settings" style="display:inline-block;margin-top:24px;padding:10px 20px;background:#ffffff;color:#0a0a0a;border-radius:8px;text-decoration:none;font-size:13px;font-weight:bold">Go to Settings</a>
+    <p style="color:#a3a3a3;font-size:14px;line-height:1.5">
+      Your subscription to Tech News Today's Daily Briefing is now active for <strong style="color:#ffffff">{subscriber.email}</strong>.
+    </p>
+    <a href="{web_url}/dashboard/settings" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#3b82f6;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px">
+      Manage Notification Preferences &rarr;
+    </a>
   </div>
 </body>
 </html>""",
@@ -208,18 +248,15 @@ async def verify_email(
 
 
 # ---------------------------------------------------------------------------
-# GET /unsubscribe?token=...  — one-click unsubscribe
+# GET /unsubscribe?token=...
 # ---------------------------------------------------------------------------
 
 @router.get("/unsubscribe")
-async def unsubscribe(
-    token: str = Query(..., description="Signed unsubscribe token from email"),
+async def unsubscribe_by_token(
+    token: str = Query(..., description="Signed unsubscribe token from email footer"),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    One-click unsubscribe. Validates the raw HMAC-signed token from the email URL,
-    hashes it server-side, and compares against the stored unsubscribe_token_hash.
-    """
+    """Deterministic, multi-day valid signed unsubscribe link."""
     subscriber = await DailyBriefingService.unsubscribe_by_token(db, raw_token=token)
     if not subscriber:
         raise HTTPException(
@@ -227,17 +264,21 @@ async def unsubscribe(
             detail="Invalid or expired unsubscribe link.",
         )
     await db.commit()
+    web_url = get_public_web_base_url()
     return HTMLResponse(
-        content=f"""
-<!DOCTYPE html>
+        content=f"""<!DOCTYPE html>
 <html>
 <head><title>Unsubscribed — Tech News Today</title></head>
 <body style="font-family:monospace;background:#0a0a0a;color:#e5e5e5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-  <div style="text-align:center;max-width:400px">
-    <div style="font-size:48px">✓</div>
+  <div style="text-align:center;max-width:400px;padding:32px;background:#12151e;border-radius:16px;border:1px solid rgba(255,255,255,0.1)">
+    <div style="font-size:48px;color:#6b7280">✕</div>
     <h1 style="color:#ffffff;font-size:24px;margin:16px 0 8px">Unsubscribed</h1>
-    <p style="color:#a3a3a3;font-size:14px">You've been removed from the Daily Briefing for <strong>{subscriber.email}</strong>.</p>
-    <p style="color:#525252;font-size:12px;margin-top:8px">You can resubscribe any time from Settings.</p>
+    <p style="color:#a3a3a3;font-size:14px;line-height:1.5">
+      You have been unsubscribed from the Daily Briefing. You will not receive any more daily emails.
+    </p>
+    <a href="{web_url}/dashboard/settings" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#262626;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px">
+      Resubscribe in Settings &rarr;
+    </a>
   </div>
 </body>
 </html>""",
@@ -255,12 +296,34 @@ async def send_test_briefing(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Trigger an immediate test briefing dispatch to the authenticated user's email."""
+    """
+    Trigger an immediate test briefing dispatch.
+    INVARIANTS:
+    - Normal users can ONLY send to their own verified email.
+    - Only Admins can specify an arbitrary destination email.
+    """
+    target_email = current_user.email.strip().lower()
+
+    if req.email and req.email.strip().lower() != target_email:
+        user_role = str(getattr(current_user, "role", "")).lower()
+        if user_role not in ("admin", "userrole.admin"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Non-admin users may only dispatch test briefings to their verified account email.",
+            )
+        target_email = req.email.strip().lower()
+
     try:
-        target_email = req.email or current_user.email
-        result = await DailyBriefingService.send_test_briefing(db, email=target_email)
+        result = await DailyBriefingService.send_test_briefing(
+            db, email=target_email, user_id=str(current_user.id)
+        )
         await db.commit()
         return result
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err),
+        )
     except Exception as e:
         logger.error(f"Error triggering test briefing: {e}")
         raise HTTPException(
@@ -270,7 +333,7 @@ async def send_test_briefing(
 
 
 # ---------------------------------------------------------------------------
-# GET /click/{signed_token}  — HMAC-signed click tracking
+# GET /click/{signed_token}
 # ---------------------------------------------------------------------------
 
 @router.get("/click/{signed_token}")
@@ -280,8 +343,7 @@ async def handle_signed_click(
 ):
     """
     Canonical click tracking endpoint.
-    Verifies HMAC-signed token, increments click_count + sets first_clicked_at
-    (engagement telemetry, does NOT change delivery status), then redirects.
+    Verifies HMAC-signed token, increments engagement telemetry, and redirects.
     """
     data = verify_signed_click_token(signed_token)
     if not data:
@@ -302,12 +364,12 @@ async def handle_signed_click(
             if not delivery.first_clicked_at:
                 delivery.first_clicked_at = now_dt
             delivery.click_count = (delivery.click_count or 0) + 1
-            # Delivery status is NOT changed — clicks are engagement, not lifecycle
             await db.commit()
 
-    # Safety: reject open redirects to external domains
+    # Safety: open redirect guard
     if target_url.startswith("http://") or target_url.startswith("https://"):
-        if not ("localhost" in target_url or "technewstoday" in target_url):
+        web_base = get_public_web_base_url().replace("http://", "").replace("https://", "")
+        if not (web_base in target_url or "localhost" in target_url or "technewstoday" in target_url):
             target_url = "/"
 
     return RedirectResponse(url=target_url, status_code=307)

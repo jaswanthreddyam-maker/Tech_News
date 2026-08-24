@@ -87,8 +87,8 @@ class DailyBriefingSubscriber(Base):
     story_count: Mapped[int] = mapped_column(Integer, default=5, nullable=False)  # 5 or 10
     topics: Mapped[dict] = mapped_column(JSONB, default=list, nullable=False)
 
-    # Unsubscribe — hash only; raw token lives in signed emails
-    unsubscribe_token_hash: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    # Unsubscribe — optional fallback hash; primary verification is cryptographic HMAC token
+    unsubscribe_token_hash: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
     unsubscribed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

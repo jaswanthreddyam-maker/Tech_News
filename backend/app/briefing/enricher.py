@@ -67,10 +67,49 @@ class BriefingEnricher:
         return fallback_why
 
     @classmethod
-    async def enrich_articles(cls, articles: List[ArticleReadModel]) -> List[Dict[str, Any]]:
+    async def enrich_articles(
+        cls,
+        articles: List[ArticleReadModel],
+        concurrency: int = 4,
+    ) -> List[Dict[str, Any]]:
+        """
+        Enrich a batch of articles in parallel with bounded concurrency.
+        Guarantees strict per-item fault isolation: any individual AI timeout or error
+        gracefully falls back to the canonical summary without failing the rest of the batch.
+        """
+        if not articles:
+            return []
+
+        sem = asyncio.Semaphore(concurrency)
+
+        async def _enrich_safe(art: ArticleReadModel) -> str:
+            async with sem:
+                try:
+                    return await cls.enrich_item(art)
+                except Exception as exc:
+                    logger.warning(f"BriefingEnricher: Error during enrich_item for article {art.id}: {exc}")
+                    return (
+                        art.summary
+                        if art.summary and len(art.summary.strip()) > 10
+                        else f"{art.title}. Key developments published by {art.source or 'Tech News'}."
+                    )
+
+        tasks = [_enrich_safe(art) for art in articles]
+        explanations = await asyncio.gather(*tasks, return_exceptions=True)
+
         enriched_items = []
-        for rank, art in enumerate(articles, 1):
-            why_it_matters = await cls.enrich_item(art)
+        for rank, (art, explanation) in enumerate(zip(articles, explanations), 1):
+            why_it_matters = (
+                str(explanation)
+                if isinstance(explanation, str) and len(explanation.strip()) > 0
+                else (
+                    art.summary
+                    if art.summary and len(art.summary.strip()) > 10
+                    else f"{art.title}. Key developments published by {art.source or 'Tech News'}."
+                )
+            )
+
+            article_slug = getattr(art, "slug", None) or getattr(art, "id", "")
             enriched_items.append({
                 "rank": rank,
                 "article_id": str(art.id),
@@ -79,7 +118,7 @@ class BriefingEnricher:
                 "why_it_matters": why_it_matters,
                 "category": art.category or "Technology",
                 "source": art.source or "Tech News",
-                "url": art.url or f"/articles/{art.slug}",
+                "url": art.url or f"/articles/{article_slug}",
                 "read_time": getattr(art, "reading_time", 3) or 3,
             })
         return enriched_items
