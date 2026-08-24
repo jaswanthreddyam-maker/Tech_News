@@ -59,7 +59,21 @@ This document serves as the project's constitution. It outlines the core subsyst
 
 ---
 
-## 3. Architecture Change Management Protocol
+## 3. System Architecture & Information Planes
+
+The system architecture is structured across four decoupled planes with clear local boundaries and control planes:
+- **Plane 1: Architecture Governance & Control Plane** (ACE AST Analysis, CI PR Gates, OpenTelemetry Tracing)
+- **Plane 2: Product Experience & Security Boundary** (Next.js Application, Auth/RBAC Interceptor, Protected REST APIs)
+- **Plane 3: Content Intelligence Pipeline** (Acquisition, Ingestion, Multi-Provider AI Enrichment, Knowledge Evolution, Story Formation)
+- **Plane 4: Editorial Assembly & Multi-Channel Distribution** (Editorial OS, Personalization, Homepage Materialization, Campaign Distribution)
+- **Plane 5: Platform Runtime & CQRS Event Bus** (FastAPI Workers, Transactional Outbox, CTE SKIP LOCKED Dispatcher, Redis Broker, Celery Workers, Targeted Projectors, Checkpoint Isolation)
+- **Plane 6: Unified PostgreSQL Persistence Store** (Domain Store, Knowledge Graph, pgvector Embeddings, AI Provenance Records, Materialized Read Models, Backup Archives)
+
+The authoritative visual diagram and detailed plane definitions are maintained in [`docs/diagrams/SYSTEM_ARCHITECTURE.md`](file:///d:/tech_news/docs/diagrams/SYSTEM_ARCHITECTURE.md).
+
+---
+
+## 4. Architecture Change Management Protocol
 
 The architecture does not evolve organically. Any future architectural change requires an explicit **Architecture Change Record (ACR)**:
 
