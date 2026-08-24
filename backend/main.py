@@ -279,12 +279,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 # 2.5 Mount Security Headers and CORS Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
-if isinstance(settings.BACKEND_CORS_ORIGINS, list):
-    for o in settings.BACKEND_CORS_ORIGINS:
-        if isinstance(o, str) and o.strip():
-            clean_o = o.strip().rstrip("/")
-            if clean_o not in cors_origins:
-                cors_origins.append(clean_o)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -299,17 +293,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# Middleware stack: added in reverse order (last added = first executed).
+# CORSMiddleware MUST be the outermost middleware so it processes
+# preflight OPTIONS and attaches headers even when inner middleware fails.
+
 app.add_middleware(MaintenanceModeMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Correlation-ID", "X-Process-Time-Ms"],
 )
 
 # 5. Mount Static Uploads Folder
