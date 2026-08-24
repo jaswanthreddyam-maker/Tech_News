@@ -168,7 +168,7 @@ export function AuthenticationGateModal() {
                   shape="pill"
                   size="large"
                   text={mode === "login" ? "signin_with" : "signup_with"}
-                  width="100%"
+                  width="340"
                 />
               </div>
               <div className="relative w-full flex items-center justify-center my-3">
