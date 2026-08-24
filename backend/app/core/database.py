@@ -59,8 +59,8 @@ if is_testing:
 # Default fallback (e.g. for CLI or Beat) is highly restricted
 if not is_testing:
     engine_kwargs.update({
-        "pool_size": getattr(settings, "DB_POOL_SIZE", 10),
-        "max_overflow": getattr(settings, "DB_MAX_OVERFLOW", 10),
+        "pool_size": getattr(settings, "DB_POOL_SIZE", 3),
+        "max_overflow": getattr(settings, "DB_MAX_OVERFLOW", 2),
         "pool_timeout": 30.0,
         "pool_recycle": 1800,
     })

@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
     # Configure FastAPI database connection pool limits
     from app.core.database import configure_database_pool
-    configure_database_pool(pool_size=10, max_overflow=10)
+    configure_database_pool(pool_size=5, max_overflow=3)
 
     # Verify strict PostgreSQL connection
     db_ok = await verify_database_connection(max_retries=5, initial_delay=1.0)

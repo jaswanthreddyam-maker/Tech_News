@@ -19,7 +19,7 @@ logger = logging.getLogger("tech_news.celery")
 
 # Explicitly configure default DB pool for Celery Beat (and worker parent processes)
 from app.core.database import configure_database_pool
-configure_database_pool(pool_size=5, max_overflow=5)
+configure_database_pool(pool_size=3, max_overflow=2)
 
 # Core Celery Queue Initializer
 celery_app = Celery(
@@ -64,9 +64,9 @@ def init_worker_process(**kwargs):
     # we must completely replace the global engine in the child process to prevent
     # connection acquisition deadlocks and 5-second pool timeouts.
     from app.core.database import configure_database_pool
-    configure_database_pool(pool_size=5, max_overflow=5)
+    configure_database_pool(pool_size=3, max_overflow=2)
     
-    logger.info("Celery worker process initialized and global DB pool safely re-created (5+5).")
+    logger.info("Celery worker process initialized and global DB pool safely re-created (3+2).")
 
 def run_in_worker_loop(coro):
     """Helper to safely run coroutines using the persistent worker loop, or fallback to a new one."""
