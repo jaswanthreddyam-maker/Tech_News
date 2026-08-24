@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArticleLink } from "@/domains/article/ArticleLink";
 import { m, useInView, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight, Compass } from 'lucide-react';
-import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
+import { apiFetch } from "@/lib/api/client";
 
 interface Session {
   session_id: string;
@@ -248,24 +248,21 @@ export function ResumeReading() {
   useEffect(() => {
     const fetchSessions = async () => {
       try {
-        let anonId = null;
+        let anonId: string | null = null;
         if (typeof window !== 'undefined') {
           anonId = localStorage.getItem('tnt_anon_id');
         }
-        const url = new URL(`${getApiBaseUrl()}/behavioral/sessions`);
-        url.searchParams.append('status', 'in_progress');
-        url.searchParams.append('limit', '3');
-        if (anonId) {
-          url.searchParams.append('anonymous_id', anonId);
-        }
-        
-        const res = await fetch(url.toString());
-        if (res.ok) {
-          const data = await res.json();
-          setSessions(data || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch resume reading sessions:', err);
+        const data = await apiFetch<Session[]>('/behavioral/sessions', {
+          params: {
+            status: 'in_progress',
+            limit: 3,
+            ...(anonId ? { anonymous_id: anonId } : {}),
+          },
+        });
+        setSessions(Array.isArray(data) ? data : []);
+      } catch {
+        // Fallback gracefully for guests/new sessions
+        setSessions([]);
       } finally {
         setLoading(false);
       }
