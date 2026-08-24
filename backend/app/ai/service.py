@@ -78,6 +78,11 @@ class AIService:
         *,
         fallback: AIEnrichmentOutput | None = None,
     ) -> AIServiceResult:
+        from app.core.tracing import SpanAttributes, get_tracer
+
+        tracer = get_tracer("tech-news.ai")
+        span = tracer.start_span("article.enrichment") if tracer else None
+
         clipped_article = self._clip_article(article)
         telemetry = []
 
@@ -114,6 +119,14 @@ class AIService:
             tags = self._validate_payload(TagsOutput, tags_response.payload)
             sentiment = self._validate_payload(SentimentOutput, sentiment_response.payload)
 
+            if span:
+                total_tokens = sum(getattr(r.usage, "total_tokens", 0) or 0 for r, _ in responses_with_retries)
+                total_cost = sum(float(calculate_cost_usd(r.model, r.usage)) for r, _ in responses_with_retries)
+                span.set_attribute(SpanAttributes.AI_PROVIDER, summary_response.provider or "unknown")
+                span.set_attribute(SpanAttributes.AI_MODEL, summary_response.model or "unknown")
+                span.set_attribute(SpanAttributes.AI_TOKENS, total_tokens)
+                span.set_attribute(SpanAttributes.AI_COST_USD, total_cost)
+
             return AIServiceResult(
                 output=AIEnrichmentOutput(
                     summary=summary.summary,
@@ -131,6 +144,9 @@ class AIService:
                 record.model_copy(update={"status": AIJobStatus.FALLBACK, "error": str(exc)}) for record in telemetry
             ]
             return AIServiceResult(output=fallback, status=AIJobStatus.FALLBACK, telemetry=telemetry, error=str(exc))
+        finally:
+            if span:
+                span.end()
 
     async def _run_task(self, task_type: AITaskType, article: ArticleAIInput) -> tuple[AIProviderResponse, int]:
         prompt_version = self.config.prompt_version_for(task_type)

@@ -82,3 +82,13 @@ class KnowledgeArtifact(BaseModel):
     topics: list[Topic] = Field(default_factory=list)
     timeline: list[TimelineEvent] = Field(default_factory=list)
     relationships: list[Relationship] = Field(default_factory=list)
+
+    # AI provenance metadata — populated by KnowledgeWorkflow from
+    # the capability results. Used by projectors to create
+    # immutable AIInferenceRecord entries.
+    provider: str | None = None
+    model: str | None = None
+    prompt_version: str | None = None
+    prompt_hash: str | None = None
+    input_fingerprint: str | None = None
+    source_article_id: int | None = None

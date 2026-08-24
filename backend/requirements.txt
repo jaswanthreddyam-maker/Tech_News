@@ -28,3 +28,10 @@ trafilatura>=1.6
 prometheus_client>=0.20,<1.0
 docker>=7.1.0
 google-genai>=0.4.0
+# OpenTelemetry — distributed tracing
+opentelemetry-api>=1.25
+opentelemetry-sdk>=1.25
+opentelemetry-instrumentation-fastapi>=0.46b0
+opentelemetry-instrumentation-sqlalchemy>=0.46b0
+opentelemetry-instrumentation-redis>=0.46b0
+opentelemetry-instrumentation-celery>=0.46b0

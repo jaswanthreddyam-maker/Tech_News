@@ -67,6 +67,8 @@ async def setup_test_database():
     import app.models.recipient  # noqa: F401
     import app.models.projection  # noqa: F401
     import app.models.source  # noqa: F401
+    import app.models.inference  # noqa: F401
+    import app.core.events.models  # noqa: F401
     from app.models.base import Base
     from app.core.database import async_engine
 

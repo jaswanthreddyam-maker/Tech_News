@@ -92,6 +92,8 @@ async def test_download_and_validate_in_memory():
     # 2. Test successful mock download
     mock_resp = MagicMock()
     mock_resp.status_code = 200
+    mock_resp.url = "https://example.com/valid.jpg"
+    mock_resp.headers = {"content-type": "image/jpeg"}
 
     # Create valid JPEG bytes
     img_byte_arr = io.BytesIO()

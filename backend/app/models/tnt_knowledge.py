@@ -43,10 +43,15 @@ class ArticleEntityLink(Base):
     article_id: Mapped[str] = mapped_column(String(64), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False, index=True)
     entity_id: Mapped[str] = mapped_column(String(255), ForeignKey("tnt_entity_nodes.id", ondelete="CASCADE"), nullable=False, index=True)
     confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    inference_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ai_inference_records.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
     projected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     entity = relationship("EntityNode", back_populates="article_links")
+    inference = relationship("AIInferenceRecord", foreign_keys=[inference_id])
 
 
 class ArticleTopicLink(Base):
@@ -87,8 +92,13 @@ class RelationshipEdge(Base):
     predicate: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     target_id: Mapped[str] = mapped_column(String(255), ForeignKey("tnt_entity_nodes.id", ondelete="CASCADE"), nullable=False, index=True)
     confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    inference_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ai_inference_records.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
     projected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     source_node = relationship("EntityNode", foreign_keys=[source_id], back_populates="relationships_as_source")
     target_node = relationship("EntityNode", foreign_keys=[target_id], back_populates="relationships_as_target")
+    inference = relationship("AIInferenceRecord", foreign_keys=[inference_id])

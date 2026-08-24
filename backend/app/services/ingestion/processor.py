@@ -130,7 +130,7 @@ def clean_and_sanitize_html(raw_html_or_text: str) -> str:
     for tag in soup.find_all(True):
         safe_attrs = {}
         for attr, value in tag.attrs.items():
-            if attr in ("href", "title", "alt", "src", "class"):
+            if attr in ("href", "title", "alt", "src", "class", "target"):
                 if attr == "href" and str(value).strip().lower().startswith("javascript:"):
                     continue
                 safe_attrs[attr] = value
@@ -168,6 +168,16 @@ def clean_and_sanitize_html(raw_html_or_text: str) -> str:
     )
 
     if not block_elements:
+        # Check if container contains inline tags (like <a>, <span>) that should be preserved in paragraphs
+        child_nodes = [c for c in container.children if getattr(c, "name", None) or (isinstance(c, str) and c.strip())]
+        if child_nodes:
+            rendered = []
+            for child in child_nodes:
+                c_str = str(child).strip()
+                if c_str:
+                    rendered.append(f"<p>{c_str}</p>" if getattr(child, "name", None) != "p" else c_str)
+            if rendered:
+                return "".join(rendered)
         body_text = container.get_text(separator="\n\n", strip=True)
         return clean_and_sanitize_html(body_text)
 

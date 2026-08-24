@@ -8,9 +8,21 @@ logger = logging.getLogger(__name__)
 
 class BackgroundDispatcher:
     """
-    Polls the EventOutbox, leases pending events, publishes them to the DomainEventBus,
-    and updates their status to DELIVERED or DLQ on failure.
-    ADR-0041: Transactional Outbox.
+    DEPRECATED — Do not use for new code.
+
+    The canonical outbox dispatcher is the Celery periodic task
+    ``process_event_outbox_task`` in ``app/tasks/distribution_tasks.py``,
+    which implements:
+      - CTE + FOR UPDATE SKIP LOCKED lease acquisition
+      - Per-handler checkpoint idempotency (OutboxDispatchCheckpoint)
+      - Per-event savepoint isolation
+      - Dead letter routing on max retries
+      - Expired lease reclamation for crashed worker recovery
+
+    This class is retained only for reference. The only external reference
+    is a comment in ``app/services/replay_service.py`` (line 85).
+
+    See ADR-0041: Transactional Outbox.
     """
     def __init__(self, event_bus: DomainEventBus, session_maker: Any):
         self.event_bus = event_bus

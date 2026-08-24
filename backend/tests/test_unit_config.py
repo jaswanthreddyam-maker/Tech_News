@@ -17,7 +17,7 @@ def test_settings_loading_hierarchy():
     # Pydantic BaseSettings load defaults if env vars are missing
     with patch.dict(os.environ, clear=True):
         # We need to temporarily set APP_ENV to avoid validation errors if it's strictly required
-        with patch.dict(os.environ, {"APP_ENV": "test"}):
+        with patch.dict(os.environ, {"APP_ENV": "test", "DATABASE_URL": "postgresql+asyncpg://postgres:postgres@localhost:5432/tech_news_today_test"}):
             settings_default = Settings()
             # UPLOAD_PUBLIC_PREFIX has a default value
             assert settings_default.UPLOAD_PUBLIC_PREFIX == "/api/v1/uploads"

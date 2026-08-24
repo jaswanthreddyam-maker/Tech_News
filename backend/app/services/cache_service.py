@@ -1,24 +1,26 @@
-"""
-CacheService — Event-Driven Cache Invalidation Infrastructure.
-Decouples editorial domain logic from Redis cache operations.
-"""
-
 import logging
+from typing import Any
+
 from app.core.redis import get_redis_client
 
 logger = logging.getLogger("tech_news.cache_service")
+
+# Process-level in-memory cache shared with route handlers
+in_memory_homepage_cache: dict[str, Any] = {
+    "cards": None,
+    "expires_at": 0.0,
+}
 
 
 class CacheService:
     @staticmethod
     async def invalidate_homepage_cache(reason: str = "unspecified") -> bool:
         """
-        Invalidates homepage projection cache keys in Redis.
+        Invalidates homepage projection cache keys in Redis and local memory.
         """
         try:
-            from app.api.v1.routes.news import _in_memory_homepage_cache
-            _in_memory_homepage_cache["cards"] = None
-            _in_memory_homepage_cache["expires_at"] = 0.0
+            in_memory_homepage_cache["cards"] = None
+            in_memory_homepage_cache["expires_at"] = 0.0
 
             redis = get_redis_client()
             if redis:

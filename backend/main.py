@@ -56,6 +56,13 @@ async def lifespan(app: FastAPI):
     if not redis_ok:
         logger.warning("Redis connection validation failed. Cache services compromised.")
 
+    # Initialize OpenTelemetry distributed tracing
+    try:
+        from app.core.tracing import init_tracing
+        init_tracing()
+    except Exception as e:
+        logger.warning(f"OpenTelemetry initialization failed (non-fatal): {e}")
+
     # 1.1 Auto-run Alembic schema migrations & seed canonical sources
     try:
         import subprocess

@@ -25,49 +25,60 @@ class KnowledgeWorkflow:
         self.relationship_cap = RelationshipExtractionCapability()
 
     async def execute(self, article: dict[str, Any]) -> KnowledgeArtifact:
-        logger.info(f"Starting KnowledgeWorkflow for article {article.get('id')}")
+        from app.core.tracing import SpanAttributes, get_tracer
 
-        # 1. Fan Out
-        # We run Entity, Topic, Timeline, and Relationship extractions in parallel.
-        entity_task = self.entity_cap.execute({"article": article}, None)
-        topic_task = self.topic_cap.execute({"article": article}, None)
-        timeline_task = self.timeline_cap.execute({"article": article}, None)
-        relationship_task = self.relationship_cap.execute({"article": article}, None)
+        tracer = get_tracer("tech-news.knowledge")
+        span = tracer.start_span("article.knowledge_extraction") if tracer else None
 
-        # Wait for all extractions to complete in parallel
-        results = await asyncio.gather(
-            entity_task,
-            topic_task,
-            timeline_task,
-            relationship_task,
-            return_exceptions=True
-        )
+        try:
+            logger.info(f"Starting KnowledgeWorkflow for article {article.get('id')}")
 
-        # Handle potential exceptions from parallel execution
-        for res in results:
-            if isinstance(res, Exception):
-                logger.error(f"Extraction failed: {res}")
-                # Depending on resilience strategy, we might fail the whole workflow
-                # or proceed with partial results. We'll fail for strictness.
-                raise res
+            # 1. Fan Out
+            # We run Entity, Topic, Timeline, and Relationship extractions in parallel.
+            entity_task = self.entity_cap.execute({"article": article}, None)
+            topic_task = self.topic_cap.execute({"article": article}, None)
+            timeline_task = self.timeline_cap.execute({"article": article}, None)
+            relationship_task = self.relationship_cap.execute({"article": article}, None)
 
-        entity_result, topic_result, timeline_result, relationship_result = results
+            # Wait for all extractions to complete in parallel
+            results = await asyncio.gather(
+                entity_task,
+                topic_task,
+                timeline_task,
+                relationship_task,
+                return_exceptions=True
+            )
 
-        # 2. Validation & Merge
-        # (In a real system we'd validate dangling relationships, enforce canoncial entity IDs, etc.)
-        merged_entities = entity_result.get("entities", [])
-        merged_topics = topic_result.get("topics", [])
-        merged_events = timeline_result.get("events", [])
-        merged_relationships = relationship_result.get("relationships", [])
+            # Handle potential exceptions from parallel execution
+            for res in results:
+                if isinstance(res, Exception):
+                    logger.error(f"Extraction failed: {res}")
+                    raise res
 
-        # 3. Publish Knowledge Artifact
-        knowledge_artifact = KnowledgeArtifact(
-            artifact_id=article.get("id"),
-            entities=merged_entities,
-            topics=merged_topics,
-            timeline=merged_events,
-            relationships=merged_relationships
-        )
+            entity_result, topic_result, timeline_result, relationship_result = results
 
-        logger.info(f"KnowledgeWorkflow completed for {article.get('id')}")
-        return knowledge_artifact
+            # 2. Validation & Merge
+            merged_entities = entity_result.get("entities", [])
+            merged_topics = topic_result.get("topics", [])
+            merged_events = timeline_result.get("events", [])
+            merged_relationships = relationship_result.get("relationships", [])
+
+            # 3. Publish Knowledge Artifact
+            knowledge_artifact = KnowledgeArtifact(
+                artifact_id=article.get("id"),
+                entities=merged_entities,
+                topics=merged_topics,
+                timeline=merged_events,
+                relationships=merged_relationships
+            )
+
+            if span:
+                span.set_attribute(SpanAttributes.ARTICLE_ID, str(article.get("id", "")))
+                span.set_attribute(SpanAttributes.ENTITIES_COUNT, len(merged_entities))
+                span.set_attribute(SpanAttributes.RELATIONSHIPS_COUNT, len(merged_relationships))
+
+            logger.info(f"KnowledgeWorkflow completed for {article.get('id')}")
+            return knowledge_artifact
+        finally:
+            if span:
+                span.end()

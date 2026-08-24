@@ -15,10 +15,7 @@ router = APIRouter()
 from typing import Any
 from fastapi import Response, Query, Depends
 
-_in_memory_homepage_cache: dict[str, Any] = {
-    "cards": None,
-    "expires_at": 0.0
-}
+from app.services.cache_service import in_memory_homepage_cache as _in_memory_homepage_cache
 
 @router.get("", response_model=PaginatedResponse[ArticleCard])
 async def list_articles(

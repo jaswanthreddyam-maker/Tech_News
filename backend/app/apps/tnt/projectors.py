@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.article import ArticleReadModel
 from app.models.story import StoryTimelineEvent, StoryMilestoneType
+from app.models.inference import AIInferenceRecord
 from app.models.tnt_knowledge import (
     ArticleEntityLink,
     ArticleTopicLink,
@@ -204,14 +205,20 @@ class ArticleProjector:
         artifact_id = payload["article_id"]
         logger.info(f"Applying ArticleThumbnailUpdated to read model for {artifact_id}")
 
+        values_to_update = {
+            "thumbnail_local": payload.get("thumbnail_local"),
+            "thumbnail_url": payload.get("thumbnail_url"),
+            "thumbnail_status": payload.get("status", "downloaded"),
+        }
+        if payload.get("thumbnail_type"):
+            values_to_update["thumbnail_type"] = payload["thumbnail_type"]
+        if payload.get("thumbnail_hash"):
+            values_to_update["hash"] = payload["thumbnail_hash"]
+
         stmt = (
             update(ArticleReadModel)
             .where(ArticleReadModel.id == artifact_id)
-            .values(
-                thumbnail_local=payload.get("thumbnail_local"),
-                thumbnail_url=payload.get("thumbnail_url"),
-                thumbnail_status=payload.get("status", "downloaded")
-            )
+            .values(**values_to_update)
         )
 
         res = await session.execute(stmt)
@@ -311,6 +318,9 @@ class EntityProjector:
         if not artifact.entities:
             return
 
+        # Create AIInferenceRecord for provenance (if metadata available)
+        inference_id = await self._create_inference_record(artifact, session, "entities")
+
         # Delete existing links for replayability
         await session.execute(
             ArticleEntityLink.__table__.delete().where(ArticleEntityLink.article_id == artifact.artifact_id)
@@ -338,16 +348,39 @@ class EntityProjector:
             )
             await session.execute(stmt)
 
-            # Insert Link
-            link_stmt = insert(ArticleEntityLink).values(
-                article_id=artifact.artifact_id,
-                entity_id=ent.id,
-                confidence=ent.confidence
-            )
+            # Insert Link with provenance
+            link_values = {
+                "article_id": artifact.artifact_id,
+                "entity_id": ent.id,
+                "confidence": ent.confidence,
+            }
+            if inference_id is not None:
+                link_values["inference_id"] = inference_id
+            link_stmt = insert(ArticleEntityLink).values(**link_values)
             link_stmt = link_stmt.on_conflict_do_nothing(index_elements=['article_id', 'entity_id'])
             await session.execute(link_stmt)
 
         await session.commit()
+
+    @staticmethod
+    async def _create_inference_record(
+        artifact: KnowledgeArtifact, session: AsyncSession, task_type: str
+    ) -> int | None:
+        """Create an immutable AIInferenceRecord if provenance metadata is available."""
+        if not artifact.provider or not artifact.model:
+            return None
+        record = AIInferenceRecord(
+            source_article_id=artifact.source_article_id,
+            provider=artifact.provider,
+            model=artifact.model,
+            task_type=task_type,
+            prompt_version=artifact.prompt_version or "unknown",
+            prompt_hash=artifact.prompt_hash or "unknown",
+            input_fingerprint=artifact.input_fingerprint,
+        )
+        session.add(record)
+        await session.flush()  # Get the auto-generated ID
+        return record.id
 
 class TopicProjector:
     async def project(self, artifact: KnowledgeArtifact, session: AsyncSession) -> None:
@@ -409,15 +442,22 @@ class RelationshipProjector:
         if not artifact.relationships:
             return
 
+        # Create AIInferenceRecord for provenance (if metadata available)
+        inference_id = await EntityProjector._create_inference_record(
+            artifact, session, "relationships"
+        )
+
         for rel in artifact.relationships:
-            # Ensure nodes exist (they should, due to EntityProjector, but just in case)
-            stmt = insert(RelationshipEdge).values(
-                article_id=artifact.artifact_id,
-                source_id=rel.source,
-                predicate=rel.predicate.value if hasattr(rel.predicate, 'value') else rel.predicate,
-                target_id=rel.target,
-                confidence=rel.confidence
-            )
+            edge_values = {
+                "article_id": artifact.artifact_id,
+                "source_id": rel.source,
+                "predicate": rel.predicate.value if hasattr(rel.predicate, 'value') else rel.predicate,
+                "target_id": rel.target,
+                "confidence": rel.confidence,
+            }
+            if inference_id is not None:
+                edge_values["inference_id"] = inference_id
+            stmt = insert(RelationshipEdge).values(**edge_values)
             stmt = stmt.on_conflict_do_nothing(index_elements=['article_id', 'source_id', 'predicate', 'target_id'])
             await session.execute(stmt)
 

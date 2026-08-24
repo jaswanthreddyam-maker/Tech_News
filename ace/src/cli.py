@@ -16,6 +16,7 @@ from ace.src.governance.policies.event_policies import (
     EventVersionPolicy, EventNamingPolicy, EventCompatibilityPolicy,
     EventDocumentationPolicy, EventReplayPolicy
 )
+from ace.src.governance.policies.layer_policy import LayerPolicy
 from ace.src.contracts.architecture_ids import AIDRegistry
 
 def build_mock_graph() -> CapabilityGraph:
@@ -64,7 +65,8 @@ def main():
         HealthPolicy(),
         EventVersionPolicy(),
         EventNamingPolicy(),
-        EventCompatibilityPolicy()
+        EventCompatibilityPolicy(),
+        LayerPolicy(),
     ]
     gov_engine = GovernanceEngine(policies)
     findings = gov_engine.execute(model)
@@ -84,8 +86,13 @@ def main():
     
     print("=============================================")
     
-    if command == "check" and len(result.technical_debt) > 0:
-        sys.exit(1)
+    if command == "check":
+        violations = [f for f in findings if f.severity.name == "VIOLATION"]
+        if violations:
+            print(f"\n[VIOLATION] {len(violations)} blocking violation(s) found.")
+            sys.exit(1)
+        advisory_count = len(result.technical_debt)
+        print(f"\n[PASS] No blocking violations. ({advisory_count} advisory items.)")
         
     sys.exit(0)
 

@@ -11,17 +11,19 @@ class ComplianceEngine:
         overall_score = 100.0
         
         # A simple algorithm for Sprint 0.1.1
-        for finding in findings:
+        for idx, finding in enumerate(findings):
             if finding.severity.name == "VIOLATION":
                 overall_score -= 5.0
                 debt_list.append(TechnicalDebt(
-                    rule_id=finding.rule_id,
+                    id=f"TD-{finding.rule_id}-{idx}",
+                    finding=finding,
+                    principle="P3",
                     severity=finding.severity,
                     documented=False,
-                    suppressed=False,
+                    owner="Architecture Guild",
                     adr=None,
-                    target_release=None,
-                    message=finding.message
+                    suppressed=False,
+                    target_release=None
                 ))
                 
         grade = "A+" if overall_score >= 100.0 else "B" if overall_score >= 90.0 else "F"
