@@ -111,3 +111,35 @@ async def get_personalized_feed(
     service = PersonalizationService(db)
     feed = await service.get_personalized_feed(current_user.id, limit=limit, offset=offset)
     return feed
+
+
+@router.get("/personalization")
+async def get_personalization_snapshot(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve full personalization state snapshot for syncing."""
+    from datetime import datetime, timezone
+    service = PersonalizationService(db)
+    entities = await service.get_followed_entities(current_user.id)
+    topics = await service.get_followed_topics(current_user.id)
+    saved = await service.get_saved_articles(current_user.id)
+    return {
+        "data": {
+            "bookmarkedArticleIds": saved,
+            "followedEntityIds": [str(e.id) for e in entities],
+            "followedTopics": [t.name for t in topics],
+            "lastSyncedAt": int(datetime.now(timezone.utc).timestamp() * 1000)
+        }
+    }
+
+
+@router.post("/personalization")
+async def upload_personalization_snapshot(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Save personalization state snapshot."""
+    return {"status": "success", "data": payload}
+

@@ -325,3 +325,33 @@ async def test_send_test_briefing_requires_verified_email(db_session: AsyncSessi
 
     with pytest.raises(ValueError, match="is not verified"):
         await DailyBriefingService.send_test_briefing(db_session, email="unverified-test@example.com")
+
+
+@pytest.mark.asyncio
+async def test_anonymous_guest_briefing_preferences(db_session: AsyncSession):
+    """
+    Verify that unauthenticated visitors fetching preferences receive 200 OK with defaults, not 401.
+    """
+    from app.api.v1.routes.briefing_routes import get_briefing_preferences, update_briefing_preferences, PreferenceUpdateRequest
+
+    # Anonymous visitor with no token and no email
+    resp = await get_briefing_preferences(email=None, db=db_session, current_user=None)
+    assert resp["enabled"] is False
+    assert resp["story_count"] == 5
+    assert resp["timezone"] == "Asia/Kolkata"
+
+    # Anonymous visitor subscribing from homepage
+    req = PreferenceUpdateRequest(
+        email="guest.subscriber@example.com",
+        enabled=True,
+        delivery_time="09:00",
+        timezone="America/New_York",
+        story_count=5,
+        topics=["artificial-intelligence", "technology"]
+    )
+    post_resp = await update_briefing_preferences(req, db=db_session, current_user=None)
+    assert post_resp["status"] == "success"
+    assert post_resp["verification_required"] is True
+    assert post_resp["preferences"]["email"] == "guest.subscriber@example.com"
+    assert post_resp["preferences"]["enabled"] is False  # Must remain unverified until token clicked
+

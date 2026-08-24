@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_user_optional
 from app.models.user import User
 from app.briefing.models import DailyBriefingSubscriber, DailyBriefingDelivery
 from app.briefing.contracts import VALID_TOPICS
@@ -84,14 +84,40 @@ class VerifyEmailRequest(BaseModel):
 
 @router.get("/preferences")
 async def get_briefing_preferences(
+    email: Optional[str] = Query(None, description="Optional email for lookup if not authenticated"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Get preferences and last delivery telemetry strictly for authenticated subscriber."""
-    subscriber = await DailyBriefingService.get_subscriber_for_user(
-        db, user_id=str(current_user.id), email=current_user.email
-    )
-    await db.commit()
+    """
+    Get preferences and last delivery telemetry.
+    If authenticated, resolves strictly by current_user.id.
+    If unauthenticated, checks optional email or returns default guest preferences with 200 OK.
+    """
+    subscriber = None
+
+    if current_user:
+        subscriber = await DailyBriefingService.get_subscriber_for_user(
+            db, user_id=str(current_user.id), email=current_user.email
+        )
+        await db.commit()
+    elif email:
+        email_clean = email.strip().lower()
+        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.email == email_clean)
+        res = await db.execute(stmt)
+        subscriber = res.scalar_one_or_none()
+
+    if not subscriber:
+        # Default guest/unauthenticated response
+        return {
+            "email": email or "",
+            "email_verified": False,
+            "enabled": False,
+            "delivery_time": "08:00",
+            "timezone": "Asia/Kolkata",
+            "story_count": 5,
+            "topics": ["artificial-intelligence", "technology", "cybersecurity"],
+            "last_delivery": None,
+        }
 
     # Last delivery telemetry
     stmt_del = (
@@ -133,17 +159,26 @@ async def get_briefing_preferences(
 async def update_briefing_preferences(
     req: PreferenceUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
-    Save Daily Briefing preferences for authenticated user.
+    Save Daily Briefing preferences.
     INVARIANTS:
-    1. Resolves subscriber exclusively by current_user.id (prevents hijacking).
-    2. Zero verification bypass: does NOT auto-verify unverified emails.
+    1. Authenticated user resolves subscriber exclusively by current_user.id.
+    2. Unauthenticated subscriber creation requires valid email in payload.
+    3. Zero verification bypass: does NOT auto-verify unverified emails.
     """
-    subscriber = await DailyBriefingService.get_subscriber_for_user(
-        db, user_id=str(current_user.id), email=current_user.email
-    )
+    if current_user:
+        subscriber = await DailyBriefingService.get_subscriber_for_user(
+            db, user_id=str(current_user.id), email=current_user.email
+        )
+    else:
+        if not req.email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email address is required for Daily Briefing subscription.",
+            )
+        subscriber = await DailyBriefingService.get_or_create_subscriber(db, email=req.email)
 
     subscriber.delivery_time = req.delivery_time
     subscriber.timezone = req.timezone
@@ -157,6 +192,8 @@ async def update_briefing_preferences(
         else:
             subscriber.enabled = False
             verification_needed = True
+            # Automatically dispatch verification email on initial subscription
+            await DailyBriefingService.send_verification_email(db, subscriber)
     else:
         subscriber.enabled = False
 
@@ -165,7 +202,7 @@ async def update_briefing_preferences(
 
     message = "Daily Briefing preferences saved."
     if verification_needed:
-        message = "Preferences saved. Please verify your email to activate daily delivery."
+        message = f"Subscription saved! A verification email has been sent to {subscriber.email}. Please verify to activate daily delivery."
 
     return {
         "status": "success",
@@ -191,12 +228,21 @@ async def update_briefing_preferences(
 async def request_email_verification(
     req: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Dispatch a verification email strictly to the authenticated subscriber's address."""
-    subscriber = await DailyBriefingService.get_subscriber_for_user(
-        db, user_id=str(current_user.id), email=current_user.email
-    )
+    """Dispatch a verification email to the user's or requested email address."""
+    if current_user:
+        subscriber = await DailyBriefingService.get_subscriber_for_user(
+            db, user_id=str(current_user.id), email=current_user.email
+        )
+    else:
+        if not req.email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email address is required.",
+            )
+        subscriber = await DailyBriefingService.get_or_create_subscriber(db, email=req.email)
+
     if subscriber.email_verified_at:
         return {"status": "already_verified", "message": "Email is already verified."}
 
