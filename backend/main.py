@@ -196,6 +196,38 @@ app = FastAPI(
 )
 
 
+# 2.5 CORS Origins List
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "https://tech-news-alpha-eosin.vercel.app",
+]
+if isinstance(settings.BACKEND_CORS_ORIGINS, list):
+    for o in settings.BACKEND_CORS_ORIGINS:
+        if isinstance(o, str) and o.strip():
+            clean_o = o.strip().rstrip("/")
+            if clean_o not in cors_origins:
+                cors_origins.append(clean_o)
+
+
+def _get_cors_headers(request: Request) -> dict[str, str]:
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin and (
+        origin in cors_origins
+        or origin.endswith(".vercel.app")
+        or "localhost" in origin
+        or "127.0.0.1" in origin
+    ):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+    return headers
+
+
 # 2. Centralized Exception Handling Middleware
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -208,7 +240,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
     response_content = ErrorResponse(correlation_id=correlation_id, error=error_details)
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=response_content.model_dump(mode="json")
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=response_content.model_dump(mode="json"),
+        headers=_get_cors_headers(request),
     )
 
 
@@ -221,7 +255,9 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError):
     )
     response_content = ErrorResponse(correlation_id=correlation_id, error=error_details)
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=response_content.model_dump(mode="json")
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=response_content.model_dump(mode="json"),
+        headers=_get_cors_headers(request),
     )
 
 
@@ -235,20 +271,14 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
     response_content = ErrorResponse(correlation_id=correlation_id, error=error_details)
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=response_content.model_dump(mode="json")
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=response_content.model_dump(mode="json"),
+        headers=_get_cors_headers(request),
     )
 
 
 # 2.5 Mount Security Headers and CORS Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
-
-cors_origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "https://tech-news-alpha-eosin.vercel.app",
-]
 if isinstance(settings.BACKEND_CORS_ORIGINS, list):
     for o in settings.BACKEND_CORS_ORIGINS:
         if isinstance(o, str) and o.strip():

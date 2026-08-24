@@ -40,42 +40,48 @@ async def get_behavioral_sessions(
     Retrieve reading sessions.
     Can filter by 'in_progress' to get incomplete articles for Resume Reading.
     """
-    query = select(ReadingSession, ProcessedArticle.title, ProcessedArticle.slug).join(
-        ProcessedArticle, ReadingSession.article_id == ProcessedArticle.id
-    )
-
-    if current_user:
-        query = query.where(ReadingSession.user_id == current_user.id)
-    elif anonymous_id:
-        query = query.where(ReadingSession.anonymous_id == anonymous_id)
-    else:
-        return []
-
-    if status == "in_progress":
-        query = query.where(ReadingSession.is_completed == False)
-
-    query = query.order_by(ReadingSession.last_activity_at.desc()).limit(limit)
-
-    result = await db.execute(query)
-    results = result.all()
-
-    response = []
-    for session, title, slug in results:
-        response.append(
-            ReadingSessionResponse(
-                session_id=session.session_id,
-                article_id=session.article_id,
-                article_title=title,
-                article_slug=slug,
-                started_at=session.started_at,
-                last_activity_at=session.last_activity_at,
-                total_reading_seconds=session.total_reading_seconds,
-                completion_percentage=session.completion_percentage,
-                is_completed=session.is_completed,
-            )
+    try:
+        query = (
+            select(ReadingSession, ProcessedArticle.title, ProcessedArticle.slug)
+            .outerjoin(ProcessedArticle, ReadingSession.article_id == ProcessedArticle.id)
         )
 
-    return response
+        if current_user:
+            query = query.where(ReadingSession.user_id == current_user.id)
+        elif anonymous_id:
+            query = query.where(ReadingSession.anonymous_id == anonymous_id)
+        else:
+            return []
+
+        if status == "in_progress":
+            query = query.where(ReadingSession.is_completed == False)
+
+        query = query.order_by(ReadingSession.last_activity_at.desc()).limit(limit)
+
+        result = await db.execute(query)
+        results = result.all()
+
+        response = []
+        for session, title, slug in results:
+            response.append(
+                ReadingSessionResponse(
+                    session_id=session.session_id,
+                    article_id=session.article_id or 0,
+                    article_title=title or "Continue Reading",
+                    article_slug=slug or "",
+                    started_at=session.started_at,
+                    last_activity_at=session.last_activity_at,
+                    total_reading_seconds=session.total_reading_seconds or 0,
+                    completion_percentage=session.completion_percentage or 0,
+                    is_completed=session.is_completed or False,
+                )
+            )
+
+        return response
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(f"Error loading reading sessions: {exc}")
+        return []
 
 
 @router.get("/interests", response_model=list[UserInterestResponse])

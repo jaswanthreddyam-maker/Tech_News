@@ -28,14 +28,14 @@ class BehavioralBatchRequest(BaseModel):
 
 class ReadingSessionResponse(BaseModel):
     session_id: str
-    article_id: int
+    article_id: int | str | None = None
     article_title: str | None = None
     article_slug: str | None = None
     started_at: datetime
     last_activity_at: datetime
-    total_reading_seconds: int
-    completion_percentage: int
-    is_completed: bool
+    total_reading_seconds: int = 0
+    completion_percentage: int = 0
+    is_completed: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
