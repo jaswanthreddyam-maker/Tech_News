@@ -53,10 +53,23 @@ async def calculate_latest_trends(db: AsyncSession) -> dict:
 
     # 2. Tokenize tags and group article data
     for proc_art, source_obj in rows:
-        if not proc_art.tags:
+        tags = []
+        if getattr(proc_art, "primary_topics", None):
+            if isinstance(proc_art.primary_topics, list):
+                tags.extend([str(t).strip().lower() for t in proc_art.primary_topics if str(t).strip()])
+            elif isinstance(proc_art.primary_topics, str):
+                tags.extend([t.strip().lower() for t in proc_art.primary_topics.split(",") if t.strip()])
+        if not tags and getattr(proc_art, "seo_keywords", None):
+            tags.extend([k.strip().lower() for k in proc_art.seo_keywords.split(",") if k.strip()])
+        if not tags and getattr(proc_art, "tags", None):
+            if isinstance(proc_art.tags, list):
+                tags.extend([str(t).strip().lower() for t in proc_art.tags if str(t).strip()])
+            elif isinstance(proc_art.tags, str):
+                tags.extend([t.strip().lower() for t in proc_art.tags.split(",") if t.strip()])
+
+        if not tags:
             continue
 
-        tags = [t.strip().lower() for t in proc_art.tags.split(",") if t.strip()]
         source_category = source_obj.category if source_obj else "community"
         source_id = source_obj.id if source_obj else -1
 
@@ -133,7 +146,31 @@ async def calculate_latest_trends(db: AsyncSession) -> dict:
         await db.commit()
         logger.info(f"Trend Engine: Successfully updated trending_topics. Top trends: {top_trends}")
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Trend Engine: Failed to update database trending topics: {e!s}", exc_info=True)
+        if "trending_topics" in str(e):
+            try:
+                await db.rollback()
+                await db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS trending_topics (
+                        id SERIAL PRIMARY KEY,
+                        topic VARCHAR(255) UNIQUE NOT NULL,
+                        weight INTEGER DEFAULT 1,
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                await db.execute(text("DELETE FROM trending_topics"))
+                for tag, score in top_trends:
+                    weight = max(1, int(score * 10))
+                    await db.execute(
+                        text("INSERT INTO trending_topics (topic, weight, updated_at) VALUES (:topic, :weight, NOW())"),
+                        {"topic": tag, "weight": weight},
+                    )
+                await db.commit()
+                logger.info(f"Trend Engine: Created trending_topics table and updated trends: {top_trends}")
+            except Exception as inner_e:
+                await db.rollback()
+                logger.error(f"Trend Engine: Failed to update database trending topics: {inner_e!s}", exc_info=True)
+        else:
+            await db.rollback()
+            logger.error(f"Trend Engine: Failed to update database trending topics: {e!s}", exc_info=True)
 
     return {"status": "success", "trends_computed": len(top_trends), "top": top_trends}

@@ -219,8 +219,8 @@ async def _async_process_event_outbox_task():
             leased_rows = result.fetchall()
         except Exception as err:
             err_str = str(err)
-            if "max_retries" in err_str or "lease_id" in err_str or "UndefinedColumnError" in err_str:
-                logger.warning("Event outbox columns missing; applying self-healing schema migration...")
+            if "max_retries" in err_str or "lease_id" in err_str or "UndefinedColumnError" in err_str or "UndefinedTableError" in err_str:
+                logger.warning("Event outbox columns/tables missing; applying self-healing schema migration...")
                 await db.rollback()
                 await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_id VARCHAR(100)"))
                 await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ"))
@@ -228,6 +228,31 @@ async def _async_process_event_outbox_task():
                 await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 3"))
                 await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS error_log TEXT"))
                 await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255)"))
+                await db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS outbox_dispatch_checkpoints (
+                        id SERIAL PRIMARY KEY,
+                        handler_name VARCHAR(100) NOT NULL,
+                        outbox_event_id INTEGER NOT NULL REFERENCES event_outbox(id) ON DELETE CASCADE,
+                        processed_at TIMESTAMPTZ DEFAULT NOW(),
+                        CONSTRAINT uq_dispatch_chkpt UNIQUE (handler_name, outbox_event_id)
+                    )
+                """))
+                await db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_dispatch_chkpt_lookup ON outbox_dispatch_checkpoints(handler_name, outbox_event_id)
+                """))
+                await db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS dead_letter_events (
+                        id SERIAL PRIMARY KEY,
+                        original_outbox_id INTEGER NOT NULL,
+                        event_type VARCHAR(100) NOT NULL,
+                        payload JSONB NOT NULL,
+                        failure_reason VARCHAR(2000) NOT NULL,
+                        failed_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                await db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_dead_letter_events_orig_id ON dead_letter_events(original_outbox_id)
+                """))
                 await db.commit()
                 result = await db.execute(
                     _LEASE_CTE_SQL,
@@ -277,12 +302,37 @@ async def _async_process_event_outbox_task():
 
             for handler_name, handler_ref in handlers:
                 # --- Step 3: Check checkpoint (idempotency) ---
-                chkpt_exists = await db.execute(
-                    select(OutboxDispatchCheckpoint.id).where(
-                        OutboxDispatchCheckpoint.handler_name == handler_name,
-                        OutboxDispatchCheckpoint.outbox_event_id == event_id,
+                try:
+                    chkpt_exists = await db.execute(
+                        select(OutboxDispatchCheckpoint.id).where(
+                            OutboxDispatchCheckpoint.handler_name == handler_name,
+                            OutboxDispatchCheckpoint.outbox_event_id == event_id,
+                        )
                     )
-                )
+                except Exception as chk_err:
+                    if "outbox_dispatch_checkpoints" in str(chk_err):
+                        await db.rollback()
+                        await db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS outbox_dispatch_checkpoints (
+                                id SERIAL PRIMARY KEY,
+                                handler_name VARCHAR(100) NOT NULL,
+                                outbox_event_id INTEGER NOT NULL REFERENCES event_outbox(id) ON DELETE CASCADE,
+                                processed_at TIMESTAMPTZ DEFAULT NOW(),
+                                CONSTRAINT uq_dispatch_chkpt UNIQUE (handler_name, outbox_event_id)
+                            )
+                        """))
+                        await db.execute(text("""
+                            CREATE INDEX IF NOT EXISTS ix_dispatch_chkpt_lookup ON outbox_dispatch_checkpoints(handler_name, outbox_event_id)
+                        """))
+                        await db.commit()
+                        chkpt_exists = await db.execute(
+                            select(OutboxDispatchCheckpoint.id).where(
+                                OutboxDispatchCheckpoint.handler_name == handler_name,
+                                OutboxDispatchCheckpoint.outbox_event_id == event_id,
+                            )
+                        )
+                    else:
+                        raise
                 if chkpt_exists.scalar_one_or_none() is not None:
                     logger.info(
                         f"  Checkpoint exists for handler={handler_name} "

@@ -23,8 +23,30 @@ from app.editorial.models import EditorialDecisionLog
 
 # Import Base and ALL models so metadata is registered
 from app.models.base import Base
-from app.models.growth import FeatureFlag
-from app.models.source import Source
+from app.models.growth import FeatureFlag, RuntimeConfiguration, Experiment, ExperimentVariant, FeatureFlagAuditLog  # noqa: F401
+from app.models.source import Source, ScraperCheckpoint, ScraperRunHistory  # noqa: F401
+from app.models.analytics import (  # noqa: F401
+    AnalyticsSession, ArticleMetrics, DistributionMetrics, EngagementMetrics,
+    SearchMetrics, AIInteractionMetrics, StoryTelemetrySnapshot, CoverageGapAnalytics
+)
+from app.models.behavioral import BehavioralEvent, ReadingSession, UserInterest  # noqa: F401
+from app.models.certification import CertificationRun, CertificationScenarioEvidence  # noqa: F401
+from app.models.ai_artifacts import AIArtifact, TimelineEvent  # noqa: F401
+from app.models.conversation import ConversationSession  # noqa: F401
+from app.models.distribution import DistributionManifest, DistributionJob, DeliveryReport  # noqa: F401
+from app.models.editorial import (  # noqa: F401
+    EditorialDraft, DistributionConfiguration, EditorialDecision, EditorialDiscussionThread,
+    EditorialDraftComment, EditorialDraftVersion, EditorialReviewArtifact, EditorialPatch,
+    PublicationRecord, EditorialSession
+)
+from app.models.event import EventEnvelope  # noqa: F401
+from app.core.events.models import EventOutbox, OutboxDispatchCheckpoint, DeadLetterEvent  # noqa: F401
+from app.newsletter.models import (  # noqa: F401
+    NewsletterSubscriber, NewsletterStatsProjection, NewsletterBriefing,
+    NewsletterBriefingVersion, NewsletterCampaign, NewsletterEmailDelivery,
+    NewsletterLinkClick, NewsletterSuppressedEmail, NewsletterCampaignAnalytics
+)
+from app.services.memory.infrastructure.models import MemoryIndex  # noqa: F401
 from app.models.user import (  # noqa: F401
     AIJobHistory,
     ArticleRevision,
@@ -382,6 +404,31 @@ async def main():
         await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 3"))
         await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS error_log TEXT"))
         await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255)"))
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS outbox_dispatch_checkpoints (
+                id SERIAL PRIMARY KEY,
+                handler_name VARCHAR(100) NOT NULL,
+                outbox_event_id INTEGER NOT NULL REFERENCES event_outbox(id) ON DELETE CASCADE,
+                processed_at TIMESTAMPTZ DEFAULT NOW(),
+                CONSTRAINT uq_dispatch_chkpt UNIQUE (handler_name, outbox_event_id)
+            )
+        """))
+        await conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_dispatch_chkpt_lookup ON outbox_dispatch_checkpoints(handler_name, outbox_event_id)
+        """))
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS dead_letter_events (
+                id SERIAL PRIMARY KEY,
+                original_outbox_id INTEGER NOT NULL,
+                event_type VARCHAR(100) NOT NULL,
+                payload JSONB NOT NULL,
+                failure_reason VARCHAR(2000) NOT NULL,
+                failed_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """))
+        await conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_dead_letter_events_orig_id ON dead_letter_events(original_outbox_id)
+        """))
     logger.info("Checked/applied required schema migrations.")
 
     async_session = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
