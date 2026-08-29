@@ -71,9 +71,15 @@ class Settings(BaseSettings):
     @classmethod
     def validate_database_url(cls, v: str) -> str:
         if v.startswith("postgresql://"):
-            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
-        if v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+
+        # Force Supabase pooler to use Transaction Mode (port 6543)
+        # Port 5432 on pooler.supabase.com is Session Mode (hard-capped at 15 clients -> EMAXCONNSESSION)
+        # Port 6543 is Transaction Mode (supports high concurrency with statement_cache_size=0)
+        if "pooler.supabase.com" in v and ":5432" in v:
+            v = v.replace(":5432", ":6543")
         return v
 
     # Observability and Health Configurations
