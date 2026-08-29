@@ -211,11 +211,31 @@ async def _async_process_event_outbox_task():
 
     async with get_celery_session() as db:
         # --- Step 1: Lease acquisition via CTE ---
-        result = await db.execute(
-            _LEASE_CTE_SQL,
-            {"lease_id": worker_lease_id, "batch_size": 50},
-        )
-        leased_rows = result.fetchall()
+        try:
+            result = await db.execute(
+                _LEASE_CTE_SQL,
+                {"lease_id": worker_lease_id, "batch_size": 50},
+            )
+            leased_rows = result.fetchall()
+        except Exception as err:
+            err_str = str(err)
+            if "max_retries" in err_str or "lease_id" in err_str or "UndefinedColumnError" in err_str:
+                logger.warning("Event outbox columns missing; applying self-healing schema migration...")
+                await db.rollback()
+                await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_id VARCHAR(100)"))
+                await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ"))
+                await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0"))
+                await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 3"))
+                await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS error_log TEXT"))
+                await db.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255)"))
+                await db.commit()
+                result = await db.execute(
+                    _LEASE_CTE_SQL,
+                    {"lease_id": worker_lease_id, "batch_size": 50},
+                )
+                leased_rows = result.fetchall()
+            else:
+                raise
 
         if not leased_rows:
             return

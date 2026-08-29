@@ -373,10 +373,16 @@ async def main():
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created/verified via ORM metadata.")
 
-    # Ensure is_deleted column exists on sources table (soft delete support)
+    # Ensure required columns exist across tables
     async with engine.begin() as conn:
         await conn.execute(text("ALTER TABLE sources ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE"))
-    logger.info("Checked/applied is_deleted column on sources table.")
+        await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_id VARCHAR(100)"))
+        await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ"))
+        await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 3"))
+        await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS error_log TEXT"))
+        await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255)"))
+    logger.info("Checked/applied required schema migrations.")
 
     async_session = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
