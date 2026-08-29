@@ -245,11 +245,26 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class DatabaseRetryMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        for attempt in range(3):
+            try:
+                return await call_next(request)
+            except Exception as exc:
+                err_str = str(exc)
+                if ("EMAXCONNSESSION" in err_str or "TooManyConnectionsError" in err_str or "connection limit" in err_str.lower()) and attempt < 2:
+                    logger.warning(f"Database pool saturated on {request.url.path} (attempt {attempt+1}/3). Retrying in 150ms...")
+                    await asyncio.sleep(0.15 * (attempt + 1))
+                    continue
+                raise exc
+
+
 # Middleware stack: added in reverse order (last added = first executed).
 # CORSMiddleware MUST be the outermost middleware so it processes
 # preflight OPTIONS and attaches headers even when inner middleware fails.
 
 app.add_middleware(MaintenanceModeMiddleware)
+app.add_middleware(DatabaseRetryMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
