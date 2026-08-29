@@ -48,22 +48,13 @@ engine_kwargs = {
     "pool_pre_ping": True,
     "echo": False,
     "future": True,
+    "poolclass": NullPool,
     "connect_args": {
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
+        "command_timeout": 30,
     },
 }
-
-if is_testing:
-    engine_kwargs["poolclass"] = NullPool
-# Default fallback (e.g. for CLI or Beat) is highly restricted
-if not is_testing:
-    engine_kwargs.update({
-        "pool_size": getattr(settings, "DB_POOL_SIZE", 3),
-        "max_overflow": getattr(settings, "DB_MAX_OVERFLOW", 2),
-        "pool_timeout": 30.0,
-        "pool_recycle": 1800,
-    })
 
 async_engine = create_async_engine(
     settings.DATABASE_URL,
@@ -74,23 +65,10 @@ AsyncSessionLocal = sessionmaker(
     bind=async_engine, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False
 )
 
-def configure_database_pool(pool_size: int, max_overflow: int):
-    """Explicitly reconfigure the connection pool for the current process."""
+def configure_database_pool(pool_size: int = 2, max_overflow: int = 1):
+    """Reconfigure database connection pool with NullPool by default for PgBouncer safety."""
     global async_engine
-    if is_testing:
-        return
-        
-    engine_kwargs.update({
-        "pool_size": pool_size,
-        "max_overflow": max_overflow,
-    })
-    # Remove NullPool if it was set
-    engine_kwargs.pop("poolclass", None)
-    
-    new_engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
-    async_engine = new_engine
-    AsyncSessionLocal.configure(bind=new_engine)
-    logger.info(f"Database connection pool configured with pool_size={pool_size}, max_overflow={max_overflow}")
+    configure_database_nullpool()
 
 
 def configure_database_nullpool():

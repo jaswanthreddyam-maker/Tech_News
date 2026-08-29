@@ -41,9 +41,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to register signal handlers during lifespan setup: {e}")
 
-    # Configure FastAPI database connection pool limits
-    from app.core.database import configure_database_pool
-    configure_database_pool(pool_size=2, max_overflow=1)  # Max 3 conns for FastAPI; leaves 12 for Celery under pgBouncer 15-conn limit
+    # Configure FastAPI database to use NullPool (safe for Supabase / PgBouncer multiplexing)
+    from app.core.database import configure_database_nullpool
+    configure_database_nullpool()
 
     # Verify strict PostgreSQL connection
     db_ok = await verify_database_connection(max_retries=5, initial_delay=1.0)
