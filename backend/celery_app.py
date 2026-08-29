@@ -83,7 +83,7 @@ def get_celery_session():
     return AsyncSessionLocal()
 
 celery_app.conf.update(
-    worker_concurrency=2,
+    worker_concurrency=1,  # Single worker to prevent connection spikes; infrastructure checks use asyncio.gather (5 concurrent DB conns per task)
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
@@ -123,7 +123,7 @@ celery_app.conf.beat_schedule = {
     },
     "process-event-outbox": {
         "task": "process_event_outbox_task",
-        "schedule": 10.0,
+        "schedule": 30.0,  # Was 10s — reduce DB contention under 15-conn pgBouncer limit
         "options": {"queue": "default"},
     },
     "trend-prioritization-ai-queue": {
@@ -159,12 +159,12 @@ celery_app.conf.beat_schedule = {
 
     "collect-queue-metrics": {
         "task": "tasks.monitoring.collect_queue_metrics",
-        "schedule": 5.0,
+        "schedule": 30.0,  # Was 5s — primary cause of EMAXCONNSESSION spikes
         "options": {"queue": "default"},
     },
     "collect-infrastructure-metrics": {
         "task": "tasks.monitoring.collect_infrastructure_metrics",
-        "schedule": 10.0,
+        "schedule": 60.0,  # Was 10s — hits DB via PostgresChecker
         "options": {"queue": "default"},
     },
     "collect-overview-metrics": {
@@ -174,12 +174,12 @@ celery_app.conf.beat_schedule = {
     },
     "collect-ai-queue-metrics": {
         "task": "tasks.monitoring.collect_ai_queue_metrics",
-        "schedule": 10.0,
+        "schedule": 30.0,  # Was 10s — hits DB via AsyncSessionLocal
         "options": {"queue": "default"},
     },
     "collect-ai-recovery-metrics": {
         "task": "tasks.monitoring.collect_ai_recovery_metrics",
-        "schedule": 30.0,
+        "schedule": 60.0,  # Was 30s — reduce contention
         "options": {"queue": "default"},
     },
     "collect-ai-performance-metrics": {

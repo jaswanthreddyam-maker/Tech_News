@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
     # Configure FastAPI database connection pool limits
     from app.core.database import configure_database_pool
-    configure_database_pool(pool_size=3, max_overflow=2)
+    configure_database_pool(pool_size=2, max_overflow=1)  # Max 3 conns for FastAPI; leaves 12 for Celery under pgBouncer 15-conn limit
 
     # Verify strict PostgreSQL connection
     db_ok = await verify_database_connection(max_retries=5, initial_delay=1.0)

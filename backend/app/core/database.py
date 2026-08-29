@@ -112,6 +112,7 @@ def configure_database_nullpool():
         "connect_args": {
             "statement_cache_size": 0,
             "prepared_statement_cache_size": 0,
+            "command_timeout": 30,  # Prevent slow queries from holding connections indefinitely
         },
     }
     new_engine = create_async_engine(settings.DATABASE_URL, **nullpool_kwargs)
