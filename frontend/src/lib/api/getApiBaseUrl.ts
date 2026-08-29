@@ -15,14 +15,10 @@ export function getApiBaseUrl(): string {
     return trimmed.endsWith("/api/v1") ? trimmed : `${trimmed}/api/v1`;
   }
 
-  // Client-side in browser: use relative proxy path /api/v1
-  let envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!envUrl || envUrl.includes("<") || envUrl.includes("your-railway")) {
-    return "/api/v1";
-  }
-  envUrl = envUrl.trim().replace(/\/+$/, "");
-  if (!envUrl.endsWith("/api/v1") && !envUrl.startsWith("/")) {
-    envUrl = `${envUrl}/api/v1`;
-  }
-  return envUrl;
+  // Client-side in browser: ALWAYS use relative proxy path /api/v1
+  // This ensures requests go through Next.js rewrites (configured in next.config.js)
+  // which proxy to the backend, avoiding CORS issues entirely.
+  // Using an absolute backend URL here would bypass the proxy and trigger CORS blocks
+  // since the Railway backend doesn't allow arbitrary Vercel preview origins.
+  return "/api/v1";
 }

@@ -14,6 +14,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   try {
     const data = await getArticle(slug);
+    if (!data || !data.article) {
+      return { title: "Article Not Found - Tech News Today" };
+    }
     return buildArticleMetadata(data.article);
   } catch (e: any) {
     if (e instanceof NotFoundError || e?.status === 404) {
@@ -33,8 +36,16 @@ export default async function ArticlePage({ params }: PageProps) {
     if (e instanceof NotFoundError || e?.status === 404) {
       notFound();
     }
-    // For other errors, let them throw so the ErrorBoundary catches them
-    throw e;
+    // Log the error for server-side observability, then show 404
+    // Re-throwing in production results in a generic unhelpful error page
+    // because Next.js strips error details to avoid leaking sensitive info.
+    console.error(`[ArticlePage] Failed to load article "${slug}":`, e?.message || e);
+    notFound();
+  }
+
+  // getArticle can return null when the API response has no data
+  if (!data || !data.article) {
+    notFound();
   }
 
   const { article } = data;
