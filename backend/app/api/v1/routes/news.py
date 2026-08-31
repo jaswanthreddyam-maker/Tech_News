@@ -154,7 +154,7 @@ async def list_articles(
                 redis = get_redis_client()
                 if redis and articles_list and not category and not cursor:
                     raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
-                    await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=60), timeout=REDIS_OP_TIMEOUT)
+                    await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=180), timeout=REDIS_OP_TIMEOUT)
             except Exception:
                 pass
 

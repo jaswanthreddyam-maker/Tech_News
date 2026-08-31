@@ -99,9 +99,9 @@ async def get_behavioral_sessions(
         response = await safe_db_execute(fetch_sessions, fallback=[])
         try:
             redis = get_redis_client()
-            if redis:
+            if redis and response:
                 raw_payload = [r.model_dump(mode="json") for r in response]
-                await asyncio.wait_for(redis.set(cache_key, json.dumps(raw_payload, default=str), ex=30), timeout=1.0)
+                await asyncio.wait_for(redis.set(cache_key, json.dumps(raw_payload, default=str), ex=60), timeout=1.0)
         except Exception:
             pass
 

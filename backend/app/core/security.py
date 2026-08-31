@@ -264,7 +264,7 @@ async def get_current_user_optional(
     """
     try:
         return await get_current_user(request, db=db)
-    except HTTPException:
+    except Exception:
         return None
 
 
