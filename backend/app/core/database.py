@@ -99,35 +99,18 @@ def configure_database_nullpool():
     logger.info("Database connection pool configured with NullPool (no persistent connections)")
 
 
-# Dynamic Dependency Injection for API routes with connection burst resilience
+# Dynamic Dependency Injection for API routes
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    for attempt in range(4):
+    async with AsyncSessionLocal() as session:
         try:
-            async with AsyncSessionLocal() as session:
-                try:
-                    yield session
-                    await session.commit()
-                    return
-                except Exception as exc:
-                    try:
-                        await session.rollback()
-                    except Exception:
-                        pass
-                    err_str = str(exc)
-                    if ("EMAXCONNSESSION" in err_str or "TooManyConnectionsError" in err_str or "connection limit" in err_str.lower() or "53300" in err_str) and attempt < 3:
-                        logger.warning(f"Database session pool saturated (attempt {attempt+1}/4). Retrying in {(attempt+1)*0.2:.1f}s...")
-                        await asyncio.sleep((attempt + 1) * 0.2)
-                        continue
-                    raise
-        except Exception as exc:
-            err_str = str(exc)
-            if ("EMAXCONNSESSION" in err_str or "TooManyConnectionsError" in err_str or "connection limit" in err_str.lower() or "53300" in err_str) and attempt < 3:
-                logger.warning(f"Database connection acquisition saturated (attempt {attempt+1}/4). Retrying in {(attempt+1)*0.2:.1f}s...")
-                await asyncio.sleep((attempt + 1) * 0.2)
-                continue
+            yield session
+            await session.commit()
+        except Exception:
+            try:
+                await session.rollback()
+            except Exception:
+                pass
             raise
-        finally:
-            await session.close()
 
 
 # Startup verification helper with exponential retry logic and precise latency measurement
