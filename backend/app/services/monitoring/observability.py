@@ -154,33 +154,22 @@ async def run_queue_health_checks(pipe=None):
         _t = time.perf_counter  # alias for readability
         _timings = {}
 
-        # 1. Queue Length
+        # 1-3. Batch all Redis reads into a single pipelined round trip
         _t0 = _t()
-        queue_depth = await client.llen("celery") or 0
-        _timings["llen_celery"] = (_t() - _t0) * 1000
-
-        # 2. Processing Rate (Jobs completed in the last 1 minute)
         now_ts = time.time()
-        # Clean timestamps older than 60s
-        _t0 = _t()
-        await client.zremrangebyscore("completed_tasks_timestamps", "-inf", now_ts - 60)
-        _timings["zremrangebyscore"] = (_t() - _t0) * 1000
+        read_pipe = client.pipeline()
+        read_pipe.llen("celery")
+        read_pipe.zremrangebyscore("completed_tasks_timestamps", "-inf", now_ts - 60)
+        read_pipe.zcard("completed_tasks_timestamps")
+        read_pipe.get("last_queue_depth")
+        p_res = await read_pipe.execute()
+        _timings["redis_pipeline_read"] = (_t() - _t0) * 1000
 
-        _t0 = _t()
-        processing_rate = await client.zcard("completed_tasks_timestamps") or 0
-        _timings["zcard"] = (_t() - _t0) * 1000
-
-        # 3. Queue Growth Rate (delta since last check)
-        _t0 = _t()
-        prev_depth_val = await client.get("last_queue_depth")
-        _timings["get_last_depth"] = (_t() - _t0) * 1000
-
+        queue_depth = p_res[0] or 0
+        processing_rate = p_res[2] or 0
+        prev_depth_val = p_res[3]
         prev_depth = int(prev_depth_val) if prev_depth_val else 0
         growth_rate = queue_depth - prev_depth
-
-        _t0 = _t()
-        await client.set("last_queue_depth", str(queue_depth))
-        _timings["set_last_depth"] = (_t() - _t0) * 1000
 
         # 4. Status determination
         available = True
@@ -216,8 +205,15 @@ async def run_queue_health_checks(pipe=None):
         )
 
         _t0 = _t()
-        await repo.save_queue(queue_payload, pipe=pipe)
-        _timings["save_queue"] = (_t() - _t0) * 1000
+        if pipe is not None:
+            pipe.set("last_queue_depth", str(queue_depth))
+            await repo.save_queue(queue_payload, pipe=pipe)
+        else:
+            write_pipe = client.pipeline(transaction=True)
+            write_pipe.set("last_queue_depth", str(queue_depth))
+            await repo.save_queue(queue_payload, pipe=write_pipe)
+            await write_pipe.execute()
+        _timings["save_queue_and_depth"] = (_t() - _t0) * 1000
 
         _total = sum(_timings.values())
         if _total > 300:
@@ -362,109 +358,102 @@ async def collect_ai_queue_metrics(pipe=None):
         _t = time.perf_counter  # alias for readability
         _timings = {}
 
+        # Concurrently execute DB queries and batch-fetch Redis telemetry keys
         _t0 = _t()
-        async with AsyncSessionLocal() as db:
-            _timings["db_session_acquire"] = (_t() - _t0) * 1000
 
-            from sqlalchemy import func
-            
-            _t0 = _t()
-            queue_stats_res = await db.execute(
-                select(
-                    func.count(RawArticle.id),
-                    func.min(RawArticle.updated_at),
-                    func.avg(RawArticle.retry_count)
-                ).where(RawArticle.status == "ai_queued")
+        async def _fetch_db():
+            async with AsyncSessionLocal() as db:
+                from sqlalchemy import func
+
+                queue_stats_res = await db.execute(
+                    select(
+                        func.count(RawArticle.id),
+                        func.min(RawArticle.updated_at),
+                        func.avg(RawArticle.retry_count),
+                    ).where(RawArticle.status == "ai_queued")
+                )
+                flag_res = await db.execute(select(FeatureFlag).where(FeatureFlag.key == "ai_enrichment_enabled"))
+                return queue_stats_res.one_or_none(), flag_res.scalars().first()
+
+        async def _fetch_redis():
+            return await client.mget(
+                "telemetry_failed_ai_jobs",
+                "telemetry_recovered_ai_jobs",
+                "telemetry_ai_last_success",
+                "telemetry_ai_recent_errors",
             )
-            queue_stats = queue_stats_res.one_or_none()
-            _timings["db_queue_stats"] = (_t() - _t0) * 1000
-            
-            depth = queue_stats[0] if queue_stats and queue_stats[0] else 0
-            oldest = queue_stats[1] if queue_stats and queue_stats[1] else now_utc
-            average_retry_count = float(queue_stats[2]) if queue_stats and queue_stats[2] else 0.0
-            
-            oldest_age_sec = (now_utc - oldest.replace(tzinfo=timezone.utc)).total_seconds() if oldest else 0
-            estimated_average_wait_sec = oldest_age_sec / 2 if depth > 0 else 0  # Fast approximation for average wait
 
-            _t0 = _t()
-            failed_today = int(await client.get("telemetry_failed_ai_jobs") or 0)
-            _timings["redis_get_failed"] = (_t() - _t0) * 1000
+        db_results, redis_results = await asyncio.gather(_fetch_db(), _fetch_redis())
+        _timings["concurrent_fetch"] = (_t() - _t0) * 1000
 
-            _t0 = _t()
-            recovered_today = int(await client.get("telemetry_recovered_ai_jobs") or 0)
-            _timings["redis_get_recovered"] = (_t() - _t0) * 1000
+        queue_stats, flag = db_results
+        failed_raw, recovered_raw, last_success_ts, recent_errors_raw = redis_results
 
-            queue_metrics = {
-                "depth": depth,
-                "oldest_age_sec": oldest_age_sec,
-                "estimated_average_wait_sec": estimated_average_wait_sec,
-                "average_retry_count": average_retry_count,
-                "failed_today": failed_today,
-                "recovered_today": recovered_today,
-                "_meta": {
-                    "schema_version": 2,
-                    "collector_version": "2.0",
-                    "build": "7.10",
-                    "git_sha": "rc1_certified",
-                    "generated_at": now_utc.isoformat(),
-                    "expires_at": (now_utc + timedelta(seconds=15)).isoformat(),
-                    "hostname": socket.gethostname(),
-                },
-            }
+        depth = queue_stats[0] if queue_stats and queue_stats[0] else 0
+        oldest = queue_stats[1] if queue_stats and queue_stats[1] else now_utc
+        average_retry_count = float(queue_stats[2]) if queue_stats and queue_stats[2] else 0.0
 
-            _t0 = _t()
-            if pipe is not None:
-                pipe.set("telemetry:v2:ai:queue", json_dumps_helpers(queue_metrics), ex=30)
-            else:
-                await client.set("telemetry:v2:ai:queue", json_dumps_helpers(queue_metrics), ex=30)
-            _timings["redis_set_queue"] = (_t() - _t0) * 1000
+        oldest_age_sec = (now_utc - oldest.replace(tzinfo=timezone.utc)).total_seconds() if oldest else 0
+        estimated_average_wait_sec = oldest_age_sec / 2 if depth > 0 else 0  # Fast approximation for average wait
 
-            # Provider Metrics
-            _t0 = _t()
-            flag_res = await db.execute(select(FeatureFlag).where(FeatureFlag.key == "ai_enrichment_enabled"))
-            flag = flag_res.scalars().first()
-            _timings["db_feature_flag"] = (_t() - _t0) * 1000
+        failed_today = int(failed_raw or 0)
+        recovered_today = int(recovered_raw or 0)
 
-            enabled = flag.default_value if flag else False
+        queue_metrics = {
+            "depth": depth,
+            "oldest_age_sec": oldest_age_sec,
+            "estimated_average_wait_sec": estimated_average_wait_sec,
+            "average_retry_count": average_retry_count,
+            "failed_today": failed_today,
+            "recovered_today": recovered_today,
+            "_meta": {
+                "schema_version": 2,
+                "collector_version": "2.0",
+                "build": "7.10",
+                "git_sha": "rc1_certified",
+                "generated_at": now_utc.isoformat(),
+                "expires_at": (now_utc + timedelta(seconds=15)).isoformat(),
+                "hostname": socket.gethostname(),
+            },
+        }
 
-            _t0 = _t()
-            last_success_ts = await client.get("telemetry_ai_last_success")
-            _timings["redis_get_last_success"] = (_t() - _t0) * 1000
+        # Provider Metrics
+        enabled = flag.default_value if flag else False
+        recent_errors = int(recent_errors_raw or 0)
+        last_success_sec = (time.time() - float(last_success_ts)) if last_success_ts else 999999
+        healthy = bool(enabled and (last_success_sec < 600) and (recent_errors < 50))
 
-            _t0 = _t()
-            recent_errors = int(await client.get("telemetry_ai_recent_errors") or 0)
-            _timings["redis_get_errors"] = (_t() - _t0) * 1000
+        provider_metrics = {
+            "name": getattr(settings, "AI_PROVIDER", "openai"),
+            "model": getattr(settings, "AI_MODEL", "gpt-4o-mini"),
+            "enabled": enabled,
+            "healthy": healthy,
+            "last_success": datetime.fromtimestamp(float(last_success_ts), tz=timezone.utc).isoformat()
+            if last_success_ts
+            else None,
+            "sdk_version": "v1.0.0",
+            "_meta": {
+                "schema_version": 2,
+                "collector_version": "2.0",
+                "build": "7.10",
+                "git_sha": "rc1_certified",
+                "generated_at": now_utc.isoformat(),
+                "expires_at": (now_utc + timedelta(seconds=15)).isoformat(),
+                "hostname": socket.gethostname(),
+            },
+        }
 
-            last_success_sec = (time.time() - float(last_success_ts)) if last_success_ts else 999999
-
-            healthy = bool(enabled and (last_success_sec < 600) and (recent_errors < 50))
-
-            provider_metrics = {
-                "name": getattr(settings, "AI_PROVIDER", "openai"),
-                "model": getattr(settings, "AI_MODEL", "gpt-4o-mini"),
-                "enabled": enabled,
-                "healthy": healthy,
-                "last_success": datetime.fromtimestamp(float(last_success_ts), tz=timezone.utc).isoformat()
-                if last_success_ts
-                else None,
-                "sdk_version": "v1.0.0",
-                "_meta": {
-                    "schema_version": 2,
-                    "collector_version": "2.0",
-                    "build": "7.10",
-                    "git_sha": "rc1_certified",
-                    "generated_at": now_utc.isoformat(),
-                    "expires_at": (now_utc + timedelta(seconds=15)).isoformat(),
-                    "hostname": socket.gethostname(),
-                },
-            }
-
-            _t0 = _t()
-            if pipe is not None:
-                pipe.set("telemetry:v2:ai:provider", json_dumps_helpers(provider_metrics), ex=30)
-            else:
-                await client.set("telemetry:v2:ai:provider", json_dumps_helpers(provider_metrics), ex=30)
-            _timings["redis_set_provider"] = (_t() - _t0) * 1000
+        # Batch write both payloads into a single Redis round trip
+        _t0 = _t()
+        if pipe is not None:
+            pipe.set("telemetry:v2:ai:queue", json_dumps_helpers(queue_metrics), ex=30)
+            pipe.set("telemetry:v2:ai:provider", json_dumps_helpers(provider_metrics), ex=30)
+        else:
+            write_pipe = client.pipeline(transaction=True)
+            write_pipe.set("telemetry:v2:ai:queue", json_dumps_helpers(queue_metrics), ex=30)
+            write_pipe.set("telemetry:v2:ai:provider", json_dumps_helpers(provider_metrics), ex=30)
+            await write_pipe.execute()
+        _timings["redis_pipeline_write"] = (_t() - _t0) * 1000
 
         _total = sum(_timings.values())
         if _total > 500:
@@ -482,8 +471,9 @@ async def collect_ai_recovery_metrics(pipe=None):
     """Medium Collector (Every 30s): Recovery Metrics"""
     try:
         client = get_redis_client()
-        recovered_total = int(await client.get("telemetry_recovered_ai_jobs") or 0)
-        failed_total = int(await client.get("telemetry_failed_ai_jobs") or 0)
+        recovered_raw, failed_raw = await client.mget("telemetry_recovered_ai_jobs", "telemetry_failed_ai_jobs")
+        recovered_total = int(recovered_raw or 0)
+        failed_total = int(failed_raw or 0)
 
         total = recovered_total + failed_total
         recovery_rate = recovered_total / total if total > 0 else 0.0
@@ -498,7 +488,9 @@ async def collect_ai_recovery_metrics(pipe=None):
                 "build": "7.10",
                 "git_sha": "rc1_certified",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
-                "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=45)).isoformat(),
+                "expires_at": (now_utc + timedelta(seconds=45)).isoformat()
+                if "now_utc" in locals()
+                else (datetime.now(timezone.utc) + timedelta(seconds=45)).isoformat(),
                 "hostname": socket.gethostname(),
             },
         }
@@ -625,8 +617,10 @@ async def collect_ai_performance_metrics(pipe=None):
                 pipe.set("telemetry:v2:ai:performance", json_dumps_helpers(performance_metrics), ex=180)
                 pipe.set("telemetry:v2:ai:cost", json_dumps_helpers(cost_metrics), ex=180)
             else:
-                await client.set("telemetry:v2:ai:performance", json_dumps_helpers(performance_metrics), ex=180)
-                await client.set("telemetry:v2:ai:cost", json_dumps_helpers(cost_metrics), ex=180)
+                write_p = client.pipeline(transaction=True)
+                write_p.set("telemetry:v2:ai:performance", json_dumps_helpers(performance_metrics), ex=180)
+                write_p.set("telemetry:v2:ai:cost", json_dumps_helpers(cost_metrics), ex=180)
+                await write_p.execute()
 
         logger.info("AI Slow Collector: Updated performance and cost telemetry.")
     except Exception as e:
