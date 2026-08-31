@@ -99,14 +99,32 @@ def configure_database_nullpool():
     logger.info("Database connection pool configured with NullPool (no persistent connections)")
 
 
-# Dynamic Dependency Injection for API routes
+# Dynamic Dependency Injection for API routes with connection burst resilience
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as session:
+    for attempt in range(4):
         try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
+            async with AsyncSessionLocal() as session:
+                try:
+                    yield session
+                    await session.commit()
+                    return
+                except Exception as exc:
+                    try:
+                        await session.rollback()
+                    except Exception:
+                        pass
+                    err_str = str(exc)
+                    if ("EMAXCONNSESSION" in err_str or "TooManyConnectionsError" in err_str or "connection limit" in err_str.lower() or "53300" in err_str) and attempt < 3:
+                        logger.warning(f"Database session pool saturated (attempt {attempt+1}/4). Retrying in {(attempt+1)*0.2:.1f}s...")
+                        await asyncio.sleep((attempt + 1) * 0.2)
+                        continue
+                    raise
+        except Exception as exc:
+            err_str = str(exc)
+            if ("EMAXCONNSESSION" in err_str or "TooManyConnectionsError" in err_str or "connection limit" in err_str.lower() or "53300" in err_str) and attempt < 3:
+                logger.warning(f"Database connection acquisition saturated (attempt {attempt+1}/4). Retrying in {(attempt+1)*0.2:.1f}s...")
+                await asyncio.sleep((attempt + 1) * 0.2)
+                continue
             raise
         finally:
             await session.close()
