@@ -91,7 +91,6 @@ async def list_articles(
                 .where(
                     ArticleReadModel.is_test_data == False,
                     ArticleReadModel.publication_status == "PUBLISHED",
-                    ArticleReadModel.published_at >= cutoff,
                 )
                 .order_by(desc(ArticleReadModel.published_at))
                 .limit(limit)
@@ -99,20 +98,6 @@ async def list_articles(
             )
             res_fresh = await db.execute(stmt_fresh)
             fresh_articles = res_fresh.scalars().all()
-            if not fresh_articles:
-                fallback_cutoff = now_utc - timedelta(hours=72)
-                stmt_fb = (
-                    select(ArticleReadModel)
-                    .where(
-                        ArticleReadModel.is_test_data == False,
-                        ArticleReadModel.publication_status == "PUBLISHED",
-                        ArticleReadModel.published_at >= fallback_cutoff,
-                    )
-                    .order_by(desc(ArticleReadModel.published_at))
-                    .limit(limit)
-                    .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
-                )
-                fresh_articles = (await db.execute(stmt_fb)).scalars().all()
 
             art_ids = [art.id for art in fresh_articles]
             topics_by_art: dict[str, list[str]] = {}
@@ -617,21 +602,8 @@ async def get_category_desks():
         res = await db.execute(stmt)
         projections = res.scalars().all()
 
-        # Check if existing projections are older than 24 hours
-        is_stale_desks = False
-        if projections:
-            for p in projections:
-                rebuilt_dt = p.rebuilt_at or p.created_at
-                if rebuilt_dt:
-                    if rebuilt_dt.tzinfo is None:
-                        rebuilt_dt = rebuilt_dt.replace(tzinfo=timezone.utc)
-                    if (now_utc - rebuilt_dt).total_seconds() > 86400:
-                        is_stale_desks = True
-                        break
-
-        # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
-        has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
-        if not projections or not has_valid_articles or is_stale_desks:
+        # Auto-heal: rebuild ONLY if projections don't exist at all
+        if not projections or not any(p.article_ids for p in projections if p.article_ids):
             from app.core.redis import RedisDistributedLock
             from app.editorial.homepage_builder import HomepageBuilder
             lock = RedisDistributedLock("category_desks_rebuild", expire_seconds=30)
