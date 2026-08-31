@@ -563,7 +563,7 @@ async def get_rss_feed(db: AsyncSession = Depends(get_db)):
     return Response(content=rss_xml.strip(), media_type="application/xml")
 
 @router.get("/desks")
-async def get_category_desks(db: AsyncSession = Depends(get_db)):
+async def get_category_desks():
     """
     Returns the aggregated Category Desk projection joined with runtime configuration.
     Guarantees that expired articles are never included in desk feeds.
@@ -573,6 +573,8 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
     import json
     import logging
     from app.core.redis import get_redis_client
+    from app.schemas.article import ArticleCard
+    from app.models.tnt_knowledge import ArticleTopicLink, ArticleEntityLink, EntityNode
 
     cache_key_desks = "editorial:v2:category_desks_json"
     try:
@@ -584,6 +586,7 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
     except Exception:
         pass
 
+    from app.core.database import AsyncSessionLocal
     from app.models.projection import CategoryDeskProjection
     from app.models.article import ArticleReadModel, ProcessedArticle
     from pathlib import Path
@@ -592,109 +595,130 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
     import yaml
 
     now_utc = datetime.now(timezone.utc)
+    logger = logging.getLogger("tech_news.routes.news")
 
     try:
-        # 1. Load configuration
-        policy_path = Path(__file__).resolve().parents[3] / "editorial" / "category_policy.yaml"
-        policy_data = {}
-        if policy_path.exists():
-            with open(policy_path, "r", encoding="utf-8") as f:
-                policy_data = yaml.safe_load(f) or {}
-        
-        categories_cfg = policy_data.get("categories", {})
+        async with AsyncSessionLocal() as db:
+            # 1. Load configuration
+            policy_path = Path(__file__).resolve().parents[3] / "editorial" / "category_policy.yaml"
+            policy_data = {}
+            if policy_path.exists():
+                with open(policy_path, "r", encoding="utf-8") as f:
+                    policy_data = yaml.safe_load(f) or {}
+            
+            categories_cfg = policy_data.get("categories", {})
 
-        # 2. Query all projections
-        stmt = select(CategoryDeskProjection)
-        res = await db.execute(stmt)
-        projections = res.scalars().all()
-
-        # Check if existing projections are older than 24 hours
-        is_stale_desks = False
-        if projections:
-            for p in projections:
-                rebuilt_dt = p.rebuilt_at or p.created_at
-                if rebuilt_dt:
-                    if rebuilt_dt.tzinfo is None:
-                        rebuilt_dt = rebuilt_dt.replace(tzinfo=timezone.utc)
-                    if (now_utc - rebuilt_dt).total_seconds() > 86400:
-                        is_stale_desks = True
-                        break
-
-        # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
-        has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
-        if not projections or not has_valid_articles or is_stale_desks:
-            from app.editorial.homepage_builder import HomepageBuilder
-            await HomepageBuilder.build_and_persist_category_desks(db)
+            # 2. Query all projections
             stmt = select(CategoryDeskProjection)
             res = await db.execute(stmt)
             projections = res.scalars().all()
 
-        # 3. Collect all article IDs needed
-        all_article_ids = set()
-        for p in projections:
-            if p.article_ids:
-                all_article_ids.update(p.article_ids)
-        
-        articles_map = {}
-        if all_article_ids:
-            from sqlalchemy.orm import defer
-            art_stmt = (
-                select(ArticleReadModel)
-                .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
-                .where(
-                    ArticleReadModel.id.in_(all_article_ids),
-                    ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.publication_status == "PUBLISHED",
-                    or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
-                    or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
-                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
-                )
-                .options(
-                    defer(ArticleReadModel.content),
-                    defer(ArticleReadModel.embedding)
-                )
-            )
-            art_res = await db.execute(art_stmt)
-            # Convert objects to dicts so they serialize nicely
-            for a in art_res.scalars().all():
-                adict = {k: v for k, v in a.__dict__.items() if not k.startswith("_")}
-                articles_map[str(a.id)] = adict
-        
-        desks = []
-        for p in projections:
-            slug = p.category_slug
-            if slug not in categories_cfg:
-                continue
-                
-            cfg = categories_cfg[slug]
-            headline = cfg.get("headline", slug.capitalize())
-            display_order = cfg.get("display_order", 999)
+            # Check if existing projections are older than 24 hours
+            is_stale_desks = False
+            if projections:
+                for p in projections:
+                    rebuilt_dt = p.rebuilt_at or p.created_at
+                    if rebuilt_dt:
+                        if rebuilt_dt.tzinfo is None:
+                            rebuilt_dt = rebuilt_dt.replace(tzinfo=timezone.utc)
+                        if (now_utc - rebuilt_dt).total_seconds() > 86400:
+                            is_stale_desks = True
+                            break
+
+            # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
+            has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
+            if not projections or not has_valid_articles or is_stale_desks:
+                from app.editorial.homepage_builder import HomepageBuilder
+                await HomepageBuilder.build_and_persist_category_desks(db)
+                stmt = select(CategoryDeskProjection)
+                res = await db.execute(stmt)
+                projections = res.scalars().all()
+
+            # 3. Collect all article IDs needed
+            all_article_ids = set()
+            for p in projections:
+                if p.article_ids:
+                    all_article_ids.update(p.article_ids)
             
-            desk_articles = []
-            for aid in p.article_ids or []:
-                if aid in articles_map:
-                    desk_articles.append(articles_map[aid])
-                
-            if not desk_articles:
-                continue
-                
-            desks.append({
-                "slug": slug,
-                "headline": headline,
-                "display_order": display_order,
-                "articles": desk_articles
-            })
-        
-        desks.sort(key=lambda x: x["display_order"])
+            articles_map = {}
+            if all_article_ids:
+                from sqlalchemy.orm import defer
+                art_stmt = (
+                    select(ArticleReadModel)
+                    .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                    .where(
+                        ArticleReadModel.id.in_(all_article_ids),
+                        ArticleReadModel.is_test_data == False,
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                        or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
+                    )
+                    .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+                )
+                res = await db.execute(art_stmt)
+                articles_map = {str(a.id): a for a in res.scalars().all()}
 
-        try:
-            redis = get_redis_client()
-            if redis and desks:
-                await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=120), timeout=1.0)
-        except Exception:
-            pass
+            # 4. Fetch topics and entities in bulk
+            topics_by_art: dict[str, list[str]] = {}
+            entities_by_art: dict[str, list[str]] = {}
+            if all_article_ids:
+                try:
+                    t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(all_article_ids))
+                    t_res = await db.execute(t_stmt)
+                    for row in t_res.all():
+                        topics_by_art.setdefault(str(row[0]), []).append(row[1])
 
-        return desks
+                    e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
+                        EntityNode, EntityNode.id == ArticleEntityLink.entity_id
+                    ).where(ArticleEntityLink.article_id.in_(all_article_ids))
+                    e_res = await db.execute(e_stmt)
+                    for row in e_res.all():
+                        art_id_str = str(row[0])
+                        if len(entities_by_art.get(art_id_str, [])) < 3:
+                            entities_by_art.setdefault(art_id_str, []).append(row[1])
+                except Exception as meta_err:
+                    logger.warning(f"Error loading topic/entity metadata for category desks: {meta_err}")
+
+            desks = []
+            for p in projections:
+                slug = p.category_slug
+                cfg = categories_cfg.get(slug, {})
+                headline = cfg.get("headline", slug.replace("-", " ").title())
+                display_order = cfg.get("display_order", 99)
+
+                desk_articles = []
+                if p.article_ids:
+                    for aid in p.article_ids:
+                        art = articles_map.get(str(aid))
+                        if art:
+                            card = ArticleCard.from_model(
+                                art,
+                                topics=topics_by_art.get(str(art.id), []),
+                                entities=entities_by_art.get(str(art.id), [])
+                            )
+                            desk_articles.append(card.model_dump(mode="json") if hasattr(card, "model_dump") else card.dict())
+
+                if not desk_articles:
+                    continue
+
+                desks.append({
+                    "slug": slug,
+                    "headline": headline,
+                    "display_order": display_order,
+                    "articles": desk_articles
+                })
+
+            desks.sort(key=lambda x: x["display_order"])
+
+            try:
+                redis = get_redis_client()
+                if redis and desks:
+                    await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=120), timeout=1.0)
+            except Exception:
+                pass
+
+            return desks
     except Exception as e:
         logger.error(f"Error generating category desks: {e}", exc_info=True)
         return []

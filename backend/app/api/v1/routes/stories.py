@@ -65,7 +65,6 @@ async def list_stories(
     status: StoryStatus | None = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
 ):
     """List stories with pagination and optional status filter."""
     import asyncio
@@ -85,23 +84,25 @@ async def list_stories(
     except Exception:
         pass
 
+    from app.core.database import AsyncSessionLocal
     try:
-        stmt = select(Story).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
-        if status:
-            stmt = stmt.where(Story.status == status)
-            
-        result = await db.execute(stmt)
-        stories = result.scalars().all()
+        async with AsyncSessionLocal() as db:
+            stmt = select(Story).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
+            if status:
+                stmt = stmt.where(Story.status == status)
+                
+            result = await db.execute(stmt)
+            stories = result.scalars().all()
 
-        try:
-            redis = get_redis_client()
-            if redis:
-                stories_payload = [StoryResponse.model_validate(s).model_dump(mode="json") for s in stories]
-                await asyncio.wait_for(redis.set(cache_key, json.dumps(stories_payload, default=str), ex=60), timeout=1.0)
-        except Exception:
-            pass
+            try:
+                redis = get_redis_client()
+                if redis:
+                    stories_payload = [StoryResponse.model_validate(s).model_dump(mode="json") for s in stories]
+                    await asyncio.wait_for(redis.set(cache_key, json.dumps(stories_payload, default=str), ex=60), timeout=1.0)
+            except Exception:
+                pass
 
-        return stories
+            return stories
     except Exception as e:
         logger.error(f"Error querying stories: {e}", exc_info=True)
         return []
