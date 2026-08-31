@@ -203,7 +203,7 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError):
     correlation_id = correlation_id_ctx.get() or "system"
     logger.error(f"Database transaction failure: {exc!s}", exc_info=True)
     
-    # Graceful degradation for read-only GET endpoints under pool contention
+    # Graceful degradation for read-only GET endpoints
     if request.method == "GET":
         path = request.url.path
         if "stories" in path or "desks" in path or "sessions" in path:
@@ -231,11 +231,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
     correlation_id = correlation_id_ctx.get() or "system"
     logger.error(f"Unhandled server exception: {exc!s}", exc_info=True)
 
-    err_str = str(exc).lower()
-    is_db_contention = any(p in err_str for p in ["emaxconnsession", "max clients", "connection limit", "toomanyconnections", "53300", "pool", "socket", "closed"])
-
-    # Graceful degradation for read-only GET endpoints under pool contention
-    if request.method == "GET" and is_db_contention:
+    # Graceful degradation for read-only GET endpoints
+    if request.method == "GET":
         path = request.url.path
         if "stories" in path or "desks" in path or "sessions" in path:
             return JSONResponse(status_code=status.HTTP_200_OK, content=[], headers=_get_cors_headers(request))
