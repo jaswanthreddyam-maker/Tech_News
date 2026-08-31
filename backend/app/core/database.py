@@ -150,6 +150,39 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             pass
 
 
+async def safe_db_execute(fn, max_retries: int = 3, initial_backoff: float = 0.15):
+    """
+    Executes an async database operation with automatic exponential retry
+    for connection pool saturation / (EMAXCONNSESSION) errors.
+    Ensures safe teardown without socket exception leakage.
+    """
+    last_exc = None
+    for attempt in range(max_retries):
+        session = AsyncSessionLocal()
+        try:
+            result = await fn(session)
+            return result
+        except Exception as exc:
+            last_exc = exc
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            err_str = str(exc)
+            if ("EMAXCONNSESSION" in err_str or "connection limit" in err_str.lower() or "53300" in err_str or "TooManyConnections" in err_str) and attempt < max_retries - 1:
+                logger.warning(f"Database session saturated (attempt {attempt+1}/{max_retries}). Retrying in {(attempt+1)*initial_backoff:.2f}s...")
+                await asyncio.sleep((attempt + 1) * initial_backoff)
+                continue
+            raise exc
+        finally:
+            try:
+                await session.close()
+            except Exception:
+                pass
+    if last_exc:
+        raise last_exc
+
+
 # Startup verification helper with exponential retry logic and precise latency measurement
 async def verify_database_connection(max_retries: int = 5, initial_delay: float = 1.0) -> bool:
     logger.info("Initializing PostgreSQL database startup checks...")

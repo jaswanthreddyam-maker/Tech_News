@@ -84,25 +84,25 @@ async def list_stories(
     except Exception:
         pass
 
-    from app.core.database import AsyncSessionLocal
+    from app.core.database import safe_db_execute
+
+    async def fetch_stories(db):
+        stmt = select(Story).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
+        if status:
+            stmt = stmt.where(Story.status == status)
+        result = await db.execute(stmt)
+        return result.scalars().all()
+
     try:
-        async with AsyncSessionLocal() as db:
-            stmt = select(Story).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
-            if status:
-                stmt = stmt.where(Story.status == status)
-                
-            result = await db.execute(stmt)
-            stories = result.scalars().all()
-
-            try:
-                redis = get_redis_client()
-                if redis:
-                    stories_payload = [StoryResponse.model_validate(s).model_dump(mode="json") for s in stories]
-                    await asyncio.wait_for(redis.set(cache_key, json.dumps(stories_payload, default=str), ex=60), timeout=1.0)
-            except Exception:
-                pass
-
-            return stories
+        stories = await safe_db_execute(fetch_stories)
+        try:
+            redis = get_redis_client()
+            if redis:
+                stories_payload = [StoryResponse.model_validate(s).model_dump(mode="json") for s in stories]
+                await asyncio.wait_for(redis.set(cache_key, json.dumps(stories_payload, default=str), ex=60), timeout=1.0)
+        except Exception:
+            pass
+        return stories
     except Exception as e:
         logger.error(f"Error querying stories: {e}", exc_info=True)
         return []

@@ -55,54 +55,57 @@ async def get_behavioral_sessions(
     except Exception:
         pass
 
-    from app.core.database import AsyncSessionLocal
-    try:
-        async with AsyncSessionLocal() as db:
-            query = (
-                select(ReadingSession, ProcessedArticle.title, ProcessedArticle.slug)
-                .outerjoin(ProcessedArticle, ReadingSession.article_id == ProcessedArticle.id)
-            )
+    from app.core.database import safe_db_execute
 
-            if current_user:
-                query = query.where(ReadingSession.user_id == current_user.id)
-            elif anonymous_id:
-                query = query.where(ReadingSession.anonymous_id == anonymous_id)
-            else:
-                return []
+    async def fetch_sessions(db):
+        query = (
+            select(ReadingSession, ProcessedArticle.title, ProcessedArticle.slug)
+            .outerjoin(ProcessedArticle, ReadingSession.article_id == ProcessedArticle.id)
+        )
 
-            if status == "in_progress":
-                query = query.where(ReadingSession.is_completed == False)
+        if current_user:
+            query = query.where(ReadingSession.user_id == current_user.id)
+        elif anonymous_id:
+            query = query.where(ReadingSession.anonymous_id == anonymous_id)
+        else:
+            return []
 
-            query = query.order_by(ReadingSession.last_activity_at.desc()).limit(limit)
+        if status == "in_progress":
+            query = query.where(ReadingSession.is_completed == False)
 
-            result = await db.execute(query)
-            results = result.all()
+        query = query.order_by(ReadingSession.last_activity_at.desc()).limit(limit)
 
-            response = []
-            for session, title, slug in results:
-                response.append(
-                    ReadingSessionResponse(
-                        session_id=session.session_id,
-                        article_id=session.article_id or 0,
-                        article_title=title or "Continue Reading",
-                        article_slug=slug or "",
-                        started_at=session.started_at,
-                        last_activity_at=session.last_activity_at,
-                        total_reading_seconds=session.total_reading_seconds or 0,
-                        completion_percentage=session.completion_percentage or 0,
-                        is_completed=session.is_completed or False,
-                    )
+        result = await db.execute(query)
+        results = result.all()
+
+        response = []
+        for session, title, slug in results:
+            response.append(
+                ReadingSessionResponse(
+                    session_id=session.session_id,
+                    article_id=session.article_id or 0,
+                    article_title=title or "Continue Reading",
+                    article_slug=slug or "",
+                    started_at=session.started_at,
+                    last_activity_at=session.last_activity_at,
+                    total_reading_seconds=session.total_reading_seconds or 0,
+                    completion_percentage=session.completion_percentage or 0,
+                    is_completed=session.is_completed or False,
                 )
+            )
+        return response
 
-            try:
-                redis = get_redis_client()
-                if redis:
-                    raw_payload = [r.model_dump(mode="json") for r in response]
-                    await asyncio.wait_for(redis.set(cache_key, json.dumps(raw_payload, default=str), ex=30), timeout=1.0)
-            except Exception:
-                pass
+    try:
+        response = await safe_db_execute(fetch_sessions)
+        try:
+            redis = get_redis_client()
+            if redis:
+                raw_payload = [r.model_dump(mode="json") for r in response]
+                await asyncio.wait_for(redis.set(cache_key, json.dumps(raw_payload, default=str), ex=30), timeout=1.0)
+        except Exception:
+            pass
 
-            return response
+        return response
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning(f"Error loading reading sessions: {exc}")

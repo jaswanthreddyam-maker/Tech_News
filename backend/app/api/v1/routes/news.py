@@ -84,83 +84,86 @@ async def list_articles(
         except Exception:
             pass
 
-        try:
-            async with AsyncSessionLocal() as db:
-                from sqlalchemy.orm import defer
-                stmt_fresh = (
+        async def fetch_fresh_data(db):
+            from sqlalchemy.orm import defer
+            stmt_fresh = (
+                select(ArticleReadModel)
+                .where(
+                    ArticleReadModel.is_test_data == False,
+                    ArticleReadModel.publication_status == "PUBLISHED",
+                    ArticleReadModel.published_at >= cutoff,
+                )
+                .order_by(desc(ArticleReadModel.published_at))
+                .limit(limit)
+                .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+            )
+            res_fresh = await db.execute(stmt_fresh)
+            fresh_articles = res_fresh.scalars().all()
+            if not fresh_articles:
+                fallback_cutoff = now_utc - timedelta(hours=72)
+                stmt_fb = (
                     select(ArticleReadModel)
                     .where(
                         ArticleReadModel.is_test_data == False,
                         ArticleReadModel.publication_status == "PUBLISHED",
-                        ArticleReadModel.published_at >= cutoff,
+                        ArticleReadModel.published_at >= fallback_cutoff,
                     )
                     .order_by(desc(ArticleReadModel.published_at))
                     .limit(limit)
                     .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
                 )
-                res_fresh = await db.execute(stmt_fresh)
-                fresh_articles = res_fresh.scalars().all()
-                if not fresh_articles:
-                    fallback_cutoff = now_utc - timedelta(hours=72)
-                    stmt_fb = (
-                        select(ArticleReadModel)
-                        .where(
-                            ArticleReadModel.is_test_data == False,
-                            ArticleReadModel.publication_status == "PUBLISHED",
-                            ArticleReadModel.published_at >= fallback_cutoff,
-                        )
-                        .order_by(desc(ArticleReadModel.published_at))
-                        .limit(limit)
-                        .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
-                    )
-                    fresh_articles = (await db.execute(stmt_fb)).scalars().all()
+                fresh_articles = (await db.execute(stmt_fb)).scalars().all()
 
-                art_ids = [art.id for art in fresh_articles]
-                topics_by_art: dict[str, list[str]] = {}
-                entities_by_art: dict[str, list[str]] = {}
+            art_ids = [art.id for art in fresh_articles]
+            topics_by_art: dict[str, list[str]] = {}
+            entities_by_art: dict[str, list[str]] = {}
 
-                if art_ids:
-                    from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
-                    try:
-                        t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
-                        t_res = await db.execute(t_stmt)
-                        for row in t_res.all():
-                            topics_by_art.setdefault(str(row[0]), []).append(row[1])
-
-                        e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
-                            EntityNode, EntityNode.id == ArticleEntityLink.entity_id
-                        ).where(ArticleEntityLink.article_id.in_(art_ids))
-                        e_res = await db.execute(e_stmt)
-                        for row in e_res.all():
-                            art_id_str = str(row[0])
-                            if len(entities_by_art.get(art_id_str, [])) < 3:
-                                entities_by_art.setdefault(art_id_str, []).append(row[1])
-                    except Exception as meta_err:
-                        logger.warning(f"Error loading topic/entity metadata for fresh articles: {meta_err}")
-
-                articles_list = [
-                    ArticleCard.from_model(
-                        art,
-                        topics=topics_by_art.get(str(art.id), []),
-                        entities=entities_by_art.get(str(art.id), [])
-                    ) for art in fresh_articles
-                ]
-
-                # Cache in Redis with 60s TTL
+            if art_ids:
+                from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
                 try:
-                    redis = get_redis_client()
-                    if redis and articles_list and not category and not cursor:
-                        raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
-                        await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=60), timeout=REDIS_OP_TIMEOUT)
-                except Exception:
-                    pass
+                    t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
+                    t_res = await db.execute(t_stmt)
+                    for row in t_res.all():
+                        topics_by_art.setdefault(str(row[0]), []).append(row[1])
 
-                response.headers["Server-Timing"] = f"db;dur={(time.time()-t0)*1000:.1f}"
-                return PaginatedResponse(
-                    correlation_id=correlation_id,
-                    data=articles_list,
-                    pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
-                )
+                    e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
+                        EntityNode, EntityNode.id == ArticleEntityLink.entity_id
+                    ).where(ArticleEntityLink.article_id.in_(art_ids))
+                    e_res = await db.execute(e_stmt)
+                    for row in e_res.all():
+                        art_id_str = str(row[0])
+                        if len(entities_by_art.get(art_id_str, [])) < 3:
+                            entities_by_art.setdefault(art_id_str, []).append(row[1])
+                except Exception as meta_err:
+                    logger.warning(f"Error loading topic/entity metadata for fresh articles: {meta_err}")
+
+            return [
+                ArticleCard.from_model(
+                    art,
+                    topics=topics_by_art.get(str(art.id), []),
+                    entities=entities_by_art.get(str(art.id), [])
+                ) for art in fresh_articles
+            ]
+
+        try:
+            from app.core.database import safe_db_execute
+            articles_list = await safe_db_execute(fetch_fresh_data)
+
+            # Cache in Redis with 60s TTL
+            try:
+                redis = get_redis_client()
+                if redis and articles_list and not category and not cursor:
+                    raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
+                    await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=60), timeout=REDIS_OP_TIMEOUT)
+            except Exception:
+                pass
+
+            response.headers["Server-Timing"] = f"db;dur={(time.time()-t0)*1000:.1f}"
+            return PaginatedResponse(
+                correlation_id=correlation_id,
+                data=articles_list,
+                pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
+            )
         except Exception as e:
             logger.error(f"Error querying fresh articles feed: {e}", exc_info=True)
             return PaginatedResponse(
