@@ -45,6 +45,9 @@ async def sse_event_stream(
 
         try:
             while not shutdown_event.is_set():
+                if await request.is_disconnected():
+                    logger.info("Events SSE: Client disconnected via request check.")
+                    break
                 message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if message and message["type"] == "message":
                     yield f"data: {message['data']}\n\n"
@@ -53,12 +56,15 @@ async def sse_event_stream(
                     yield f": keepalive {datetime.now(timezone.utc).strftime('%H:%M:%S')}\n\n"
                 await asyncio.sleep(0.5)
         except asyncio.CancelledError:
-            logger.info("Events SSE: Client disconnected.")
+            logger.info("Events SSE: Client disconnected (CancelledError).")
         except Exception as e:
             logger.error(f"Events SSE: Error in stream: {e}")
         finally:
-            await pubsub.unsubscribe(EVENT_CHANNEL)
-            await pubsub.aclose()
+            try:
+                await pubsub.unsubscribe(EVENT_CHANNEL)
+                await pubsub.aclose()
+            except Exception:
+                pass
 
     return StreamingResponse(
         event_generator(),

@@ -675,15 +675,15 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
                 if aid in articles_map:
                     desk_articles.append(articles_map[aid])
                 
-        if not desk_articles:
-            continue
-            
-        desks.append({
-            "slug": slug,
-            "headline": headline,
-            "display_order": display_order,
-            "articles": desk_articles
-        })
+            if not desk_articles:
+                continue
+                
+            desks.append({
+                "slug": slug,
+                "headline": headline,
+                "display_order": display_order,
+                "articles": desk_articles
+            })
         
         desks.sort(key=lambda x: x["display_order"])
 

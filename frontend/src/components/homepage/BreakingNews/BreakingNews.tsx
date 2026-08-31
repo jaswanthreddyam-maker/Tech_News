@@ -103,7 +103,7 @@ export function BreakingNews() {
     };
 
     eventSource.onerror = () => {
-      eventSource.close();
+      // Allow EventSource's native reconnect behavior on network resume
     };
 
     const bufferMs = Number(process.env.NEXT_PUBLIC_BREAKING_BUFFER_MS || 2000);
