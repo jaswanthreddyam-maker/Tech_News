@@ -68,12 +68,43 @@ async def list_stories(
     db: AsyncSession = Depends(get_db)
 ):
     """List stories with pagination and optional status filter."""
-    stmt = select(Story).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
-    if status:
-        stmt = stmt.where(Story.status == status)
-        
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    import asyncio
+    import json
+    import logging
+    from app.core.redis import get_redis_client
+
+    logger = logging.getLogger("tech_news.routes.stories")
+    cache_key = f"stories:v2:list:{status or 'all'}:{skip}:{limit}"
+
+    try:
+        redis = get_redis_client()
+        if redis:
+            cached_data = await asyncio.wait_for(redis.get(cache_key), timeout=1.0)
+            if cached_data:
+                return json.loads(cached_data)
+    except Exception:
+        pass
+
+    try:
+        stmt = select(Story).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
+        if status:
+            stmt = stmt.where(Story.status == status)
+            
+        result = await db.execute(stmt)
+        stories = result.scalars().all()
+
+        try:
+            redis = get_redis_client()
+            if redis:
+                stories_payload = [StoryResponse.model_validate(s).model_dump(mode="json") for s in stories]
+                await asyncio.wait_for(redis.set(cache_key, json.dumps(stories_payload, default=str), ex=60), timeout=1.0)
+        except Exception:
+            pass
+
+        return stories
+    except Exception as e:
+        logger.error(f"Error querying stories: {e}", exc_info=True)
+        return []
 
 @router.get("/{story_id}", response_model=StoryResponse)
 async def get_story(story_id: str, db: AsyncSession = Depends(get_db)):

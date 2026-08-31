@@ -97,32 +97,37 @@ async def get_user_interests(
     """
     from app.models.behavioral import UserInterest
 
-    if not current_user and not anonymous_id:
-        raise HTTPException(status_code=400, detail="Must provide authentication or anonymous_id")
+    try:
+        if not current_user and not anonymous_id:
+            return []
 
-    stmt = select(UserInterest)
+        stmt = select(UserInterest)
 
-    if current_user:
-        stmt = stmt.where(UserInterest.user_id == current_user.id)
-    else:
-        stmt = stmt.where(UserInterest.anonymous_id == anonymous_id)
+        if current_user:
+            stmt = stmt.where(UserInterest.user_id == current_user.id)
+        else:
+            stmt = stmt.where(UserInterest.anonymous_id == anonymous_id)
 
-    if entity_type:
-        stmt = stmt.where(UserInterest.entity_type == entity_type)
+        if entity_type:
+            stmt = stmt.where(UserInterest.entity_type == entity_type)
 
-    stmt = stmt.order_by(UserInterest.affinity.desc()).limit(limit)
+        stmt = stmt.order_by(UserInterest.affinity.desc()).limit(limit)
 
-    result = await db.execute(stmt)
-    interests = result.scalars().all()
+        result = await db.execute(stmt)
+        interests = result.scalars().all()
 
-    return [
-        UserInterestResponse(
-            entity_type=i.entity_type,
-            entity_id=i.entity_id,
-            affinity=i.affinity,
-            expertise=i.expertise,
-            confidence=i.confidence,
-            model_version=i.model_version,
-            last_updated=i.last_updated
-        ) for i in interests
-    ]
+        return [
+            UserInterestResponse(
+                entity_type=i.entity_type,
+                entity_id=i.entity_id,
+                affinity=i.affinity,
+                expertise=i.expertise,
+                confidence=i.confidence,
+                model_version=i.model_version,
+                last_updated=i.last_updated
+            ) for i in interests
+        ]
+    except Exception as e:
+        import logging
+        logging.getLogger("tech_news.routes.behavioral").warning(f"Error querying user interests: {e}")
+        return []

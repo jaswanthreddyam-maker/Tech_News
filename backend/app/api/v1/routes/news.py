@@ -67,7 +67,24 @@ async def list_articles(
     cutoff = now_utc - timedelta(hours=cutoff_hours)
 
     # ── Special Path: sort_by == "freshness" (Breaking News Feed) ──
+    # ── Special Path: sort_by == "freshness" (Breaking News Feed) ──
     if sort_by == "freshness":
+        cache_key_fresh = f"editorial:v2:freshness_cards_json:{limit}"
+        try:
+            redis = get_redis_client()
+            if redis and not category and not cursor:
+                cached_fresh = await asyncio.wait_for(redis.get(cache_key_fresh), timeout=REDIS_OP_TIMEOUT)
+                if cached_fresh:
+                    fresh_cards_data = json.loads(cached_fresh)
+                    response.headers["Server-Timing"] = f"redis_hit;dur={(time.time()-t0)*1000:.1f}"
+                    return PaginatedResponse(
+                        correlation_id=correlation_id,
+                        data=fresh_cards_data[:limit],
+                        pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
+                    )
+        except Exception:
+            pass
+
         from sqlalchemy.orm import defer
         stmt_fresh = (
             select(ArticleReadModel)
@@ -393,14 +410,23 @@ async def list_articles(
 
     if not category and not cursor and articles_list:
         raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
-        _in_memory_homepage_cache["cards"] = raw_cards
-        _in_memory_homepage_cache["expires_at"] = time.time() + 60.0
-        try:
-            redis = get_redis_client()
-            if redis:
-                await asyncio.wait_for(redis.set(cache_key_full, json.dumps(raw_cards, default=str), ex=300), timeout=REDIS_OP_TIMEOUT)
-        except Exception as cache_err:
-            logger.warning(f"Failed to cache full payload: {cache_err}")
+        if sort_by == "freshness":
+            try:
+                redis = get_redis_client()
+                if redis:
+                    cache_key_fresh = f"editorial:v2:freshness_cards_json:{limit}"
+                    await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=60), timeout=REDIS_OP_TIMEOUT)
+            except Exception as cache_err:
+                logger.warning(f"Failed to cache freshness payload: {cache_err}")
+        else:
+            _in_memory_homepage_cache["cards"] = raw_cards
+            _in_memory_homepage_cache["expires_at"] = time.time() + 60.0
+            try:
+                redis = get_redis_client()
+                if redis:
+                    await asyncio.wait_for(redis.set(cache_key_full, json.dumps(raw_cards, default=str), ex=300), timeout=REDIS_OP_TIMEOUT)
+            except Exception as cache_err:
+                logger.warning(f"Failed to cache full payload: {cache_err}")
 
     t_total = time.time() - t0
     timing_parts = []
@@ -439,64 +465,56 @@ async def purge_news_cache(db: AsyncSession = Depends(get_db)):
             keys = await redis.keys("editorial:*")
             if keys:
                 await redis.delete(*keys)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Redis purge failed: {e}")
 
     articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
     await HomepageBuilder.build_and_persist_category_desks(db)
-    return {"status": "success", "message": f"Cache purged. Homepage rebuilt with {len(articles)} articles and category desks updated."}
+    return {"status": "success", "message": "News cache purged successfully"}
 
 
-import html
-from datetime import datetime, timezone
-
-from fastapi import Response
-
-
-@router.get("/rss.xml")
-async def get_rss(db: AsyncSession = Depends(get_db)):
+@router.get("/rss")
+async def get_rss_feed(db: AsyncSession = Depends(get_db)):
     """
-    Generate an RSS 2.0 feed from the canonical ArticleReadModel.
+    Generates standard RSS 2.0 feed of the latest published tech news articles.
     """
+    from app.models.article import ArticleReadModel
+    from datetime import datetime, timezone
+    import html
+
     stmt = select(ArticleReadModel).where(
         ArticleReadModel.is_test_data == False,
-        or_(ArticleReadModel.publication_status == None, ArticleReadModel.publication_status != "EXPIRED"),
-    ).order_by(desc(ArticleReadModel.published_at)).limit(20)
-    result = await db.execute(stmt)
-    articles = result.scalars().all()
+        ArticleReadModel.publication_status == "PUBLISHED"
+    ).order_by(desc(ArticleReadModel.published_at)).limit(30)
+    res = await db.execute(stmt)
+    articles = res.scalars().all()
 
-    pub_date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
-
-    items = []
-    for art in articles:
-        link = art.url or f"https://technewstoday.com/articles/{art.id}"
-        desc_escaped = html.escape(art.summary or "")
-        title_escaped = html.escape(art.title or "")
-        art_pub = art.published_at.strftime("%a, %d %b %Y %H:%M:%S %z") if art.published_at else pub_date
-
-        item = f"""
+    now_str = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+    items_xml = []
+    for a in articles:
+        pub_date = a.published_at.strftime("%a, %d %b %Y %H:%M:%S +0000") if a.published_at else now_str
+        title = html.escape(a.title or "Untitled")
+        summary = html.escape(a.summary or "")
+        link = f"https://technews.today/article/{a.slug or a.id}"
+        items_xml.append(f"""
         <item>
-            <title>{title_escaped}</title>
+            <title>{title}</title>
             <link>{link}</link>
-            <description>{desc_escaped}</description>
-            <pubDate>{art_pub}</pubDate>
-            <guid>{link}</guid>
+            <description>{summary}</description>
+            <pubDate>{pub_date}</pubDate>
+            <guid isPermaLink="false">{a.id}</guid>
         </item>
-        """
-        items.append(item)
-
-    items_xml = "".join(items)
+        """)
 
     rss_xml = f"""<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">
 <channel>
-    <title>Tech News Today</title>
-    <link>https://technewstoday.com</link>
-    <description>The latest technology news, powered by AI.</description>
+    <title>Tech News Today | Autonomous AI Newsroom</title>
+    <link>https://technews.today</link>
+    <description>The latest verified breaking technology, AI, and cybersecurity news.</description>
+    <lastBuildDate>{now_str}</lastBuildDate>
     <language>en-us</language>
-    <pubDate>{pub_date}</pubDate>
-    <lastBuildDate>{pub_date}</lastBuildDate>
-    {items_xml}
+    {"".join(items_xml)}
 </channel>
 </rss>
 """
@@ -507,7 +525,23 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
     """
     Returns the aggregated Category Desk projection joined with runtime configuration.
     Guarantees that expired articles are never included in desk feeds.
+    Cached in Redis to protect database connection pools.
     """
+    import asyncio
+    import json
+    import logging
+    from app.core.redis import get_redis_client
+
+    cache_key_desks = "editorial:v2:category_desks_json"
+    try:
+        redis = get_redis_client()
+        if redis:
+            cached_desks = await asyncio.wait_for(redis.get(cache_key_desks), timeout=1.0)
+            if cached_desks:
+                return json.loads(cached_desks)
+    except Exception:
+        pass
+
     from app.models.projection import CategoryDeskProjection
     from app.models.article import ArticleReadModel, ProcessedArticle
     from pathlib import Path
@@ -517,86 +551,87 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
 
     now_utc = datetime.now(timezone.utc)
 
-    # 1. Load configuration
-    policy_path = Path(__file__).resolve().parents[3] / "editorial" / "category_policy.yaml"
-    policy_data = {}
-    if policy_path.exists():
-        with open(policy_path, "r", encoding="utf-8") as f:
-            policy_data = yaml.safe_load(f) or {}
-    
-    categories_cfg = policy_data.get("categories", {})
+    try:
+        # 1. Load configuration
+        policy_path = Path(__file__).resolve().parents[3] / "editorial" / "category_policy.yaml"
+        policy_data = {}
+        if policy_path.exists():
+            with open(policy_path, "r", encoding="utf-8") as f:
+                policy_data = yaml.safe_load(f) or {}
+        
+        categories_cfg = policy_data.get("categories", {})
 
-    # 2. Query all projections
-    stmt = select(CategoryDeskProjection)
-    res = await db.execute(stmt)
-    projections = res.scalars().all()
-
-    # Check if existing projections are older than 24 hours
-    is_stale_desks = False
-    if projections:
-        for p in projections:
-            rebuilt_dt = p.rebuilt_at or p.created_at
-            if rebuilt_dt:
-                if rebuilt_dt.tzinfo is None:
-                    rebuilt_dt = rebuilt_dt.replace(tzinfo=timezone.utc)
-                if (now_utc - rebuilt_dt).total_seconds() > 86400:
-                    is_stale_desks = True
-                    break
-
-    # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
-    has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
-    if not projections or not has_valid_articles or is_stale_desks:
-        from app.editorial.homepage_builder import HomepageBuilder
-        await HomepageBuilder.build_and_persist_category_desks(db)
+        # 2. Query all projections
         stmt = select(CategoryDeskProjection)
         res = await db.execute(stmt)
         projections = res.scalars().all()
 
-    # 3. Collect all article IDs needed
-    all_article_ids = set()
-    for p in projections:
-        if p.article_ids:
-            all_article_ids.update(p.article_ids)
-    
-    articles_map = {}
-    if all_article_ids:
-        from sqlalchemy.orm import defer
-        art_stmt = (
-            select(ArticleReadModel)
-            .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
-            .where(
-                ArticleReadModel.id.in_(all_article_ids),
-                ArticleReadModel.is_test_data == False,
-                ArticleReadModel.publication_status == "PUBLISHED",
-                or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
-                or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
-                or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
-            )
-            .options(
-                defer(ArticleReadModel.content),
-                defer(ArticleReadModel.embedding)
-            )
-        )
-        art_res = await db.execute(art_stmt)
-        # Convert objects to dicts so they serialize nicely
-        for a in art_res.scalars().all():
-            adict = {k: v for k, v in a.__dict__.items() if not k.startswith("_")}
-            articles_map[str(a.id)] = adict
-    
-    desks = []
-    for p in projections:
-        slug = p.category_slug
-        if slug not in categories_cfg:
-            continue
-            
-        cfg = categories_cfg[slug]
-        headline = cfg.get("headline", slug.capitalize())
-        display_order = cfg.get("display_order", 999)
+        # Check if existing projections are older than 24 hours
+        is_stale_desks = False
+        if projections:
+            for p in projections:
+                rebuilt_dt = p.rebuilt_at or p.created_at
+                if rebuilt_dt:
+                    if rebuilt_dt.tzinfo is None:
+                        rebuilt_dt = rebuilt_dt.replace(tzinfo=timezone.utc)
+                    if (now_utc - rebuilt_dt).total_seconds() > 86400:
+                        is_stale_desks = True
+                        break
+
+        # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
+        has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
+        if not projections or not has_valid_articles or is_stale_desks:
+            from app.editorial.homepage_builder import HomepageBuilder
+            await HomepageBuilder.build_and_persist_category_desks(db)
+            stmt = select(CategoryDeskProjection)
+            res = await db.execute(stmt)
+            projections = res.scalars().all()
+
+        # 3. Collect all article IDs needed
+        all_article_ids = set()
+        for p in projections:
+            if p.article_ids:
+                all_article_ids.update(p.article_ids)
         
-        desk_articles = []
-        for aid in p.article_ids or []:
-            if aid in articles_map:
-                desk_articles.append(articles_map[aid])
+        articles_map = {}
+        if all_article_ids:
+            from sqlalchemy.orm import defer
+            art_stmt = (
+                select(ArticleReadModel)
+                .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                .where(
+                    ArticleReadModel.id.in_(all_article_ids),
+                    ArticleReadModel.is_test_data == False,
+                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                    or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
+                )
+                .options(
+                    defer(ArticleReadModel.content),
+                    defer(ArticleReadModel.embedding)
+                )
+            )
+            art_res = await db.execute(art_stmt)
+            # Convert objects to dicts so they serialize nicely
+            for a in art_res.scalars().all():
+                adict = {k: v for k, v in a.__dict__.items() if not k.startswith("_")}
+                articles_map[str(a.id)] = adict
+        
+        desks = []
+        for p in projections:
+            slug = p.category_slug
+            if slug not in categories_cfg:
+                continue
+                
+            cfg = categories_cfg[slug]
+            headline = cfg.get("headline", slug.capitalize())
+            display_order = cfg.get("display_order", 999)
+            
+            desk_articles = []
+            for aid in p.article_ids or []:
+                if aid in articles_map:
+                    desk_articles.append(articles_map[aid])
                 
         if not desk_articles:
             continue
@@ -608,8 +643,19 @@ async def get_category_desks(db: AsyncSession = Depends(get_db)):
             "articles": desk_articles
         })
         
-    desks.sort(key=lambda x: x["display_order"])
-    return desks
+        desks.sort(key=lambda x: x["display_order"])
+
+        try:
+            redis = get_redis_client()
+            if redis and desks:
+                await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=120), timeout=1.0)
+        except Exception:
+            pass
+
+        return desks
+    except Exception as e:
+        logger.error(f"Error generating category desks: {e}", exc_info=True)
+        return []
 
 
 async def _backfill_missing_thumbnails(db: AsyncSession):
