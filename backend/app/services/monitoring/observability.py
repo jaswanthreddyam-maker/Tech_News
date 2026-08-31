@@ -151,20 +151,36 @@ async def run_queue_health_checks(pipe=None):
     now_str = datetime.now(timezone.utc).isoformat()
 
     try:
+        _t = time.perf_counter  # alias for readability
+        _timings = {}
+
         # 1. Queue Length
+        _t0 = _t()
         queue_depth = await client.llen("celery") or 0
+        _timings["llen_celery"] = (_t() - _t0) * 1000
 
         # 2. Processing Rate (Jobs completed in the last 1 minute)
         now_ts = time.time()
         # Clean timestamps older than 60s
+        _t0 = _t()
         await client.zremrangebyscore("completed_tasks_timestamps", "-inf", now_ts - 60)
+        _timings["zremrangebyscore"] = (_t() - _t0) * 1000
+
+        _t0 = _t()
         processing_rate = await client.zcard("completed_tasks_timestamps") or 0
+        _timings["zcard"] = (_t() - _t0) * 1000
 
         # 3. Queue Growth Rate (delta since last check)
+        _t0 = _t()
         prev_depth_val = await client.get("last_queue_depth")
+        _timings["get_last_depth"] = (_t() - _t0) * 1000
+
         prev_depth = int(prev_depth_val) if prev_depth_val else 0
         growth_rate = queue_depth - prev_depth
+
+        _t0 = _t()
         await client.set("last_queue_depth", str(queue_depth))
+        _timings["set_last_depth"] = (_t() - _t0) * 1000
 
         # 4. Status determination
         available = True
@@ -178,6 +194,7 @@ async def run_queue_health_checks(pipe=None):
 
         from app.services.monitoring.evaluation import HealthEvaluationService
 
+        _t0 = _t()
         snapshot = HealthEvaluationService.evaluate(
             service_name="queue",
             available=available,
@@ -190,6 +207,7 @@ async def run_queue_health_checks(pipe=None):
             error=error_msg,
             status_reason=status_reason,
         )
+        _timings["evaluate"] = (_t() - _t0) * 1000
 
         queue_payload = snapshot.model_dump()
         # For backwards compatibility with the raw dictionary saving
@@ -197,7 +215,17 @@ async def run_queue_health_checks(pipe=None):
             queue_payload["status"].value if hasattr(queue_payload["status"], "value") else queue_payload["status"]
         )
 
+        _t0 = _t()
         await repo.save_queue(queue_payload, pipe=pipe)
+        _timings["save_queue"] = (_t() - _t0) * 1000
+
+        _total = sum(_timings.values())
+        if _total > 300:
+            logger.warning(
+                f"Queue collector profiling: total={_total:.1f}ms | "
+                + " | ".join(f"{k}={v:.1f}ms" for k, v in _timings.items())
+            )
+
         logger.info(
             f"Queue telemetry updated: depth={queue_depth}, processing_rate={processing_rate}, growth_rate={growth_rate}"
         )
@@ -331,10 +359,16 @@ async def collect_ai_queue_metrics(pipe=None):
 
         client = get_redis_client()
         now_utc = datetime.now(timezone.utc)
+        _t = time.perf_counter  # alias for readability
+        _timings = {}
 
+        _t0 = _t()
         async with AsyncSessionLocal() as db:
+            _timings["db_session_acquire"] = (_t() - _t0) * 1000
+
             from sqlalchemy import func
             
+            _t0 = _t()
             queue_stats_res = await db.execute(
                 select(
                     func.count(RawArticle.id),
@@ -343,6 +377,7 @@ async def collect_ai_queue_metrics(pipe=None):
                 ).where(RawArticle.status == "ai_queued")
             )
             queue_stats = queue_stats_res.one_or_none()
+            _timings["db_queue_stats"] = (_t() - _t0) * 1000
             
             depth = queue_stats[0] if queue_stats and queue_stats[0] else 0
             oldest = queue_stats[1] if queue_stats and queue_stats[1] else now_utc
@@ -351,8 +386,13 @@ async def collect_ai_queue_metrics(pipe=None):
             oldest_age_sec = (now_utc - oldest.replace(tzinfo=timezone.utc)).total_seconds() if oldest else 0
             estimated_average_wait_sec = oldest_age_sec / 2 if depth > 0 else 0  # Fast approximation for average wait
 
+            _t0 = _t()
             failed_today = int(await client.get("telemetry_failed_ai_jobs") or 0)
+            _timings["redis_get_failed"] = (_t() - _t0) * 1000
+
+            _t0 = _t()
             recovered_today = int(await client.get("telemetry_recovered_ai_jobs") or 0)
+            _timings["redis_get_recovered"] = (_t() - _t0) * 1000
 
             queue_metrics = {
                 "depth": depth,
@@ -371,18 +411,30 @@ async def collect_ai_queue_metrics(pipe=None):
                     "hostname": socket.gethostname(),
                 },
             }
+
+            _t0 = _t()
             if pipe is not None:
                 pipe.set("telemetry:v2:ai:queue", json_dumps_helpers(queue_metrics), ex=30)
             else:
                 await client.set("telemetry:v2:ai:queue", json_dumps_helpers(queue_metrics), ex=30)
+            _timings["redis_set_queue"] = (_t() - _t0) * 1000
 
             # Provider Metrics
+            _t0 = _t()
             flag_res = await db.execute(select(FeatureFlag).where(FeatureFlag.key == "ai_enrichment_enabled"))
             flag = flag_res.scalars().first()
+            _timings["db_feature_flag"] = (_t() - _t0) * 1000
+
             enabled = flag.default_value if flag else False
 
+            _t0 = _t()
             last_success_ts = await client.get("telemetry_ai_last_success")
+            _timings["redis_get_last_success"] = (_t() - _t0) * 1000
+
+            _t0 = _t()
             recent_errors = int(await client.get("telemetry_ai_recent_errors") or 0)
+            _timings["redis_get_errors"] = (_t() - _t0) * 1000
+
             last_success_sec = (time.time() - float(last_success_ts)) if last_success_ts else 999999
 
             healthy = bool(enabled and (last_success_sec < 600) and (recent_errors < 50))
@@ -406,10 +458,20 @@ async def collect_ai_queue_metrics(pipe=None):
                     "hostname": socket.gethostname(),
                 },
             }
+
+            _t0 = _t()
             if pipe is not None:
                 pipe.set("telemetry:v2:ai:provider", json_dumps_helpers(provider_metrics), ex=30)
             else:
                 await client.set("telemetry:v2:ai:provider", json_dumps_helpers(provider_metrics), ex=30)
+            _timings["redis_set_provider"] = (_t() - _t0) * 1000
+
+        _total = sum(_timings.values())
+        if _total > 500:
+            logger.warning(
+                f"AI queue collector profiling: total={_total:.1f}ms | "
+                + " | ".join(f"{k}={v:.1f}ms" for k, v in _timings.items())
+            )
 
         logger.info("AI Fast Collector: Updated queue and provider telemetry.")
     except Exception as e:
