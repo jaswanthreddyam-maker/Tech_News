@@ -24,7 +24,6 @@ async def list_articles(
     cursor: str | None = Query(None, description="Cursor for pagination"),
     sort_by: str | None = Query(None, description="Sort ordering"),
     limit: int = Query(10, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Fetch articles from ArticleReadModel using the versioned Redis ranking cache.
@@ -49,6 +48,7 @@ async def list_articles(
     import asyncio
     import json
     import logging
+    from app.core.database import AsyncSessionLocal
     from app.core.redis import get_redis_client
     from app.core.config import settings
     from app.models.article import ProcessedArticle
@@ -85,81 +85,82 @@ async def list_articles(
             pass
 
         try:
-            from sqlalchemy.orm import defer
-            stmt_fresh = (
-                select(ArticleReadModel)
-                .where(
-                    ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.publication_status == "PUBLISHED",
-                    ArticleReadModel.published_at >= cutoff,
-                )
-                .order_by(desc(ArticleReadModel.published_at))
-                .limit(limit)
-                .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
-            )
-            res_fresh = await db.execute(stmt_fresh)
-            fresh_articles = res_fresh.scalars().all()
-            if not fresh_articles:
-                fallback_cutoff = now_utc - timedelta(hours=72)
-                stmt_fb = (
+            async with AsyncSessionLocal() as db:
+                from sqlalchemy.orm import defer
+                stmt_fresh = (
                     select(ArticleReadModel)
                     .where(
                         ArticleReadModel.is_test_data == False,
                         ArticleReadModel.publication_status == "PUBLISHED",
-                        ArticleReadModel.published_at >= fallback_cutoff,
+                        ArticleReadModel.published_at >= cutoff,
                     )
                     .order_by(desc(ArticleReadModel.published_at))
                     .limit(limit)
                     .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
                 )
-                fresh_articles = (await db.execute(stmt_fb)).scalars().all()
+                res_fresh = await db.execute(stmt_fresh)
+                fresh_articles = res_fresh.scalars().all()
+                if not fresh_articles:
+                    fallback_cutoff = now_utc - timedelta(hours=72)
+                    stmt_fb = (
+                        select(ArticleReadModel)
+                        .where(
+                            ArticleReadModel.is_test_data == False,
+                            ArticleReadModel.publication_status == "PUBLISHED",
+                            ArticleReadModel.published_at >= fallback_cutoff,
+                        )
+                        .order_by(desc(ArticleReadModel.published_at))
+                        .limit(limit)
+                        .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+                    )
+                    fresh_articles = (await db.execute(stmt_fb)).scalars().all()
 
-            art_ids = [art.id for art in fresh_articles]
-            topics_by_art: dict[str, list[str]] = {}
-            entities_by_art: dict[str, list[str]] = {}
+                art_ids = [art.id for art in fresh_articles]
+                topics_by_art: dict[str, list[str]] = {}
+                entities_by_art: dict[str, list[str]] = {}
 
-            if art_ids:
-                from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
+                if art_ids:
+                    from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
+                    try:
+                        t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
+                        t_res = await db.execute(t_stmt)
+                        for row in t_res.all():
+                            topics_by_art.setdefault(str(row[0]), []).append(row[1])
+
+                        e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
+                            EntityNode, EntityNode.id == ArticleEntityLink.entity_id
+                        ).where(ArticleEntityLink.article_id.in_(art_ids))
+                        e_res = await db.execute(e_stmt)
+                        for row in e_res.all():
+                            art_id_str = str(row[0])
+                            if len(entities_by_art.get(art_id_str, [])) < 3:
+                                entities_by_art.setdefault(art_id_str, []).append(row[1])
+                    except Exception as meta_err:
+                        logger.warning(f"Error loading topic/entity metadata for fresh articles: {meta_err}")
+
+                articles_list = [
+                    ArticleCard.from_model(
+                        art,
+                        topics=topics_by_art.get(str(art.id), []),
+                        entities=entities_by_art.get(str(art.id), [])
+                    ) for art in fresh_articles
+                ]
+
+                # Cache in Redis with 60s TTL
                 try:
-                    t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
-                    t_res = await db.execute(t_stmt)
-                    for row in t_res.all():
-                        topics_by_art.setdefault(str(row[0]), []).append(row[1])
+                    redis = get_redis_client()
+                    if redis and articles_list and not category and not cursor:
+                        raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
+                        await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=60), timeout=REDIS_OP_TIMEOUT)
+                except Exception:
+                    pass
 
-                    e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
-                        EntityNode, EntityNode.id == ArticleEntityLink.entity_id
-                    ).where(ArticleEntityLink.article_id.in_(art_ids))
-                    e_res = await db.execute(e_stmt)
-                    for row in e_res.all():
-                        art_id_str = str(row[0])
-                        if len(entities_by_art.get(art_id_str, [])) < 3:
-                            entities_by_art.setdefault(art_id_str, []).append(row[1])
-                except Exception as meta_err:
-                    logger.warning(f"Error loading topic/entity metadata for fresh articles: {meta_err}")
-
-            articles_list = [
-                ArticleCard.from_model(
-                    art,
-                    topics=topics_by_art.get(str(art.id), []),
-                    entities=entities_by_art.get(str(art.id), [])
-                ) for art in fresh_articles
-            ]
-
-            # Cache in Redis with 60s TTL
-            try:
-                redis = get_redis_client()
-                if redis and articles_list and not category and not cursor:
-                    raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
-                    await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=60), timeout=REDIS_OP_TIMEOUT)
-            except Exception:
-                pass
-
-            response.headers["Server-Timing"] = f"db;dur={(time.time()-t0)*1000:.1f}"
-            return PaginatedResponse(
-                correlation_id=correlation_id,
-                data=articles_list,
-                pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
-            )
+                response.headers["Server-Timing"] = f"db;dur={(time.time()-t0)*1000:.1f}"
+                return PaginatedResponse(
+                    correlation_id=correlation_id,
+                    data=articles_list,
+                    pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
+                )
         except Exception as e:
             logger.error(f"Error querying fresh articles feed: {e}", exc_info=True)
             return PaginatedResponse(
@@ -217,220 +218,147 @@ async def list_articles(
         articles = []
         is_stale_state = False
 
-        # Path 1: Check Redis ranking cache & CQRS Identity Invariants
-        if ranked_ids:
-            algo_ver = cache_meta.get("algorithm_version")
-            expected_algo = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
-            
-            # Invariant 1: Algorithm version match
-            if algo_ver != expected_algo:
-                logger.info(f"Redis cache algorithm version mismatch (cached: {algo_ver}, expected: {expected_algo}). Invalidating.")
-                is_stale_state = True
-            else:
-                # Invariant 2: Compare projection_id & projection_version against DB HomepageProjection
+        async with AsyncSessionLocal() as db:
+            # Path 1: Check Redis ranking cache & CQRS Identity Invariants
+            if ranked_ids:
+                algo_ver = cache_meta.get("algorithm_version")
+                expected_algo = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
+                
+                # Invariant 1: Algorithm version match
+                if algo_ver != expected_algo:
+                    logger.info(f"Redis cache algorithm version mismatch (cached: {algo_ver}, expected: {expected_algo}). Invalidating.")
+                    is_stale_state = True
+                else:
+                    # Invariant 2: Compare projection_id & projection_version against DB HomepageProjection
+                    try:
+                        from app.models.projection import HomepageProjection
+                        proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
+                        proj_res = await db.execute(proj_stmt)
+                        latest_projection = proj_res.scalars().first()
+
+                        if not latest_projection:
+                            is_stale_state = True
+                        else:
+                            cached_proj_id = str(cache_meta.get("projection_id", ""))
+                            cached_proj_ver = cache_meta.get("projection_version")
+                            if cached_proj_id != str(latest_projection.id) or cached_proj_ver != latest_projection.projection_version:
+                                logger.info(f"Redis cache projection identity mismatch (cached v{cached_proj_ver}, DB v{latest_projection.projection_version}). Invalidating.")
+                                is_stale_state = True
+                            else:
+                                # Invariant 2b: Check if projection is older than 24 hours
+                                proj_created = latest_projection.created_at
+                                if proj_created.tzinfo is None:
+                                    proj_created = proj_created.replace(tzinfo=timezone.utc)
+                                if (now_utc - proj_created).total_seconds() > 86400:
+                                    logger.info("DB HomepageProjection is older than 24 hours. Marking stale.")
+                                    is_stale_state = True
+                    except Exception as e:
+                        logger.warning(f"HomepageProjection query failed: {e}. Falling back to rebuild.")
+                        is_stale_state = True
+
+                if not is_stale_state:
+                    # Invariant 3: Single SQL IN query to resolve all IDs at once & verify non-expired
+                    str_ranked_ids = [str(aid) for aid in ranked_ids]
+                    int_ranked_ids = [int(aid) for aid in ranked_ids if str(aid).isdigit()]
+                    
+                    if str_ranked_ids:
+                        # Check if any ranked IDs are marked expired in ProcessedArticle
+                        if int_ranked_ids:
+                            exp_cnt_stmt = select(func.count(ProcessedArticle.id)).where(
+                                ProcessedArticle.id.in_(int_ranked_ids),
+                                or_(
+                                    ProcessedArticle.is_expired == True,
+                                    ProcessedArticle.is_archived == True,
+                                    and_(ProcessedArticle.expires_at != None, ProcessedArticle.expires_at <= now_utc),
+                                ),
+                            )
+                            exp_cnt = (await db.execute(exp_cnt_stmt)).scalar() or 0
+                            if exp_cnt > 0:
+                                logger.info(f"Redis cache contains {exp_cnt} expired articles. Invalidating.")
+                                is_stale_state = True
+
+                        if not is_stale_state:
+                            stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(str_ranked_ids))
+                            res = await db.execute(stmt)
+                            articles_map = {str(art.id): art for art in res.scalars().all()}
+                            
+                            if set(articles_map.keys()) != set(str_ranked_ids):
+                                logger.warning(f"Partial ID resolution in Redis cache: requested {len(str_ranked_ids)}, found {len(articles_map)}. Invalidating.")
+                                is_stale_state = True
+                            else:
+                                articles = [articles_map[aid] for aid in str_ranked_ids if aid in articles_map]
+                    else:
+                        is_stale_state = True
+
+            # Path 2: Check latest HomepageProjection CQRS read model
+            if not articles and not is_stale_state:
                 try:
                     from app.models.projection import HomepageProjection
                     proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
                     proj_res = await db.execute(proj_stmt)
                     latest_projection = proj_res.scalars().first()
 
-                    if not latest_projection:
-                        is_stale_state = True
-                    else:
-                        cached_proj_id = str(cache_meta.get("projection_id", ""))
-                        cached_proj_ver = cache_meta.get("projection_version")
-                        if cached_proj_id != str(latest_projection.id) or cached_proj_ver != latest_projection.projection_version:
-                            logger.info(f"Redis cache projection identity mismatch (cached v{cached_proj_ver}, DB v{latest_projection.projection_version}). Invalidating.")
+                    if latest_projection and latest_projection.stories_json:
+                        # Check projection age
+                        proj_created = latest_projection.created_at
+                        if proj_created.tzinfo is None:
+                            proj_created = proj_created.replace(tzinfo=timezone.utc)
+                        if (now_utc - proj_created).total_seconds() > 86400:
+                            logger.info("DB HomepageProjection is older than 24 hours. Triggering rebuild.")
                             is_stale_state = True
-                        else:
-                            # Invariant 2b: Check if projection is older than 24 hours
-                            proj_created = latest_projection.created_at
-                            if proj_created.tzinfo is None:
-                                proj_created = proj_created.replace(tzinfo=timezone.utc)
-                            if (now_utc - proj_created).total_seconds() > 86400:
-                                logger.info("DB HomepageProjection is older than 24 hours. Marking stale.")
+
+                        story_ids = [str(s["id"]) for s in latest_projection.stories_json if "id" in s]
+                        int_story_ids = [int(sid) for sid in story_ids if sid.isdigit()]
+                        
+                        # Verify none of the stories in projection are expired in ProcessedArticle
+                        if not is_stale_state and int_story_ids:
+                            exp_cnt_stmt = select(func.count(ProcessedArticle.id)).where(
+                                ProcessedArticle.id.in_(int_story_ids),
+                                or_(
+                                    ProcessedArticle.is_expired == True,
+                                    ProcessedArticle.is_archived == True,
+                                    and_(ProcessedArticle.expires_at != None, ProcessedArticle.expires_at <= now_utc),
+                                ),
+                            )
+                            exp_cnt = (await db.execute(exp_cnt_stmt)).scalar() or 0
+                            if exp_cnt > 0:
+                                logger.info(f"HomepageProjection contains {exp_cnt} expired articles. Triggering rebuild.")
                                 is_stale_state = True
+
+                        if not is_stale_state and story_ids:
+                            stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(story_ids))
+                            res = await db.execute(stmt)
+                            articles_map = {str(art.id): art for art in res.scalars().all()}
+                            
+                            if set(articles_map.keys()) != set(story_ids):
+                                logger.warning(f"Partial resolution in HomepageProjection v{latest_projection.projection_version}: requested {len(story_ids)}, resolved {len(articles_map)}. Triggering rebuild.")
+                                is_stale_state = True
+                            else:
+                                articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
+                                ranked_ids = [str(a.id) for a in articles]
+                                try:
+                                    import asyncio
+                                    algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
+                                    cache_payload = {
+                                        "projection_id": str(latest_projection.id),
+                                        "projection_version": latest_projection.projection_version,
+                                        "algorithm_version": algo_ver,
+                                        "generated_at": datetime.now(timezone.utc).isoformat(),
+                                        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+                                        "article_ids": ranked_ids
+                                    }
+                                    redis = get_redis_client()
+                                    if redis:
+                                        await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=REDIS_OP_TIMEOUT)
+                                except Exception as e:
+                                    logger.warning(f"Redis cache write failed: {e}")
                 except Exception as e:
-                    logger.warning(f"HomepageProjection query failed: {e}. Falling back to rebuild.")
-                    is_stale_state = True
+                    logger.warning(f"HomepageProjection Path 2 read failed: {e}. Falling back to rebuild.")
 
-            if not is_stale_state:
-                # Invariant 3: Single SQL IN query to resolve all IDs at once & verify non-expired
-                str_ranked_ids = [str(aid) for aid in ranked_ids]
-                int_ranked_ids = [int(aid) for aid in ranked_ids if str(aid).isdigit()]
-                
-                if str_ranked_ids:
-                    # Check if any ranked IDs are marked expired in ProcessedArticle
-                    if int_ranked_ids:
-                        exp_cnt_stmt = select(func.count(ProcessedArticle.id)).where(
-                            ProcessedArticle.id.in_(int_ranked_ids),
-                            or_(
-                                ProcessedArticle.is_expired == True,
-                                ProcessedArticle.is_archived == True,
-                                and_(ProcessedArticle.expires_at != None, ProcessedArticle.expires_at <= now_utc),
-                            ),
-                        )
-                        exp_cnt = (await db.execute(exp_cnt_stmt)).scalar() or 0
-                        if exp_cnt > 0:
-                            logger.info(f"Redis cache contains {exp_cnt} expired articles. Invalidating.")
-                            is_stale_state = True
-
-                    if not is_stale_state:
-                        stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(str_ranked_ids))
-                        res = await db.execute(stmt)
-                        articles_map = {str(art.id): art for art in res.scalars().all()}
-                        
-                        if set(articles_map.keys()) != set(str_ranked_ids):
-                            logger.warning(f"Partial ID resolution in Redis cache: requested {len(str_ranked_ids)}, found {len(articles_map)}. Invalidating.")
-                            is_stale_state = True
-                        else:
-                            articles = [articles_map[aid] for aid in str_ranked_ids if aid in articles_map]
-                else:
-                    is_stale_state = True
-
-        # Path 2: Check latest HomepageProjection CQRS read model
-        if not articles and not is_stale_state:
-            try:
-                from app.models.projection import HomepageProjection
-                proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
-                proj_res = await db.execute(proj_stmt)
-                latest_projection = proj_res.scalars().first()
-
-                if latest_projection and latest_projection.stories_json:
-                    # Check projection age
-                    proj_created = latest_projection.created_at
-                    if proj_created.tzinfo is None:
-                        proj_created = proj_created.replace(tzinfo=timezone.utc)
-                    if (now_utc - proj_created).total_seconds() > 86400:
-                        logger.info("DB HomepageProjection is older than 24 hours. Triggering rebuild.")
-                        is_stale_state = True
-
-                    story_ids = [str(s["id"]) for s in latest_projection.stories_json if "id" in s]
-                    int_story_ids = [int(sid) for sid in story_ids if sid.isdigit()]
-                    
-                    # Verify none of the stories in projection are expired in ProcessedArticle
-                    if not is_stale_state and int_story_ids:
-                        exp_cnt_stmt = select(func.count(ProcessedArticle.id)).where(
-                            ProcessedArticle.id.in_(int_story_ids),
-                            or_(
-                                ProcessedArticle.is_expired == True,
-                                ProcessedArticle.is_archived == True,
-                                and_(ProcessedArticle.expires_at != None, ProcessedArticle.expires_at <= now_utc),
-                            ),
-                        )
-                        exp_cnt = (await db.execute(exp_cnt_stmt)).scalar() or 0
-                        if exp_cnt > 0:
-                            logger.info(f"HomepageProjection contains {exp_cnt} expired articles. Triggering rebuild.")
-                            is_stale_state = True
-
-                    if not is_stale_state and story_ids:
-                        stmt = select(ArticleReadModel).where(ArticleReadModel.id.in_(story_ids))
-                        res = await db.execute(stmt)
-                        articles_map = {str(art.id): art for art in res.scalars().all()}
-                        
-                        if set(articles_map.keys()) != set(story_ids):
-                            logger.warning(f"Partial resolution in HomepageProjection v{latest_projection.projection_version}: requested {len(story_ids)}, resolved {len(articles_map)}. Triggering rebuild.")
-                            is_stale_state = True
-                        else:
-                            articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
-                            ranked_ids = [str(a.id) for a in articles]
-                            try:
-                                import asyncio
-                                algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
-                                cache_payload = {
-                                    "projection_id": str(latest_projection.id),
-                                    "projection_version": latest_projection.projection_version,
-                                    "algorithm_version": algo_ver,
-                                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                                    "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-                                    "article_ids": ranked_ids
-                                }
-                                redis = get_redis_client()
-                                if redis:
-                                    await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=REDIS_OP_TIMEOUT)
-                            except Exception as e:
-                                logger.warning(f"Redis cache write failed: {e}")
-            except Exception as e:
-                logger.warning(f"HomepageProjection Path 2 read failed: {e}. Falling back to rebuild.")
-
-        # Path 3: Concurrent-safe rebuild using RedisDistributedLock with safe fallback path (Guardrail #3)
-        if not articles or is_stale_state:
-            from app.core.redis import RedisDistributedLock
-            from app.editorial.homepage_builder import HomepageBuilder
-            from app.services.cache_service import CacheService
-            from app.services.ranking.news_ranking_engine import expire_articles
-
-            lock = RedisDistributedLock("homepage_projection_rebuild", expire_seconds=30)
-            lock_acquired = False
-            try:
-                async with lock:
-                    lock_acquired = True
-                    logger.info("Acquired homepage rebuild lock. Executing canonical expiration and homepage projection rebuild.")
-                    await CacheService.invalidate_homepage_cache(reason="projection_rebuild")
-                    await expire_articles(db)
-                    global_articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
-                    await HomepageBuilder.build_and_persist_category_desks(db)
-                    articles = global_articles
-                    ranked_ids = [str(a.id) for a in global_articles]
-
-                    # Fetch the newly created projection metadata
-                    from app.models.projection import HomepageProjection
-                    new_proj_res = await db.execute(select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1))
-                    new_proj = new_proj_res.scalars().first()
-
-                    try:
-                        import asyncio
-                        algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
-                        cache_payload = {
-                            "projection_id": str(new_proj.id) if new_proj else "",
-                            "projection_version": new_proj.projection_version if new_proj else 1,
-                            "algorithm_version": algo_ver,
-                            "generated_at": datetime.now(timezone.utc).isoformat(),
-                            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-                            "article_ids": ranked_ids
-                        }
-                        redis = get_redis_client()
-                        if redis:
-                            await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=REDIS_OP_TIMEOUT)
-                    except Exception as e:
-                        logger.warning(f"Redis cache write failed: {e}")
-            except Exception as lock_err:
-                logger.warning(f"Could not acquire rebuild lock (or lock failed): {lock_err}. Falling back to DB read model.")
+            # Path 3: Concurrent-safe rebuild using RedisDistributedLock with safe fallback path (Guardrail #3)
+            if not articles or is_stale_state:
+                from app.core.redis import RedisDistributedLock
                 from app.editorial.homepage_builder import HomepageBuilder
-                articles = await HomepageBuilder.build_homepage(db)
-
-
-
-    # If category filter is active, filter from the global ranked articles
-    if category:
-        category_lower = category.lower().strip()
-        filtered_articles = []
-        for art in articles:
-            topic_stmt = select(ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id == art.id)
-            topic_res = await db.execute(topic_stmt)
-            topics = topic_res.scalars().all()
-            if any(category_lower in t.lower() for t in topics):
-                filtered_articles.append(art)
-        articles = filtered_articles
-
-    # Paginate by slicing
-    articles = articles[:limit]
-
-    # Batch fetch topics and entities for all articles in 2 single queries (eliminates N+1 loop delay)
-    art_ids = [art.id for art in articles]
-    topics_by_art: dict[str, list[str]] = {}
-    entities_by_art: dict[str, list[str]] = {}
-
-    if art_ids:
-        from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
-        # 1. Batch topics
-        t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
-        t_res = await db.execute(t_stmt)
-        for row in t_res.all():
-            topics_by_art.setdefault(str(row[0]), []).append(row[1])
-
-        # 2. Batch entities
-        e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
             EntityNode, EntityNode.id == ArticleEntityLink.entity_id
         ).where(ArticleEntityLink.article_id.in_(art_ids))
         e_res = await db.execute(e_stmt)
