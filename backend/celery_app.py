@@ -44,8 +44,27 @@ celery_app = Celery(
 import asyncio
 
 from celery.signals import worker_process_init
+from celery.signals import setup_logging as celery_setup_logging
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+
+
+@celery_setup_logging.connect
+def configure_worker_logging(**kwargs):
+    """
+    Intercept Celery's logging setup to install our structured JSONFormatter.
+
+    Without this, the Celery worker emits plain-text logs (e.g.
+    "[INFO/ForkPoolWorker-1] Task ... succeeded") to stdout. Log backends
+    that receive this plain text cannot parse the embedded level and default
+    all entries to severity=error, corrupting observability.
+
+    By connecting to setup_logging we prevent Celery from installing its
+    default formatter and instead configure structured JSON output with a
+    correct "level" field that any log collector can parse.
+    """
+    from app.core.logging import setup_logging
+    setup_logging(env=settings.ENV)
 
 celery_engine = None
 CeleryAsyncSessionLocal = None

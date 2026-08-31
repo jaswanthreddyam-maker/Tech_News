@@ -388,7 +388,16 @@ async def run_source_ingestion_pipeline(db: AsyncSession) -> dict:
                             # Content hash didn't change, just update metadata (e.g. retry counts)
                             existing_article.article_metadata = json.dumps(meta_payload)
                             existing_article.scraped_at = current_time
-                            logger.info(f"Pipeline: Content hash unchanged for existing article '{title_source}', skipping re-enrichment.")
+                            # If content is unchanged AND the article was REJECTED (e.g.
+                            # CANONICAL_CONTENT_INSUFFICIENT_WEAK_RSS), update status to
+                            # "filtered" to prevent a permanent retry loop. Without this,
+                            # the article stays at "failed"/"discovered" and the
+                            # DeduplicationService re-triggers it every ingestion cycle.
+                            if acquisition_decision.decision == "REJECTED" and status_state == "filtered":
+                                existing_article.status = "filtered"
+                                logger.info(f"Pipeline: Content hash unchanged and REJECTED for '{title_source}'; status set to 'filtered' (terminal).")
+                            else:
+                                logger.info(f"Pipeline: Content hash unchanged for existing article '{title_source}', skipping re-enrichment.")
                     else:
                         # Insert new raw article via PersistenceService
                         new_article = await persistence_service.save_raw_article(

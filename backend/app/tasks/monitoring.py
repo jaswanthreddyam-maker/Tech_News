@@ -48,18 +48,18 @@ def track_execution(task_name: str):
                 completed_at = datetime.now(timezone.utc)
                 duration_ms = (time.perf_counter() - start_time) * 1000.0
 
-                # Check for slow collectors
-                thresholds = {
-                    "overview": 1000,
-                    "queue": 300,
-                    "infrastructure": 5000,
-                    "ai_queue": 500,
-                    "ai_recovery": 1000,
-                    "ai_performance": 5000,
+                # Check for slow collectors — explicit mapping to avoid substring collisions
+                # (e.g. "queue" matching before "ai_queue" in substring search)
+                task_thresholds = {
+                    "tasks.monitoring.collect_overview_metrics": 1000,
+                    "tasks.monitoring.collect_queue_metrics": 300,
+                    "tasks.monitoring.collect_infrastructure_metrics": 5000,
+                    "tasks.monitoring.collect_ai_queue_metrics": 500,
+                    "tasks.monitoring.collect_ai_recovery_metrics": 1000,
+                    "tasks.monitoring.collect_ai_performance_metrics": 5000,
                 }
 
-                t_key = next((k for k in thresholds if k in task_name), "default")
-                threshold = thresholds.get(t_key, 2000)
+                threshold = task_thresholds.get(task_name, 2000)
 
                 if duration_ms > threshold:
                     logger.warning(f"Slow collector [{task_name}]: took {duration_ms:.2f}ms (threshold: {threshold}ms)")
