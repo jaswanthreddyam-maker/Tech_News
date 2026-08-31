@@ -94,7 +94,7 @@ async def list_stories(
         return result.scalars().all()
 
     try:
-        stories = await safe_db_execute(fetch_stories)
+        stories = await safe_db_execute(fetch_stories, fallback=[])
         try:
             redis = get_redis_client()
             if redis:

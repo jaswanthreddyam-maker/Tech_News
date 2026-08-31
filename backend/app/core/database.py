@@ -150,11 +150,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             pass
 
 
-async def safe_db_execute(fn, max_retries: int = 3, initial_backoff: float = 0.15):
+async def safe_db_execute(fn, fallback=None, max_retries: int = 5, initial_backoff: float = 0.2):
     """
     Executes an async database operation with automatic exponential retry
-    for connection pool saturation / (EMAXCONNSESSION) errors.
-    Ensures safe teardown without socket exception leakage.
+    for connection pool saturation, pgBouncer limits, or transient socket errors.
+    Ensures safe session rollback/closure and returns fallback on complete exhaustion.
     """
     last_exc = None
     for attempt in range(max_retries):
@@ -168,17 +168,42 @@ async def safe_db_execute(fn, max_retries: int = 3, initial_backoff: float = 0.1
                 await session.rollback()
             except Exception:
                 pass
-            err_str = str(exc)
-            if ("EMAXCONNSESSION" in err_str or "connection limit" in err_str.lower() or "53300" in err_str or "TooManyConnections" in err_str) and attempt < max_retries - 1:
-                logger.warning(f"Database session saturated (attempt {attempt+1}/{max_retries}). Retrying in {(attempt+1)*initial_backoff:.2f}s...")
-                await asyncio.sleep((attempt + 1) * initial_backoff)
+            
+            err_str = str(exc).lower()
+            is_transient = any(phrase in err_str for phrase in [
+                "emaxconnsession",
+                "max clients",
+                "connection limit",
+                "toomanyconnections",
+                "53300",
+                "pool",
+                "connection",
+                "closed",
+                "timeout",
+                "socket",
+                "operationalerror",
+                "interfaceerror",
+            ])
+            
+            if is_transient and attempt < max_retries - 1:
+                sleep_time = (attempt + 1) * initial_backoff
+                logger.warning(f"Database contention/transient error (attempt {attempt+1}/{max_retries}): {exc}. Retrying in {sleep_time:.2f}s...")
+                await asyncio.sleep(sleep_time)
                 continue
-            raise exc
+            
+            if not is_transient:
+                logger.error(f"Non-transient database error: {exc}", exc_info=True)
+                break
         finally:
             try:
                 await session.close()
             except Exception:
                 pass
+
+    if fallback is not None:
+        logger.warning(f"Database query exhausted {max_retries} retries ({last_exc}). Returning graceful fallback.")
+        return fallback
+
     if last_exc:
         raise last_exc
 

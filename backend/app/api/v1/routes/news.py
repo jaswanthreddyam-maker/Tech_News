@@ -147,7 +147,7 @@ async def list_articles(
 
         try:
             from app.core.database import safe_db_execute
-            articles_list = await safe_db_execute(fetch_fresh_data)
+            articles_list = await safe_db_execute(fetch_fresh_data, fallback=[])
 
             # Cache in Redis with 60s TTL
             try:
@@ -450,7 +450,7 @@ async def list_articles(
 
         try:
             from app.core.database import safe_db_execute
-            articles_list = await safe_db_execute(fetch_homepage_articles)
+            articles_list = await safe_db_execute(fetch_homepage_articles, fallback=[])
         except Exception as exc:
             logger.error(f"Error fetching homepage articles: {exc}", exc_info=True)
             articles_list = []
@@ -717,7 +717,7 @@ async def get_category_desks():
         return desks
 
     try:
-        desks = await safe_db_execute(fetch_category_desks)
+        desks = await safe_db_execute(fetch_category_desks, fallback=[])
 
         try:
             redis = get_redis_client()

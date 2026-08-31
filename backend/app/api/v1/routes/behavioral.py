@@ -96,7 +96,7 @@ async def get_behavioral_sessions(
         return response
 
     try:
-        response = await safe_db_execute(fetch_sessions)
+        response = await safe_db_execute(fetch_sessions, fallback=[])
         try:
             redis = get_redis_client()
             if redis:
