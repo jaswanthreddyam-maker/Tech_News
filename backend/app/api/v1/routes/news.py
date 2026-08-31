@@ -218,10 +218,10 @@ async def list_articles(
             except Exception:
                 pass
 
-        articles = []
-        is_stale_state = False
+        async def fetch_homepage_articles(db):
+            nonlocal ranked_ids, is_stale_state
+            resolved_articles = []
 
-        async with AsyncSessionLocal() as db:
             # Path 1: Check Redis ranking cache & CQRS Identity Invariants
             if ranked_ids:
                 algo_ver = cache_meta.get("algorithm_version")
@@ -289,12 +289,12 @@ async def list_articles(
                                 logger.warning(f"Partial ID resolution in Redis cache: requested {len(str_ranked_ids)}, found {len(articles_map)}. Invalidating.")
                                 is_stale_state = True
                             else:
-                                articles = [articles_map[aid] for aid in str_ranked_ids if aid in articles_map]
+                                resolved_articles = [articles_map[aid] for aid in str_ranked_ids if aid in articles_map]
                     else:
                         is_stale_state = True
 
             # Path 2: Check latest HomepageProjection CQRS read model
-            if not articles and not is_stale_state:
+            if not resolved_articles and not is_stale_state:
                 try:
                     from app.models.projection import HomepageProjection
                     proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
@@ -337,8 +337,8 @@ async def list_articles(
                                 logger.warning(f"Partial resolution in HomepageProjection v{latest_projection.projection_version}: requested {len(story_ids)}, resolved {len(articles_map)}. Triggering rebuild.")
                                 is_stale_state = True
                             else:
-                                articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
-                                ranked_ids = [str(a.id) for a in articles]
+                                resolved_articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
+                                ranked_ids = [str(a.id) for a in resolved_articles]
                                 try:
                                     import asyncio
                                     algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
@@ -359,27 +359,101 @@ async def list_articles(
                     logger.warning(f"HomepageProjection Path 2 read failed: {e}. Falling back to rebuild.")
 
             # Path 3: Concurrent-safe rebuild using RedisDistributedLock with safe fallback path (Guardrail #3)
-            if not articles or is_stale_state:
+            if not resolved_articles or is_stale_state:
                 from app.core.redis import RedisDistributedLock
                 from app.editorial.homepage_builder import HomepageBuilder
-            EntityNode, EntityNode.id == ArticleEntityLink.entity_id
-        ).where(ArticleEntityLink.article_id.in_(art_ids))
-        e_res = await db.execute(e_stmt)
-        for row in e_res.all():
-            art_id_str = str(row[0])
-            if len(entities_by_art.get(art_id_str, [])) < 3:
-                entities_by_art.setdefault(art_id_str, []).append(row[1])
+                from app.services.cache_service import CacheService
+                from app.services.ranking.news_ranking_engine import expire_articles
 
-    articles_list = []
-    for art in articles:
-        topics = topics_by_art.get(str(art.id), [])
-        entities = entities_by_art.get(str(art.id), [])
-        card = ArticleCard.from_model(
-            art,
-            topics=topics,
-            entities=entities
-        )
-        articles_list.append(card)
+                lock = RedisDistributedLock("homepage_projection_rebuild", expire_seconds=30)
+                try:
+                    async with lock:
+                        logger.info("Acquired homepage rebuild lock. Executing canonical expiration and homepage projection rebuild.")
+                        await CacheService.invalidate_homepage_cache(reason="projection_rebuild")
+                        await expire_articles(db)
+                        global_articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
+                        await HomepageBuilder.build_and_persist_category_desks(db)
+                        resolved_articles = global_articles
+                        ranked_ids = [str(a.id) for a in global_articles]
+
+                        # Fetch the newly created projection metadata
+                        from app.models.projection import HomepageProjection
+                        new_proj_res = await db.execute(select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1))
+                        new_proj = new_proj_res.scalars().first()
+
+                        try:
+                            import asyncio
+                            algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
+                            cache_payload = {
+                                "projection_id": str(new_proj.id) if new_proj else "",
+                                "projection_version": new_proj.projection_version if new_proj else 1,
+                                "algorithm_version": algo_ver,
+                                "generated_at": datetime.now(timezone.utc).isoformat(),
+                                "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+                                "article_ids": ranked_ids
+                            }
+                            redis = get_redis_client()
+                            if redis:
+                                await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=REDIS_OP_TIMEOUT)
+                        except Exception as e:
+                            logger.warning(f"Redis cache write failed: {e}")
+                except Exception as lock_err:
+                    logger.warning(f"Could not acquire rebuild lock (or lock failed): {lock_err}. Falling back to DB read model.")
+                    from app.editorial.homepage_builder import HomepageBuilder
+                    resolved_articles = await HomepageBuilder.build_homepage(db)
+
+            # If category filter is active, filter from the global ranked articles
+            if category:
+                category_lower = category.lower().strip()
+                filtered_articles = []
+                for art in resolved_articles:
+                    topic_stmt = select(ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id == art.id)
+                    topic_res = await db.execute(topic_stmt)
+                    topics = topic_res.scalars().all()
+                    if any(category_lower in t.lower() for t in topics):
+                        filtered_articles.append(art)
+                resolved_articles = filtered_articles
+
+            # Paginate by slicing
+            resolved_articles = resolved_articles[:limit]
+
+            # Batch fetch topics and entities for all articles in 2 single queries (eliminates N+1 loop delay)
+            art_ids = [art.id for art in resolved_articles]
+            topics_by_art: dict[str, list[str]] = {}
+            entities_by_art: dict[str, list[str]] = {}
+
+            if art_ids:
+                from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
+                # 1. Batch topics
+                t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
+                t_res = await db.execute(t_stmt)
+                for row in t_res.all():
+                    topics_by_art.setdefault(str(row[0]), []).append(row[1])
+
+                # 2. Batch entities
+                e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
+                    EntityNode, EntityNode.id == ArticleEntityLink.entity_id
+                ).where(ArticleEntityLink.article_id.in_(art_ids))
+                e_res = await db.execute(e_stmt)
+                for row in e_res.all():
+                    art_id_str = str(row[0])
+                    if len(entities_by_art.get(art_id_str, [])) < 3:
+                        entities_by_art.setdefault(art_id_str, []).append(row[1])
+
+            return [
+                ArticleCard.from_model(
+                    art,
+                    topics=topics_by_art.get(str(art.id), []),
+                    entities=entities_by_art.get(str(art.id), [])
+                ) for art in resolved_articles
+            ]
+
+        try:
+            from app.core.database import safe_db_execute
+            articles_list = await safe_db_execute(fetch_homepage_articles)
+        except Exception as exc:
+            logger.error(f"Error fetching homepage articles: {exc}", exc_info=True)
+            articles_list = []
 
     if not category and not cursor and articles_list:
         raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
@@ -517,7 +591,7 @@ async def get_category_desks():
     except Exception:
         pass
 
-    from app.core.database import AsyncSessionLocal
+    from app.core.database import safe_db_execute
     from app.models.projection import CategoryDeskProjection
     from app.models.article import ArticleReadModel, ProcessedArticle
     from pathlib import Path
@@ -528,130 +602,133 @@ async def get_category_desks():
     now_utc = datetime.now(timezone.utc)
     logger = logging.getLogger("tech_news.routes.news")
 
-    try:
-        async with AsyncSessionLocal() as db:
-            # 1. Load configuration
-            policy_path = Path(__file__).resolve().parents[3] / "editorial" / "category_policy.yaml"
-            policy_data = {}
-            if policy_path.exists():
-                with open(policy_path, "r", encoding="utf-8") as f:
-                    policy_data = yaml.safe_load(f) or {}
-            
-            categories_cfg = policy_data.get("categories", {})
+    async def fetch_category_desks(db):
+        # 1. Load configuration
+        policy_path = Path(__file__).resolve().parents[3] / "editorial" / "category_policy.yaml"
+        policy_data = {}
+        if policy_path.exists():
+            with open(policy_path, "r", encoding="utf-8") as f:
+                policy_data = yaml.safe_load(f) or {}
+        
+        categories_cfg = policy_data.get("categories", {})
 
-            # 2. Query all projections
+        # 2. Query all projections
+        stmt = select(CategoryDeskProjection)
+        res = await db.execute(stmt)
+        projections = res.scalars().all()
+
+        # Check if existing projections are older than 24 hours
+        is_stale_desks = False
+        if projections:
+            for p in projections:
+                rebuilt_dt = p.rebuilt_at or p.created_at
+                if rebuilt_dt:
+                    if rebuilt_dt.tzinfo is None:
+                        rebuilt_dt = rebuilt_dt.replace(tzinfo=timezone.utc)
+                    if (now_utc - rebuilt_dt).total_seconds() > 86400:
+                        is_stale_desks = True
+                        break
+
+        # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
+        has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
+        if not projections or not has_valid_articles or is_stale_desks:
+            from app.editorial.homepage_builder import HomepageBuilder
+            await HomepageBuilder.build_and_persist_category_desks(db)
             stmt = select(CategoryDeskProjection)
             res = await db.execute(stmt)
             projections = res.scalars().all()
 
-            # Check if existing projections are older than 24 hours
-            is_stale_desks = False
-            if projections:
-                for p in projections:
-                    rebuilt_dt = p.rebuilt_at or p.created_at
-                    if rebuilt_dt:
-                        if rebuilt_dt.tzinfo is None:
-                            rebuilt_dt = rebuilt_dt.replace(tzinfo=timezone.utc)
-                        if (now_utc - rebuilt_dt).total_seconds() > 86400:
-                            is_stale_desks = True
-                            break
-
-            # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
-            has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
-            if not projections or not has_valid_articles or is_stale_desks:
-                from app.editorial.homepage_builder import HomepageBuilder
-                await HomepageBuilder.build_and_persist_category_desks(db)
-                stmt = select(CategoryDeskProjection)
-                res = await db.execute(stmt)
-                projections = res.scalars().all()
-
-            # 3. Collect all article IDs needed
-            all_article_ids = set()
-            for p in projections:
-                if p.article_ids:
-                    all_article_ids.update(p.article_ids)
-            
-            articles_map = {}
-            if all_article_ids:
-                from sqlalchemy.orm import defer
-                art_stmt = (
-                    select(ArticleReadModel)
-                    .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
-                    .where(
-                        ArticleReadModel.id.in_(all_article_ids),
-                        ArticleReadModel.is_test_data == False,
-                        ArticleReadModel.publication_status == "PUBLISHED",
-                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
-                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
-                        or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
-                    )
-                    .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+        # 3. Collect all article IDs needed
+        all_article_ids = set()
+        for p in projections:
+            if p.article_ids:
+                all_article_ids.update(p.article_ids)
+        
+        articles_map = {}
+        if all_article_ids:
+            from sqlalchemy.orm import defer
+            art_stmt = (
+                select(ArticleReadModel)
+                .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                .where(
+                    ArticleReadModel.id.in_(all_article_ids),
+                    ArticleReadModel.is_test_data == False,
+                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                    or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
                 )
-                res = await db.execute(art_stmt)
-                articles_map = {str(a.id): a for a in res.scalars().all()}
+                .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+            )
+            res = await db.execute(art_stmt)
+            articles_map = {str(a.id): a for a in res.scalars().all()}
 
-            # 4. Fetch topics and entities in bulk
-            topics_by_art: dict[str, list[str]] = {}
-            entities_by_art: dict[str, list[str]] = {}
-            if all_article_ids:
-                try:
-                    t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(all_article_ids))
-                    t_res = await db.execute(t_stmt)
-                    for row in t_res.all():
-                        topics_by_art.setdefault(str(row[0]), []).append(row[1])
-
-                    e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
-                        EntityNode, EntityNode.id == ArticleEntityLink.entity_id
-                    ).where(ArticleEntityLink.article_id.in_(all_article_ids))
-                    e_res = await db.execute(e_stmt)
-                    for row in e_res.all():
-                        art_id_str = str(row[0])
-                        if len(entities_by_art.get(art_id_str, [])) < 3:
-                            entities_by_art.setdefault(art_id_str, []).append(row[1])
-                except Exception as meta_err:
-                    logger.warning(f"Error loading topic/entity metadata for category desks: {meta_err}")
-
-            desks = []
-            for p in projections:
-                slug = p.category_slug
-                cfg = categories_cfg.get(slug, {})
-                headline = cfg.get("headline", slug.replace("-", " ").title())
-                display_order = cfg.get("display_order", 99)
-
-                desk_articles = []
-                if p.article_ids:
-                    for aid in p.article_ids:
-                        art = articles_map.get(str(aid))
-                        if art:
-                            card = ArticleCard.from_model(
-                                art,
-                                topics=topics_by_art.get(str(art.id), []),
-                                entities=entities_by_art.get(str(art.id), [])
-                            )
-                            desk_articles.append(card.model_dump(mode="json") if hasattr(card, "model_dump") else card.dict())
-
-                if not desk_articles:
-                    continue
-
-                desks.append({
-                    "slug": slug,
-                    "headline": headline,
-                    "display_order": display_order,
-                    "articles": desk_articles
-                })
-
-            desks.sort(key=lambda x: x["display_order"])
-
+        # 4. Fetch topics and entities in bulk
+        topics_by_art: dict[str, list[str]] = {}
+        entities_by_art: dict[str, list[str]] = {}
+        if all_article_ids:
             try:
-                redis = get_redis_client()
-                if redis and desks:
-                    await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=120), timeout=1.0)
-            except Exception:
-                pass
+                t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(all_article_ids))
+                t_res = await db.execute(t_stmt)
+                for row in t_res.all():
+                    topics_by_art.setdefault(str(row[0]), []).append(row[1])
 
-            return desks
+                e_stmt = select(ArticleEntityLink.article_id, EntityNode.canonical_name).join(
+                    EntityNode, EntityNode.id == ArticleEntityLink.entity_id
+                ).where(ArticleEntityLink.article_id.in_(all_article_ids))
+                e_res = await db.execute(e_stmt)
+                for row in e_res.all():
+                    art_id_str = str(row[0])
+                    if len(entities_by_art.get(art_id_str, [])) < 3:
+                        entities_by_art.setdefault(art_id_str, []).append(row[1])
+            except Exception as meta_err:
+                logger.warning(f"Error loading topic/entity metadata for category desks: {meta_err}")
+
+        desks = []
+        for p in projections:
+            slug = p.category_slug
+            cfg = categories_cfg.get(slug, {})
+            headline = cfg.get("headline", slug.replace("-", " ").title())
+            display_order = cfg.get("display_order", 99)
+
+            desk_articles = []
+            if p.article_ids:
+                for aid in p.article_ids:
+                    art = articles_map.get(str(aid))
+                    if art:
+                        card = ArticleCard.from_model(
+                            art,
+                            topics=topics_by_art.get(str(art.id), []),
+                            entities=entities_by_art.get(str(art.id), [])
+                        )
+                        desk_articles.append(card.model_dump(mode="json") if hasattr(card, "model_dump") else card.dict())
+
+            if not desk_articles:
+                continue
+
+            desks.append({
+                "slug": slug,
+                "headline": headline,
+                "display_order": display_order,
+                "articles": desk_articles
+            })
+
+        desks.sort(key=lambda d: d["display_order"])
+        return desks
+
+    try:
+        desks = await safe_db_execute(fetch_category_desks)
+
+        try:
+            redis = get_redis_client()
+            if redis and desks:
+                await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=60), timeout=1.0)
+        except Exception:
+            pass
+
+        return desks
     except Exception as e:
-        logger.error(f"Error generating category desks: {e}", exc_info=True)
+        logger.error(f"Error serving category desks: {e}", exc_info=True)
         return []
 
 
