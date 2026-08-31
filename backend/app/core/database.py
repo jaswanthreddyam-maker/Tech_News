@@ -104,13 +104,17 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             try:
                 await session.rollback()
             except Exception:
                 pass
             raise
+        finally:
+            try:
+                await session.close()
+            except Exception:
+                pass
 
 
 # Startup verification helper with exponential retry logic and precise latency measurement
