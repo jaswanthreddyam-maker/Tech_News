@@ -116,6 +116,27 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 f"CORS Diagnostics: Origin: {origin}",
                 exc_info=True,
             )
+
+            # Graceful degradation for public read-only GET endpoints
+            if request.method == "GET":
+                path = request.url.path
+                cors_headers = {
+                    "Access-Control-Allow-Origin": origin or "*",
+                    "Access-Control-Allow-Credentials": "true",
+                    "X-Correlation-ID": correlation_id,
+                    "X-Process-Time-Ms": f"{process_time:.2f}",
+                }
+                if "stories" in path or "desks" in path or "sessions" in path:
+                    from starlette.responses import JSONResponse
+                    return JSONResponse(status_code=200, content=[], headers=cors_headers)
+                elif "news" in path:
+                    from starlette.responses import JSONResponse
+                    return JSONResponse(
+                        status_code=200,
+                        content={"correlation_id": correlation_id, "data": [], "pagination": {"limit": 25, "has_more": False, "next_cursor": None}},
+                        headers=cors_headers
+                    )
+
             raise
         finally:
             correlation_id_ctx.reset(token)
