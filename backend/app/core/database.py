@@ -42,36 +42,17 @@ import_all_models()
 
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
-is_testing = os.getenv("USE_NULL_POOL", "0") == "1" or "pytest" in sys.modules
-
-if is_testing:
-    engine_kwargs = {
-        "pool_pre_ping": True,
-        "echo": False,
-        "future": True,
-        "poolclass": NullPool,
-        "connect_args": {
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
-            "command_timeout": 30,
-        },
-    }
-else:
-    engine_kwargs = {
-        "pool_pre_ping": True,
-        "echo": False,
-        "future": True,
-        "poolclass": AsyncAdaptedQueuePool,
-        "pool_size": 3,
-        "max_overflow": 2,
-        "pool_timeout": 10.0,
-        "pool_recycle": 300,
-        "connect_args": {
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
-            "command_timeout": 30,
-        },
-    }
+engine_kwargs = {
+    "pool_pre_ping": True,
+    "echo": False,
+    "future": True,
+    "poolclass": NullPool,
+    "connect_args": {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+        "command_timeout": 30,
+    },
+}
 
 async_engine = create_async_engine(
     settings.DATABASE_URL,
@@ -83,7 +64,7 @@ AsyncSessionLocal = sessionmaker(
 )
 
 def configure_database_pool(pool_size: int = 3, max_overflow: int = 2):
-    """Configures database connection pool with strict AsyncAdaptedQueuePool bounds to prevent Supabase saturation."""
+    """Configures database connection pool with NullPool to prevent Supabase saturation."""
     global async_engine
     if is_testing:
         return
@@ -92,11 +73,7 @@ def configure_database_pool(pool_size: int = 3, max_overflow: int = 2):
         "pool_pre_ping": True,
         "echo": False,
         "future": True,
-        "poolclass": AsyncAdaptedQueuePool,
-        "pool_size": pool_size,
-        "max_overflow": max_overflow,
-        "pool_timeout": 10.0,
-        "pool_recycle": 300,
+        "poolclass": NullPool,
         "connect_args": {
             "statement_cache_size": 0,
             "prepared_statement_cache_size": 0,
@@ -106,7 +83,7 @@ def configure_database_pool(pool_size: int = 3, max_overflow: int = 2):
     new_engine = create_async_engine(settings.DATABASE_URL, **queue_kwargs)
     async_engine = new_engine
     AsyncSessionLocal.configure(bind=new_engine)
-    logger.info(f"Database connection pool configured with AsyncAdaptedQueuePool(pool_size={pool_size}, max_overflow={max_overflow})")
+    logger.info("Database connection pool configured with NullPool for Supabase pgBouncer")
 
 
 def configure_database_nullpool():
@@ -163,32 +140,13 @@ async def safe_db_execute(fn, fallback=None, max_retries: int = 5, initial_backo
             session = AsyncSessionLocal()
             result = await fn(session)
             return result
-        except Exception as exc:
+        except BaseException as exc:
             last_exc = exc
             if session is not None:
                 try:
                     await session.rollback()
-                except Exception:
+                except BaseException:
                     pass
-            
-            err_str = str(exc).lower()
-            is_transient = any(phrase in err_str for phrase in [
-                "emaxconnsession",
-                "max clients",
-                "connection limit",
-                "toomanyconnections",
-                "53300",
-                "pool",
-                "connection",
-                "closed",
-                "timeout",
-                "socket",
-                "operationalerror",
-                "interfaceerror",
-                "internalclienterror",
-                "driver",
-                "cannot perform operation",
-            ])
             
             if attempt < max_retries - 1:
                 sleep_time = (attempt + 1) * initial_backoff
@@ -201,7 +159,7 @@ async def safe_db_execute(fn, fallback=None, max_retries: int = 5, initial_backo
             if session is not None:
                 try:
                     await session.close()
-                except Exception:
+                except BaseException:
                     pass
 
     if fallback is not None:
