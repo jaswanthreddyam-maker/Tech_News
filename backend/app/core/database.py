@@ -40,21 +40,38 @@ def import_all_models():
 
 import_all_models()
 
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 is_testing = os.getenv("USE_NULL_POOL", "0") == "1" or "pytest" in sys.modules
 
-engine_kwargs = {
-    "pool_pre_ping": True,
-    "echo": False,
-    "future": True,
-    "poolclass": NullPool,
-    "connect_args": {
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-        "command_timeout": 30,
-    },
-}
+if is_testing:
+    engine_kwargs = {
+        "pool_pre_ping": True,
+        "echo": False,
+        "future": True,
+        "poolclass": NullPool,
+        "connect_args": {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "command_timeout": 30,
+        },
+    }
+else:
+    engine_kwargs = {
+        "pool_pre_ping": True,
+        "echo": False,
+        "future": True,
+        "poolclass": AsyncAdaptedQueuePool,
+        "pool_size": 3,
+        "max_overflow": 2,
+        "pool_timeout": 10.0,
+        "pool_recycle": 300,
+        "connect_args": {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "command_timeout": 30,
+        },
+    }
 
 async_engine = create_async_engine(
     settings.DATABASE_URL,
@@ -65,19 +82,35 @@ AsyncSessionLocal = sessionmaker(
     bind=async_engine, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False
 )
 
-def configure_database_pool(pool_size: int = 2, max_overflow: int = 1):
-    """Reconfigure database connection pool with NullPool by default for PgBouncer safety."""
+def configure_database_pool(pool_size: int = 3, max_overflow: int = 2):
+    """Configures database connection pool with strict AsyncAdaptedQueuePool bounds to prevent Supabase saturation."""
     global async_engine
-    configure_database_nullpool()
+    if is_testing:
+        return
+
+    queue_kwargs = {
+        "pool_pre_ping": True,
+        "echo": False,
+        "future": True,
+        "poolclass": AsyncAdaptedQueuePool,
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
+        "pool_timeout": 10.0,
+        "pool_recycle": 300,
+        "connect_args": {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "command_timeout": 30,
+        },
+    }
+    new_engine = create_async_engine(settings.DATABASE_URL, **queue_kwargs)
+    async_engine = new_engine
+    AsyncSessionLocal.configure(bind=new_engine)
+    logger.info(f"Database connection pool configured with AsyncAdaptedQueuePool(pool_size={pool_size}, max_overflow={max_overflow})")
 
 
 def configure_database_nullpool():
-    """Use NullPool for Celery workers — no persistent connections.
-    
-    Each query creates a fresh connection and releases it immediately.
-    This prevents connection accumulation across multiple forked workers
-    that share a limited pgBouncer session-mode pool (e.g. Supabase 15-conn limit).
-    """
+    """Use NullPool for Celery workers — no persistent connections."""
     global async_engine
     if is_testing:
         return
@@ -90,13 +123,13 @@ def configure_database_nullpool():
         "connect_args": {
             "statement_cache_size": 0,
             "prepared_statement_cache_size": 0,
-            "command_timeout": 30,  # Prevent slow queries from holding connections indefinitely
+            "command_timeout": 30,
         },
     }
     new_engine = create_async_engine(settings.DATABASE_URL, **nullpool_kwargs)
     async_engine = new_engine
     AsyncSessionLocal.configure(bind=new_engine)
-    logger.info("Database connection pool configured with NullPool (no persistent connections)")
+    logger.info("Database connection pool configured with NullPool")
 
 
 # Dynamic Dependency Injection for API routes
