@@ -247,9 +247,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 class DatabaseRetryMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        if request.method != "GET":
+            return await call_next(request)
+
         for attempt in range(3):
             try:
-                return await call_next(request)
+                response = await call_next(request)
+                if response.status_code == 500 and attempt < 2:
+                    # Retry transient 500 database session saturation on GET requests
+                    await asyncio.sleep(0.15 * (attempt + 1))
+                    continue
+                return response
             except Exception as exc:
                 err_str = str(exc)
                 if ("EMAXCONNSESSION" in err_str or "TooManyConnectionsError" in err_str or "connection limit" in err_str.lower()) and attempt < 2:
