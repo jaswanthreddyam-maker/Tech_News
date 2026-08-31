@@ -271,10 +271,50 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class DatabaseRetryAndDegradeMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "GET":
+            path = request.url.path
+            is_public_read = any(seg in path for seg in ["stories", "desks", "sessions", "news", "articles"])
+            
+            for attempt in range(3):
+                try:
+                    response = await call_next(request)
+                    if response.status_code < 500 or not is_public_read:
+                        return response
+                    
+                    if attempt < 2:
+                        import asyncio
+                        await asyncio.sleep(0.15 * (attempt + 1))
+                        continue
+                except Exception:
+                    if attempt < 2 and is_public_read:
+                        import asyncio
+                        await asyncio.sleep(0.15 * (attempt + 1))
+                        continue
+                    if not is_public_read:
+                        raise
+
+            if is_public_read:
+                origin = request.headers.get("origin")
+                headers = _get_cors_headers(request)
+                if "stories" in path or "desks" in path or "sessions" in path:
+                    return JSONResponse(status_code=200, content=[], headers=headers)
+                elif "news" in path:
+                    return JSONResponse(
+                        status_code=200,
+                        content={"correlation_id": "fallback", "data": [], "pagination": {"limit": 25, "has_more": False, "next_cursor": None}},
+                        headers=headers
+                    )
+
+        return await call_next(request)
+
+
 # Middleware stack: added in reverse order (last added = first executed).
 # CORSMiddleware MUST be the outermost middleware so it processes
 # preflight OPTIONS and attaches headers even when inner middleware fails.
 
+app.add_middleware(DatabaseRetryAndDegradeMiddleware)
 app.add_middleware(MaintenanceModeMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
