@@ -478,7 +478,7 @@ class HomepageBuilder:
             if proj:
                 proj.article_ids = article_ids
                 proj.article_count = len(article_ids)
-                proj.rebuilt_at = datetime.utcnow()
+                proj.rebuilt_at = datetime.now(timezone.utc)
                 proj.algorithm_version = algo_ver
                 proj.policy_version = "v1"
                 proj.build_duration_ms = build_duration
@@ -487,7 +487,7 @@ class HomepageBuilder:
                     category_slug=cat_slug,
                     article_ids=article_ids,
                     article_count=len(article_ids),
-                    rebuilt_at=datetime.utcnow(),
+                    rebuilt_at=datetime.now(timezone.utc),
                     projection_version=pipeline_ver,
                     algorithm_version=algo_ver,
                     policy_version="v1",
