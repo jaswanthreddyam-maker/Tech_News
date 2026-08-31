@@ -348,6 +348,9 @@ def json_dumps_helpers(obj: Any) -> str:
     return json.dumps(obj)
 
 
+_feature_flag_cache: dict[str, tuple[bool, float]] = {}
+
+
 async def collect_ai_queue_metrics(pipe=None):
     """Fast Collector (Every 10s): Queue and Provider Health"""
     try:
@@ -372,8 +375,19 @@ async def collect_ai_queue_metrics(pipe=None):
                         func.avg(RawArticle.retry_count),
                     ).where(RawArticle.status == "ai_queued")
                 )
-                flag_res = await db.execute(select(FeatureFlag).where(FeatureFlag.key == "ai_enrichment_enabled"))
-                return queue_stats_res.one_or_none(), flag_res.scalars().first()
+
+                # Check 60s in-memory cache for feature flag to eliminate unnecessary DB round-trips
+                now_ts = time.time()
+                cached_flag = _feature_flag_cache.get("ai_enrichment_enabled")
+                if cached_flag is not None and now_ts < cached_flag[1]:
+                    flag_enabled = cached_flag[0]
+                else:
+                    flag_res = await db.execute(select(FeatureFlag).where(FeatureFlag.key == "ai_enrichment_enabled"))
+                    flag = flag_res.scalars().first()
+                    flag_enabled = flag.default_value if flag else False
+                    _feature_flag_cache["ai_enrichment_enabled"] = (flag_enabled, now_ts + 60.0)
+
+                return queue_stats_res.one_or_none(), flag_enabled
 
         async def _fetch_redis():
             return await client.mget(
@@ -386,7 +400,7 @@ async def collect_ai_queue_metrics(pipe=None):
         db_results, redis_results = await asyncio.gather(_fetch_db(), _fetch_redis())
         _timings["concurrent_fetch"] = (_t() - _t0) * 1000
 
-        queue_stats, flag = db_results
+        queue_stats, enabled = db_results
         failed_raw, recovered_raw, last_success_ts, recent_errors_raw = redis_results
 
         depth = queue_stats[0] if queue_stats and queue_stats[0] else 0
@@ -418,7 +432,6 @@ async def collect_ai_queue_metrics(pipe=None):
         }
 
         # Provider Metrics
-        enabled = flag.default_value if flag else False
         recent_errors = int(recent_errors_raw or 0)
         last_success_sec = (time.time() - float(last_success_ts)) if last_success_ts else 999999
         healthy = bool(enabled and (last_success_sec < 600) and (recent_errors < 50))
