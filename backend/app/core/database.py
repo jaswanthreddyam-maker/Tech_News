@@ -101,20 +101,20 @@ def configure_database_nullpool():
 
 # Dynamic Dependency Injection for API routes
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as session:
+    session = AsyncSessionLocal()
+    try:
+        yield session
+    except Exception:
         try:
-            yield session
+            await session.rollback()
         except Exception:
-            try:
-                await session.rollback()
-            except Exception:
-                pass
-            raise
-        finally:
-            try:
-                await session.close()
-            except Exception:
-                pass
+            pass
+        raise
+    finally:
+        try:
+            await session.close()
+        except Exception:
+            pass
 
 
 # Startup verification helper with exponential retry logic and precise latency measurement

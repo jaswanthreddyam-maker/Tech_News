@@ -40,6 +40,22 @@ async def get_behavioral_sessions(
     Retrieve reading sessions.
     Can filter by 'in_progress' to get incomplete articles for Resume Reading.
     """
+    import asyncio
+    import json
+    from app.core.redis import get_redis_client
+
+    user_key = str(current_user.id) if current_user else (anonymous_id or "none")
+    cache_key = f"behavioral:v2:sessions:{user_key}:{status or 'all'}:{limit}"
+
+    try:
+        redis = get_redis_client()
+        if redis:
+            cached_data = await asyncio.wait_for(redis.get(cache_key), timeout=1.0)
+            if cached_data:
+                return json.loads(cached_data)
+    except Exception:
+        pass
+
     try:
         query = (
             select(ReadingSession, ProcessedArticle.title, ProcessedArticle.slug)
@@ -76,6 +92,14 @@ async def get_behavioral_sessions(
                     is_completed=session.is_completed or False,
                 )
             )
+
+        try:
+            redis = get_redis_client()
+            if redis:
+                raw_payload = [r.model_dump(mode="json") for r in response]
+                await asyncio.wait_for(redis.set(cache_key, json.dumps(raw_payload, default=str), ex=30), timeout=1.0)
+        except Exception:
+            pass
 
         return response
     except Exception as exc:
