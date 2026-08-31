@@ -28,12 +28,14 @@ async def ingest_behavioral_events(
     return result
 
 
+from starlette.requests import Request
+
 @router.get("/sessions", response_model=list[ReadingSessionResponse])
 async def get_behavioral_sessions(
+    request: Request,
     status: str | None = Query(None, description="Filter by status (e.g., 'in_progress')"),
     limit: int = Query(10, le=50),
     anonymous_id: str | None = Query(None),
-    current_user: User | None = Depends(get_current_user_optional),
 ):
     """
     Retrieve reading sessions.
@@ -42,6 +44,15 @@ async def get_behavioral_sessions(
     import asyncio
     import json
     from app.core.redis import get_redis_client
+
+    current_user = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        try:
+            from app.core.security import get_current_user_optional
+            current_user = await get_current_user_optional(request)
+        except Exception:
+            current_user = None
 
     user_key = str(current_user.id) if current_user else (anonymous_id or "none")
     cache_key = f"behavioral:v2:sessions:{user_key}:{status or 'all'}:{limit}"
