@@ -3,6 +3,12 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://technews-production-d18d.up.railway.app/api/v1/:path*"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
