@@ -632,8 +632,14 @@ async def get_category_desks():
         # Auto-heal: rebuild if projections don't exist, contain no valid articles, or are older than 24h
         has_valid_articles = any(p.article_ids for p in projections if p.article_ids)
         if not projections or not has_valid_articles or is_stale_desks:
+            from app.core.redis import RedisDistributedLock
             from app.editorial.homepage_builder import HomepageBuilder
-            await HomepageBuilder.build_and_persist_category_desks(db)
+            lock = RedisDistributedLock("category_desks_rebuild", expire_seconds=30)
+            try:
+                async with lock:
+                    await HomepageBuilder.build_and_persist_category_desks(db)
+            except Exception as lock_err:
+                logger.warning(f"Could not acquire category desks rebuild lock: {lock_err}")
             stmt = select(CategoryDeskProjection)
             res = await db.execute(stmt)
             projections = res.scalars().all()
@@ -722,7 +728,7 @@ async def get_category_desks():
         try:
             redis = get_redis_client()
             if redis and desks:
-                await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=60), timeout=1.0)
+                await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=300), timeout=1.0)
         except Exception:
             pass
 
