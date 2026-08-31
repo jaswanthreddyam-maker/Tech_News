@@ -87,12 +87,29 @@ async def list_stories(
     from app.core.database import safe_db_execute
 
     async def fetch_stories(db):
-        stmt = select(Story).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
+        stmt = select(
+            Story.id,
+            Story.title,
+            Story.status,
+            Story.impact_score,
+            Story.primary_article_id,
+            Story.created_by,
+        ).order_by(Story.updated_at.desc()).offset(skip).limit(limit)
         if status:
             stmt = stmt.where(Story.status == status)
         result = await db.execute(stmt)
-        raw_stories = result.scalars().all()
-        return [StoryResponse.model_validate(s) for s in raw_stories]
+        rows = result.all()
+        return [
+            StoryResponse(
+                id=str(r[0]),
+                title=r[1] or "",
+                status=r[2] or StoryStatus.ACTIVE,
+                impact_score=r[3],
+                primary_article_id=r[4],
+                created_by=r[5],
+            )
+            for r in rows
+        ]
 
     try:
         stories = await safe_db_execute(fetch_stories, fallback=[])

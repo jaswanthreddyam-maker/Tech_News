@@ -70,7 +70,17 @@ async def get_behavioral_sessions(
 
     async def fetch_sessions(db):
         query = (
-            select(ReadingSession, ProcessedArticle.title, ProcessedArticle.slug)
+            select(
+                ReadingSession.session_id,
+                ReadingSession.article_id,
+                ReadingSession.started_at,
+                ReadingSession.last_activity_at,
+                ReadingSession.total_reading_seconds,
+                ReadingSession.completion_percentage,
+                ReadingSession.is_completed,
+                ProcessedArticle.title,
+                ProcessedArticle.slug,
+            )
             .outerjoin(ProcessedArticle, ReadingSession.article_id == ProcessedArticle.id)
         )
 
@@ -90,18 +100,18 @@ async def get_behavioral_sessions(
         results = result.all()
 
         response = []
-        for session, title, slug in results:
+        for sid, aid, started, last_act, total_sec, comp_pct, is_comp, title, slug in results:
             response.append(
                 ReadingSessionResponse(
-                    session_id=session.session_id,
-                    article_id=session.article_id or 0,
+                    session_id=sid,
+                    article_id=aid or 0,
                     article_title=title or "Continue Reading",
                     article_slug=slug or "",
-                    started_at=session.started_at,
-                    last_activity_at=session.last_activity_at,
-                    total_reading_seconds=session.total_reading_seconds or 0,
-                    completion_percentage=session.completion_percentage or 0,
-                    is_completed=session.is_completed or False,
+                    started_at=started,
+                    last_activity_at=last_act,
+                    total_reading_seconds=total_sec or 0,
+                    completion_percentage=comp_pct or 0,
+                    is_completed=is_comp or False,
                 )
             )
         return response
