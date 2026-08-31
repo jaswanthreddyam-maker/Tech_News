@@ -98,7 +98,7 @@ async def list_stories(
         stories = await safe_db_execute(fetch_stories, fallback=[])
         try:
             redis = get_redis_client()
-            if redis and stories:
+            if redis and stories is not None:
                 stories_payload = [s.model_dump(mode="json") if hasattr(s, "model_dump") else s for s in stories]
                 await asyncio.wait_for(redis.set(cache_key, json.dumps(stories_payload, default=str), ex=60), timeout=1.0)
         except Exception:

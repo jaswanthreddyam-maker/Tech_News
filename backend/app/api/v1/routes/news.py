@@ -134,10 +134,10 @@ async def list_articles(
             from app.core.database import safe_db_execute
             articles_list = await safe_db_execute(fetch_fresh_data, fallback=[])
 
-            # Cache in Redis with 60s TTL
+            # Cache in Redis with 180s TTL
             try:
                 redis = get_redis_client()
-                if redis and articles_list and not category and not cursor:
+                if redis and articles_list is not None and not category and not cursor:
                     raw_cards = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c.dict() for c in articles_list]
                     await asyncio.wait_for(redis.set(cache_key_fresh, json.dumps(raw_cards, default=str), ex=180), timeout=REDIS_OP_TIMEOUT)
             except Exception:
@@ -699,7 +699,7 @@ async def get_category_desks():
 
         try:
             redis = get_redis_client()
-            if redis and desks:
+            if redis and desks is not None:
                 await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=300), timeout=1.0)
         except Exception:
             pass
