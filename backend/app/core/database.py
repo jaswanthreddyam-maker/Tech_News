@@ -158,16 +158,18 @@ async def safe_db_execute(fn, fallback=None, max_retries: int = 5, initial_backo
     """
     last_exc = None
     for attempt in range(max_retries):
-        session = AsyncSessionLocal()
+        session = None
         try:
+            session = AsyncSessionLocal()
             result = await fn(session)
             return result
         except Exception as exc:
             last_exc = exc
-            try:
-                await session.rollback()
-            except Exception:
-                pass
+            if session is not None:
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
             
             err_str = str(exc).lower()
             is_transient = any(phrase in err_str for phrase in [
@@ -183,22 +185,24 @@ async def safe_db_execute(fn, fallback=None, max_retries: int = 5, initial_backo
                 "socket",
                 "operationalerror",
                 "interfaceerror",
+                "internalclienterror",
+                "driver",
+                "cannot perform operation",
             ])
             
-            if is_transient and attempt < max_retries - 1:
+            if attempt < max_retries - 1:
                 sleep_time = (attempt + 1) * initial_backoff
-                logger.warning(f"Database contention/transient error (attempt {attempt+1}/{max_retries}): {exc}. Retrying in {sleep_time:.2f}s...")
+                logger.warning(f"Database retry (attempt {attempt+1}/{max_retries}): {exc}. Retrying in {sleep_time:.2f}s...")
                 await asyncio.sleep(sleep_time)
                 continue
-            
-            if not is_transient:
-                logger.error(f"Non-transient database error: {exc}", exc_info=True)
+            else:
                 break
         finally:
-            try:
-                await session.close()
-            except Exception:
-                pass
+            if session is not None:
+                try:
+                    await session.close()
+                except Exception:
+                    pass
 
     if fallback is not None:
         logger.warning(f"Database query exhausted {max_retries} retries ({last_exc}). Returning graceful fallback.")

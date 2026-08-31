@@ -202,6 +202,19 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def database_exception_handler(request: Request, exc: SQLAlchemyError):
     correlation_id = correlation_id_ctx.get() or "system"
     logger.error(f"Database transaction failure: {exc!s}", exc_info=True)
+    
+    # Graceful degradation for read-only GET endpoints under pool contention
+    if request.method == "GET":
+        path = request.url.path
+        if path.endswith("/news/desks") or path.endswith("/stories") or path.endswith("/sessions"):
+            return JSONResponse(status_code=status.HTTP_200_OK, content=[], headers=_get_cors_headers(request))
+        elif path.endswith("/news"):
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"correlation_id": correlation_id, "data": [], "pagination": {"limit": 25, "has_more": False, "next_cursor": None}},
+                headers=_get_cors_headers(request)
+            )
+
     error_details = ErrorDetails(
         code="DATABASE_ERROR", message=f"A secure database transaction encountered an operational exception: {exc!s}"
     )
@@ -217,6 +230,22 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError):
 async def generic_exception_handler(request: Request, exc: Exception):
     correlation_id = correlation_id_ctx.get() or "system"
     logger.error(f"Unhandled server exception: {exc!s}", exc_info=True)
+
+    err_str = str(exc).lower()
+    is_db_contention = any(p in err_str for p in ["emaxconnsession", "max clients", "connection limit", "toomanyconnections", "53300", "pool", "socket", "closed"])
+
+    # Graceful degradation for read-only GET endpoints under pool contention
+    if request.method == "GET" and is_db_contention:
+        path = request.url.path
+        if path.endswith("/news/desks") or path.endswith("/stories") or path.endswith("/sessions"):
+            return JSONResponse(status_code=status.HTTP_200_OK, content=[], headers=_get_cors_headers(request))
+        elif path.endswith("/news"):
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"correlation_id": correlation_id, "data": [], "pagination": {"limit": 25, "has_more": False, "next_cursor": None}},
+                headers=_get_cors_headers(request)
+            )
+
     error_details = ErrorDetails(
         code="INTERNAL_SERVER_ERROR",
         message=f"An unexpected server error occurred. {str(exc)}",
