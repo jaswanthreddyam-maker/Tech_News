@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
     # Configure FastAPI database to use bounded AsyncAdaptedQueuePool (prevents Supabase connection limit exhaustion)
     from app.core.database import configure_database_pool
-    configure_database_pool(pool_size=3, max_overflow=2)
+    configure_database_pool(pool_size=2, max_overflow=1)
 
     # Verify strict PostgreSQL connection
     db_ok = await verify_database_connection(max_retries=5, initial_delay=1.0)
@@ -206,9 +206,9 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError):
     # Graceful degradation for read-only GET endpoints under pool contention
     if request.method == "GET":
         path = request.url.path
-        if path.endswith("/news/desks") or path.endswith("/stories") or path.endswith("/sessions"):
+        if "stories" in path or "desks" in path or "sessions" in path:
             return JSONResponse(status_code=status.HTTP_200_OK, content=[], headers=_get_cors_headers(request))
-        elif path.endswith("/news"):
+        elif "news" in path:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={"correlation_id": correlation_id, "data": [], "pagination": {"limit": 25, "has_more": False, "next_cursor": None}},
@@ -237,9 +237,9 @@ async def generic_exception_handler(request: Request, exc: Exception):
     # Graceful degradation for read-only GET endpoints under pool contention
     if request.method == "GET" and is_db_contention:
         path = request.url.path
-        if path.endswith("/news/desks") or path.endswith("/stories") or path.endswith("/sessions"):
+        if "stories" in path or "desks" in path or "sessions" in path:
             return JSONResponse(status_code=status.HTTP_200_OK, content=[], headers=_get_cors_headers(request))
-        elif path.endswith("/news"):
+        elif "news" in path:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={"correlation_id": correlation_id, "data": [], "pagination": {"limit": 25, "has_more": False, "next_cursor": None}},
