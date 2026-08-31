@@ -86,13 +86,25 @@ export function useOfflineQueue() {
           const clearTx = db.transaction(STORE_NAME, 'readwrite');
           await clearTx.objectStore(STORE_NAME).clear();
         }
-      } catch (err) {
-        console.warn("[Tracker] Failed to flush events to backend:", err);
+      } catch {
+        // Network offline or suspended — events remain safely in IndexedDB queue for the next flush
       }
-    } catch (err) {
-      console.error('Failed to flush events:', err);
+    } catch {
+      // IndexedDB access issue
     }
   }, []);
+
+  // Automatically flush queued events when connectivity returns
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => {
+      import('@/lib/api/anonymousId').then(({ getAnonymousId }) => {
+        flush(getAnonymousId());
+      });
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [flush]);
 
   return { enqueue, flush };
 }

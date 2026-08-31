@@ -123,27 +123,7 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
     }
   }, [compactMode]);
 
-  const createArticleConversation = useCallback(async (articleId: string | number) => {
-    try {
-      const parsedId = typeof articleId === "number" ? articleId : parseInt(articleId, 10);
-      const data = await apiFetch<{ conversation_id: string }>('/chat/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'ARTICLE', article_id: isNaN(parsedId) ? null : parsedId }),
-      });
-      if (data && data.conversation_id) {
-        setConversationId(data.conversation_id);
-      }
-    } catch (err) {
-      // Ignore
-    }
-  }, []);
 
-  useEffect(() => {
-    if (rawData?.article?.id && !conversationId) {
-      createArticleConversation(rawData.article.id);
-    }
-  }, [rawData?.article?.id, conversationId, createArticleConversation]);
 
   // Unpack API response fields
   const { article, content, clean_html, images, knowledge, related, navigation, scoring_debug } = rawData;

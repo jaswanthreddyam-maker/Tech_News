@@ -143,28 +143,63 @@ class WorkerChecker:
         t0 = time.perf_counter()
         try:
             from celery_app import celery_app
+            from celery import current_task
+
+            # If this check is invoked directly from within a Celery worker task,
+            # we know the worker is actively running and healthy.
+            is_inside_worker = bool(current_task and current_task.request and current_task.request.id)
 
             def inspect_workers():
-                inspector = celery_app.control.inspect()
-                pings = inspector.ping()
-                active = inspector.active()
+                inspector = celery_app.control.inspect(timeout=1.0)
+                pings = inspector.ping() if inspector else None
+                active = inspector.active() if inspector else None
                 return pings, active
 
-            pings, active = await asyncio.wait_for(asyncio.to_thread(inspect_workers), timeout=3.0)
-            latency_ms = (time.perf_counter() - t0) * 1000
+            pings = None
+            active = None
+            try:
+                pings, active = await asyncio.wait_for(asyncio.to_thread(inspect_workers), timeout=1.5)
+            except Exception:
+                pass
 
-            workers_online = len(pings) if pings else 0
-            active_count = sum(len(tasks) for tasks in active.values()) if active else 0
+            latency_ms = (time.perf_counter() - t0) * 1000
+            workers_online = len(pings) if pings else (1 if is_inside_worker else 0)
+            active_count = sum(len(tasks) for tasks in active.values()) if active else (1 if is_inside_worker else 0)
+
+            if workers_online > 0:
+                return HealthEvaluationService.evaluate(
+                    service_name=self.service_name,
+                    available=True,
+                    latency_ms=latency_ms,
+                    metrics={
+                        "workers_online": workers_online,
+                        "active_tasks": active_count,
+                        "workers": list(pings.keys()) if pings else ["local_worker"],
+                    },
+                )
+
+            # Fallback check via Redis
+            client = get_redis_client()
+            worker_hb = await client.get("telemetry:v2:celery_worker_heartbeat")
+            if worker_hb or is_inside_worker:
+                return HealthEvaluationService.evaluate(
+                    service_name=self.service_name,
+                    available=True,
+                    latency_ms=latency_ms,
+                    metrics={
+                        "workers_online": 1,
+                        "active_tasks": 1 if is_inside_worker else 0,
+                        "workers": ["heartbeat_worker"],
+                    },
+                )
 
             return HealthEvaluationService.evaluate(
                 service_name=self.service_name,
-                available=True,
+                available=False,
                 latency_ms=latency_ms,
-                metrics={
-                    "workers_online": workers_online,
-                    "active_tasks": active_count,
-                    "workers": list(pings.keys()) if pings else [],
-                },
+                metrics={"workers_online": 0, "active_tasks": 0},
+                error="No workers responded to ping and no recent heartbeat found.",
+                status_reason="timeout",
             )
 
         except Exception as e:
