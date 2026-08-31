@@ -312,12 +312,10 @@ class DatabaseRetryAndDegradeMiddleware(BaseHTTPMiddleware):
 
 # Middleware stack: added in reverse order (last added = first executed).
 # CORSMiddleware MUST be the outermost middleware so it processes
-# preflight OPTIONS and attaches headers even when inner middleware fails.
-
-app.add_middleware(DatabaseRetryAndDegradeMiddleware)
 app.add_middleware(MaintenanceModeMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(DatabaseRetryAndDegradeMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
