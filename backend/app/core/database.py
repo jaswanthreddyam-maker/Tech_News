@@ -42,6 +42,8 @@ import_all_models()
 
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
+is_testing = os.getenv("USE_NULL_POOL", "0") == "1" or "pytest" in sys.modules
+
 engine_kwargs = {
     "pool_pre_ping": True,
     "echo": False,
