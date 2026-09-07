@@ -14,6 +14,7 @@ class ArticleBase(BaseModel):
     url: str
     slug: str
     summary: str | None = None
+    description: str | None = None
     source: str
     reading_time: int = 0
     published_at: datetime | None = None
@@ -49,6 +50,7 @@ class ArticleCard(ArticleBase):
             url=mdict.get("url") or getattr(model, "url", ""),
             slug=str(resolved_slug),
             summary=mdict.get("summary") or getattr(model, "summary", ""),
+            description=mdict.get("description") or mdict.get("summary") or getattr(model, "summary", ""),
             source=mdict.get("source") or getattr(model, "source", ""),
             reading_time=mdict.get("reading_time") or getattr(model, "reading_time", 3),
             published_at=mdict.get("published_at") or getattr(model, "published_at", None),

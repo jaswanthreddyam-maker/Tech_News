@@ -6,6 +6,7 @@ import "@/styles/prose-theme.css";
 
 interface ArticleReaderProps {
   content: string;
+  fallbackSummary?: string;
 }
 
 /**
@@ -16,16 +17,24 @@ interface ArticleReaderProps {
  * - Single batched IntersectionObserver for block-level reveals
  *   (H2, H3, blockquote, figure, pre only — NOT paragraphs)
  * - Reading preference CSS variable hooks
+ * - Narrative fallback when raw HTML contains no readable text
  *
  * The observer is created ONCE for the entire article, not per-element.
  * This is both performant and avoids the "70 paragraphs → 70 animations" problem.
  */
-export function ArticleReader({ content }: ArticleReaderProps) {
+export function ArticleReader({ content, fallbackSummary }: ArticleReaderProps) {
   const { mounted } = useReadingPreferences();
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const plainTextLength = useMemo(() => {
+    return (content || "").replace(/<[^>]*>/g, "").trim().length;
+  }, [content]);
+
   // Process heading IDs for TOC and anchor link support
   const processedContent = useMemo(() => {
+    if (plainTextLength < 25 && fallbackSummary) {
+      return `<p class="lead">${fallbackSummary}</p>`;
+    }
     if (typeof window === "undefined") return content;
 
     try {
@@ -61,7 +70,7 @@ export function ArticleReader({ content }: ArticleReaderProps) {
       console.error("Error processing article headings:", e);
       return content;
     }
-  }, [content]);
+  }, [content, plainTextLength, fallbackSummary]);
 
   // Single batched IntersectionObserver — block-level only
   // Targets: h2, h3, blockquote, figure, pre (NOT p — avoids 70-animations problem)

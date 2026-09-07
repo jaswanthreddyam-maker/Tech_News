@@ -55,6 +55,7 @@ export default async function ArticlePage({ params }: PageProps) {
     "@context": "https://schema.org",
     "@type": "NewsArticle",
     headline: article.metadata.seoTitle,
+    description: article.description || article.summary || undefined,
     image: article.hero_image || article.thumbnail_url ? [article.hero_image || article.thumbnail_url] : [],
     datePublished: article.publishedAt ? article.publishedAt.toISOString() : undefined,
     author: [{

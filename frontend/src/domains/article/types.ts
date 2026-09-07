@@ -53,6 +53,7 @@ export interface CanonicalArticle {
   slug?: string | null;
   title: string;
   summary?: string | null;
+  description?: string | null;
   category?: string | { name?: string } | null;
   image?: string | null;
   imageSource?: MediaSource;

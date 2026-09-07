@@ -449,6 +449,7 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
           <div className="space-y-6">
             <ArticleHeader
               title={article.title}
+              description={article.description || article.summary || ""}
               category={article.category || "News"}
               publishedAt={article.published_at ? new Date(article.published_at).toISOString() : new Date().toISOString()}
               readingTimeMin={article.reading_time || 5}
@@ -544,7 +545,10 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
         content={
           <ArticleRevealSection delay={REVEAL_DELAYS.body}>
             <div className="space-y-6">
-              <ArticleReader content={clean_html || content || ""} />
+              <ArticleReader
+                content={clean_html || content || ""}
+                fallbackSummary={article.description || article.summary || ""}
+              />
               {article.url && (
                 <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3 mt-6">
                   <div className="flex items-center gap-2 text-xs font-mono text-primary font-semibold uppercase tracking-wider">

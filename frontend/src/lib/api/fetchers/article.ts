@@ -17,6 +17,8 @@ export const getArticle = cache(async (slug: string): Promise<any> => {
   const rawArticle = {
     ...payload.data.article,
     id: parseInt(payload.data.article.id, 10),
+    description: payload.data.article.description || payload.data.article.summary || "",
+    summary: payload.data.article.summary || payload.data.article.description || "",
     content: payload.data.content,
     clean_html: payload.data.clean_html,
     hero_image: payload.data.hero_image,

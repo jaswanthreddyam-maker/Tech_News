@@ -51,6 +51,7 @@ export function normalizeCanonicalArticle(dto: BackendArticleDTO | null | undefi
     slug: cleanSlug,
     title: dto.title || "Untitled Story",
     summary: dto.summary || dto.description || null,
+    description: dto.description || dto.summary || null,
     category,
     image: media.url,
     imageSource: media.source,

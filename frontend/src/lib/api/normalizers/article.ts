@@ -2,6 +2,7 @@ import { RawArticlePayload } from "../schemas/article";
 
 export interface NormalizedArticle extends Omit<RawArticlePayload, "published_at" | "related_articles" | "metadata"> {
   publishedAt: Date | null;
+  description: string;
   relatedArticles: Array<{
     id: number;
     title: string;
@@ -55,6 +56,8 @@ export function normalizeArticle(raw: RawArticlePayload): NormalizedArticle {
 
   return {
     ...raw,
+    description: raw.description || raw.summary || "",
+    summary: raw.summary || raw.description || "",
     hero_image: raw.hero_image || raw.image_url || null,
     publishedAt,
     relatedArticles,

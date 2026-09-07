@@ -12,6 +12,7 @@ import { CardHeader } from "@/components/common/card/primitives";
 
 interface ArticleHeaderProps {
   title: string;
+  description?: string;
   category: string;
   publishedAt: string;
   readingTimeMin: number;
@@ -19,7 +20,15 @@ interface ArticleHeaderProps {
   isMultiTopic?: boolean;
 }
 
-export function ArticleHeader({ title, category, publishedAt, readingTimeMin, documentType, isMultiTopic }: ArticleHeaderProps) {
+export function ArticleHeader({
+  title,
+  description,
+  category,
+  publishedAt,
+  readingTimeMin,
+  documentType,
+  isMultiTopic,
+}: ArticleHeaderProps) {
   const shouldReduceMotion = useReducedMotion();
   const { isColdLoad } = useNavigationType();
 
@@ -93,6 +102,18 @@ export function ArticleHeader({ title, category, publishedAt, readingTimeMin, do
       >
         {title}
       </m.h1>
+
+      {/* Lead Story Description / Dek */}
+      {description && (
+        <m.p
+          initial={isColdLoad ? "hidden" : false}
+          animate="visible"
+          variants={metaVariants}
+          className="text-lg md:text-xl text-muted-foreground font-sans leading-relaxed tracking-normal mt-3 max-w-prose"
+        >
+          {description}
+        </m.p>
+      )}
     </header>
   );
 }
