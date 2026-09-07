@@ -3,7 +3,7 @@
 import { useTrending, useCategoryDesks } from "@/components/hooks/articles/useArticles";
 import { useOfflineQueue } from "@/components/reading/tracker/useOfflineQueue";
 import { Sparkles, TrendingUp } from "lucide-react";
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useEffect } from "react";
 import { m, useReducedMotion } from "framer-motion";
 import { FeedArticle, FeedResponseItem } from "./types";
 import { FeaturedStory } from "./FeaturedStory";
@@ -44,29 +44,8 @@ export function TrendingStories() {
   const isLoading = trendingQuery.isLoading && desksQuery.isLoading;
   const error = trendingQuery.isError && desksQuery.isError;
 
-  // Animation Refs & Hooks
-  const sectionRef = useRef<HTMLElement>(null);
-  const [isInView, setIsInView] = useState(false);
+  // Animation Hooks
   const shouldReduceMotion = useReducedMotion();
-
-  useEffect(() => {
-    if (isLoading || isInView) return;
-
-    const section = sectionRef.current;
-    if (!section) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        setIsInView(true);
-        observer.disconnect();
-      },
-      { threshold: 0.15 }
-    );
-
-    observer.observe(section);
-    return () => observer.disconnect();
-  }, [isLoading, isInView]);
 
   // Listen to SSE events for thumbnail updates
   useEffect(() => {
@@ -94,30 +73,27 @@ export function TrendingStories() {
   const getAnimationProps = (idx: number, isFeatured: boolean): any => {
     if (shouldReduceMotion) return {};
 
-    // First: Big giant card starts immediately at delay 0
-    // Then: Right compact cards start after 0.50s lead delay, cascading sequentially top-to-bottom
-    const delay = isFeatured ? 0 : 0.45 + idx * 0.10;
-    const duration = isFeatured ? 1.4 : 1.2;
+    const delay = isFeatured ? 0 : 0.15 + idx * 0.08;
+    const duration = isFeatured ? 0.8 : 0.6;
 
     return {
       initial: {
-        rotateY: isFeatured ? -24 : -16,
-        rotateX: isFeatured ? 5 : 2,
-        z: -30,
+        rotateY: isFeatured ? -12 : -8,
+        rotateX: isFeatured ? 4 : 2,
+        z: -20,
         opacity: 0,
       },
-      animate: isInView
-        ? {
-            rotateY: 0,
-            rotateX: 0,
-            z: 0,
-            opacity: 1,
-          }
-        : undefined,
+      whileInView: {
+        rotateY: 0,
+        rotateX: 0,
+        z: 0,
+        opacity: 1,
+      },
+      viewport: { once: true, amount: 0.02, margin: "150px" },
       transition: {
         duration,
         delay,
-        ease: [0.16, 1, 0.3, 1] as const, // pure compositor GPU transition
+        ease: [0.16, 1, 0.3, 1] as const,
       },
     };
   };
@@ -214,7 +190,7 @@ export function TrendingStories() {
   };
 
   return (
-    <section ref={sectionRef} className="TrendingWall py-8 my-6 w-full">
+    <section className="TrendingWall py-8 my-6 w-full">
       {/* Editorial Section Header */}
       <div className="flex items-center gap-3 mb-9">
         <div className="p-2 bg-primary/10 rounded-xl">
@@ -259,9 +235,9 @@ export function TrendingStories() {
             </m.div>
           )}
 
-          {/* Story Tiles Grid (7 cols desktop, 2×3 grid) */}
+          {/* Story Tiles Grid (7 cols desktop if featured exists, 12 cols otherwise) */}
           <div
-            className="ExhibitionItem lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6 auto-rows-fr"
+            className={`ExhibitionItem ${featured ? "lg:col-span-7" : "lg:col-span-12"} grid grid-cols-1 sm:grid-cols-2 gap-6 auto-rows-fr`}
             style={{ transformStyle: "preserve-3d" }}
           >
             {compact.map((article: FeedArticle, idx: number) => (

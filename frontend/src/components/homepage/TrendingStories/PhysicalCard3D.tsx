@@ -47,8 +47,6 @@ export function PhysicalCard3D({
         className={`group/front relative w-full h-full ${roundedClass} ${frontFaceClassName} transition-[background-color,border-color,box-shadow] duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none`}
         style={{
           transformStyle: "preserve-3d",
-          backfaceVisibility: "hidden",
-          WebkitBackfaceVisibility: "hidden",
           transform: "translateZ(0px)",
         }}
       >
