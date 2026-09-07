@@ -264,7 +264,7 @@ export function Hero3DRing() {
         if (settleRafId) cancelAnimationFrame(settleRafId);
       };
     }
-  }, [items?.length]);
+  }, [items, arrivalFinished, setContextArrivalFinished]);
 
   // Continuous Museum Exhibit Turntable Rotation Engine
   const ambientRotationRef = useRef<number>(0);

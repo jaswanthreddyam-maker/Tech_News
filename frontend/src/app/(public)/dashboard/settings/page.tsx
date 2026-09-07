@@ -96,7 +96,7 @@ export default function SettingsPage() {
       }
     }
     loadData();
-  }, []);
+  }, [user?.email]);
 
   const handleSavePreferences = async (overrides: Partial<any> = {}) => {
     setIsSaving(true);

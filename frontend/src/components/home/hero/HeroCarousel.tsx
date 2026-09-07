@@ -27,11 +27,12 @@ export function HeroCarousel({
   const trendingQuery = useTrending();
   const desksQuery = useCategoryDesks();
 
-  const rawClientArticles = Array.isArray(trendingQuery.data)
-    ? trendingQuery.data
-    : (trendingQuery.data as any)?.data || [];
-
-  const clientFeatured = React.useMemo(() => mapArticlesToFeatured(rawClientArticles), [rawClientArticles]);
+  const clientFeatured = React.useMemo(() => {
+    const rawClientArticles = Array.isArray(trendingQuery.data)
+      ? trendingQuery.data
+      : (trendingQuery.data as any)?.data || [];
+    return mapArticlesToFeatured(rawClientArticles);
+  }, [trendingQuery.data]);
 
   const deskFeatured = React.useMemo(() => {
     const list: any[] = [];
@@ -57,9 +58,23 @@ export function HeroCarousel({
     return Array.from(map.values());
   }, [initialItems, clientFeatured, deskFeatured]);
 
-  const isLoading = genuinePool.length === 0 && (trendingQuery.isLoading || desksQuery.isLoading);
-  const isError = genuinePool.length === 0 && trendingQuery.isError && desksQuery.isError;
-  const isEmpty = genuinePool.length === 0 && !trendingQuery.isLoading && !desksQuery.isLoading;
+  // Fallback pool with all unique available articles to prevent false empty states during scraping
+  const allPool = React.useMemo(() => {
+    const map = new Map<string, FeaturedArticle>();
+    for (const art of [...initialItems, ...clientFeatured, ...deskFeatured]) {
+      const artId = String(art.id || art.slug || art.title);
+      if (!map.has(artId)) {
+        map.set(artId, art);
+      }
+    }
+    return Array.from(map.values());
+  }, [initialItems, clientFeatured, deskFeatured]);
+
+  const activePool = genuinePool.length > 0 ? genuinePool : allPool;
+
+  const isLoading = activePool.length === 0 && (trendingQuery.isLoading || desksQuery.isLoading);
+  const isError = activePool.length === 0 && trendingQuery.isError && desksQuery.isError;
+  const isEmpty = activePool.length === 0 && !trendingQuery.isLoading && !desksQuery.isLoading;
 
   const skeletonItems = Array.from({ length: 12 }).map((_, i) => ({
     id: `skeleton-${i}`,
@@ -68,7 +83,7 @@ export function HeroCarousel({
     thumbnail: "",
   } as FeaturedArticle));
 
-  const items = isLoading ? skeletonItems : (genuinePool.length > 0 ? genuinePool.slice(0, 12) : skeletonItems);
+  const items = isLoading ? skeletonItems : (activePool.length > 0 ? activePool.slice(0, 12) : skeletonItems);
   const editorPicks = isLoading ? skeletonItems.slice(0, 4) : (initialEditorPicks.length > 0 ? initialEditorPicks : items.slice(1, 5));
   const latest = isLoading ? skeletonItems.slice(0, 4) : (initialLatest.length > 0 ? initialLatest : items.slice(1, 5));
   const aiInsights = isLoading ? skeletonItems.slice(0, 4) : (initialAiInsights.length > 0 ? initialAiInsights : items.slice(1, 5));

@@ -139,18 +139,25 @@ export function TrendingStories() {
       }
     }
 
-    // Deduplicate by article ID across both sources, keeping genuine-thumbnailed only
+    // Deduplicate by article ID across both sources, prioritizing genuine-thumbnailed
     const seenIds = new Set<string>();
     const genuineResults: FeedResponseItem[] = [];
+    const allResults: FeedResponseItem[] = [];
+
     for (const r of [...rawResults, ...deskArticles]) {
       const artId = String((r as any).id || (r as any).slug || (r as any).title);
-      if (!seenIds.has(artId) && MediaService.hasGenuineThumbnail(r)) {
+      if (!seenIds.has(artId)) {
         seenIds.add(artId);
-        genuineResults.push(r);
+        allResults.push(r);
+        if (MediaService.hasGenuineThumbnail(r)) {
+          genuineResults.push(r);
+        }
       }
     }
 
-    if (!genuineResults || genuineResults.length === 0) {
+    const candidateResults = genuineResults.length > 0 ? genuineResults : allResults;
+
+    if (!candidateResults || candidateResults.length === 0) {
       return {
         featured: null,
         compact: [],
@@ -160,7 +167,7 @@ export function TrendingStories() {
     }
 
     const title = "Trending Now";
-    const articles: FeedArticle[] = genuineResults.map(normalizeArticle);
+    const articles: FeedArticle[] = candidateResults.map(normalizeArticle);
 
     if (process.env.NODE_ENV === "development") {
       validateCanonicalArticles(articles as any);

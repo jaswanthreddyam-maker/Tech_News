@@ -692,6 +692,56 @@ async def get_category_desks():
                 "articles": desk_articles
             })
 
+        if not desks:
+            logger.info("Category desks projections empty or stale; generating dynamic category desks from ArticleReadModel.")
+            dynamic_stmt = (
+                select(ArticleReadModel)
+                .where(
+                    ArticleReadModel.is_test_data == False,
+                    ArticleReadModel.publication_status == "PUBLISHED",
+                )
+                .order_by(ArticleReadModel.published_at.desc())
+                .limit(60)
+            )
+            dyn_res = await db.execute(dynamic_stmt)
+            dyn_articles = dyn_res.scalars().all()
+
+            cat_buckets: dict[str, list] = {}
+            for art in dyn_articles:
+                raw_s = (art.category or "technology").lower().replace(" ", "-").strip()
+                if raw_s in ("ai", "artificial-intelligence", "machine-learning"):
+                    c_slug = "artificial-intelligence"
+                elif raw_s in ("cybersecurity", "security", "privacy"):
+                    c_slug = "cybersecurity"
+                elif raw_s in ("hardware", "devices", "chips"):
+                    c_slug = "hardware"
+                elif raw_s in ("robotics", "automation"):
+                    c_slug = "robotics"
+                elif raw_s in ("science", "quantum"):
+                    c_slug = "science"
+                elif raw_s in ("startups", "business", "startups-and-business"):
+                    c_slug = "startups-and-business"
+                elif raw_s in ("policy", "governance"):
+                    c_slug = "policy"
+                else:
+                    c_slug = "technology"
+                cat_buckets.setdefault(c_slug, []).append(art)
+
+            for c_slug, art_list in cat_buckets.items():
+                cfg = categories_cfg.get(c_slug, {})
+                headline = cfg.get("headline", c_slug.replace("-", " ").title())
+                display_order = cfg.get("display_order", 99)
+                card_list = [
+                    (ArticleCard.from_model(a, topics=[], entities=[]).model_dump(mode="json"))
+                    for a in art_list[:6]
+                ]
+                desks.append({
+                    "slug": c_slug,
+                    "headline": headline,
+                    "display_order": display_order,
+                    "articles": card_list,
+                })
+
         desks.sort(key=lambda d: d["display_order"])
         return desks
 
@@ -762,9 +812,9 @@ async def trigger_editorial_rebuild(db: AsyncSession = Depends(get_db)):
         "message": "Editorial projections successfully rebuilt.",
         "expired_metrics": expire_metrics,
         "replenishment_metrics": repl_metrics,
-        "homepage_article_count": len(homepage_articles),
-        "homepage_articles": [{"id": a.id, "title": a.title, "thumbnail": a.thumbnail_url} for a in homepage_articles[:12]],
-        "category_desks_count": len(category_desks),
+        "homepage_article_count": len(homepage_articles or []),
+        "homepage_articles": [{"id": a.id, "title": a.title, "thumbnail": a.thumbnail_url} for a in (homepage_articles or [])[:12]],
+        "category_desks_count": len(category_desks or []),
     }
 
 
@@ -791,7 +841,7 @@ async def trigger_flush_and_crawl(db: AsyncSession = Depends(get_db)):
         "action": "flush_and_crawl",
         "expired": expire_metrics,
         "replenishment": repl_metrics,
-        "fresh_homepage_count": len(homepage_articles),
-        "articles": [{"id": a.id, "title": a.title, "thumbnail": a.thumbnail_url} for a in homepage_articles[:12]],
+        "fresh_homepage_count": len(homepage_articles or []),
+        "articles": [{"id": a.id, "title": a.title, "thumbnail": a.thumbnail_url} for a in (homepage_articles or [])[:12]],
     }
 

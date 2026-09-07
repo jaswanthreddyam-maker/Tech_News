@@ -462,6 +462,7 @@ class HomepageBuilder:
         algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v2.1")
         pipeline_ver = getattr(settings, "PIPELINE_VERSION", "1.0.0")
 
+        projections_list = []
         # Upsert category desk projections for all allowed categories
         for cat_slug in allowed_cats:
             candidates = candidates_by_cat.get(cat_slug, [])
@@ -494,12 +495,14 @@ class HomepageBuilder:
                     build_duration_ms=build_duration
                 )
                 db.add(proj)
-
+            projections_list.append(proj)
 
         try:
             await db.commit()
             logger.info("HomepageBuilder: Successfully built and persisted CategoryDeskProjections.")
+            return projections_list
         except Exception as e:
             logger.error(f"HomepageBuilder: Failed to persist CategoryDeskProjections: {e}", exc_info=True)
             await db.rollback()
+            return []
 
