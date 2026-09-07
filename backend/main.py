@@ -379,6 +379,60 @@ async def root_health_ready(db=Depends(get_db)):
     )
 
 
+@app.get("/health/redis-diag", tags=["System"])
+async def root_health_redis_diag():
+    """Diagnoses Redis connection under different auth schemes from inside the Railway network."""
+    import urllib.parse
+    import redis.asyncio as aioredis
+    from app.core.config import settings
+
+    raw_url = settings.REDIS_URL
+    parsed = urllib.parse.urlparse(raw_url)
+    
+    masked_url = f"{parsed.scheme}://{parsed.username or ''}:{'*' * len(parsed.password or '')}@{parsed.hostname}:{parsed.port}{parsed.path}"
+    
+    results = {
+        "configured_url": masked_url,
+        "has_password": bool(parsed.password),
+        "username": parsed.username,
+        "hostname": parsed.hostname,
+        "port": parsed.port,
+        "tests": {}
+    }
+
+    # Test 1: As configured
+    try:
+        c1 = aioredis.from_url(raw_url, socket_connect_timeout=2.0, socket_timeout=2.0)
+        p1 = await c1.ping()
+        results["tests"]["configured"] = {"ok": True, "ping": p1}
+        await c1.aclose()
+    except Exception as e:
+        results["tests"]["configured"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    # Test 2: No username (redis://:password@host:port/db)
+    if parsed.password:
+        no_user_url = f"{parsed.scheme}://:{parsed.password}@{parsed.hostname}:{parsed.port or 6379}{parsed.path or '/0'}"
+        try:
+            c2 = aioredis.from_url(no_user_url, socket_connect_timeout=2.0, socket_timeout=2.0)
+            p2 = await c2.ping()
+            results["tests"]["no_username"] = {"ok": True, "ping": p2}
+            await c2.aclose()
+        except Exception as e:
+            results["tests"]["no_username"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    # Test 3: No password at all (redis://host:port/db)
+    no_auth_url = f"{parsed.scheme}://{parsed.hostname}:{parsed.port or 6379}{parsed.path or '/0'}"
+    try:
+        c3 = aioredis.from_url(no_auth_url, socket_connect_timeout=2.0, socket_timeout=2.0)
+        p3 = await c3.ping()
+        results["tests"]["no_auth"] = {"ok": True, "ping": p3}
+        await c3.aclose()
+    except Exception as e:
+        results["tests"]["no_auth"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    return results
+
+
 # 8. Mount Versioned Router Tree
 api_router.include_router(chat.router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
