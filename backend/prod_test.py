@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-BASE_URL = "https://tech-news-api-production-1b42.up.railway.app"
+BASE_URL = "https://technews-production-d51a.up.railway.app"
 
 def get_headers():
     login_payload = {'email': 'jeshu0069@gmail.com', 'password': 'mnbvcxzlkjhgfdsapoiuytrewq'}

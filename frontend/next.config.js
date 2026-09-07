@@ -1,6 +1,6 @@
 const rawTarget = process.env.API_PROXY_TARGET || process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
 const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
-const defaultTarget = isProd ? 'https://technews-production-d18d.up.railway.app' : 'http://localhost:8000';
+const defaultTarget = isProd ? 'https://technews-production-d51a.up.railway.app' : 'http://localhost:8000';
 let baseTarget = (rawTarget && rawTarget.startsWith('http')) ? rawTarget : defaultTarget;
 baseTarget = baseTarget.trim().replace(/\/+$/, '');
 if (baseTarget.endsWith('/api/v1')) {

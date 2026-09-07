@@ -3,7 +3,7 @@ import requests
 import statistics
 import concurrent.futures
 
-API_URL = "https://tech-news-api-production-1b42.up.railway.app/api/v1/news?limit=10"
+API_URL = "https://technews-production-d51a.up.railway.app/api/v1/news?limit=10"
 
 def make_request():
     start = time.perf_counter()

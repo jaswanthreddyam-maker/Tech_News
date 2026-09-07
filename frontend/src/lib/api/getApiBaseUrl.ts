@@ -3,7 +3,7 @@ export function getApiBaseUrl(): string {
     // Server-side (Node.js SSR) requires absolute URL
     const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
     const defaultBackend = isProd 
-      ? "https://technews-production-d18d.up.railway.app" 
+      ? "https://technews-production-d51a.up.railway.app" 
       : "http://localhost:8000";
 
     const serverUrl =

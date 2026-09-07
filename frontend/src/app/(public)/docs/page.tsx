@@ -29,7 +29,7 @@ export default function DocsPage() {
           </div>
           <p className="text-sm text-muted-foreground">Production REST Endpoint:</p>
           <pre className="p-4 rounded-xl bg-background border border-border font-mono text-sm text-emerald-400 overflow-x-auto">
-            https://tech-news-api-production-1b42.up.railway.app/api/v1
+            https://technews-production-d51a.up.railway.app/api/v1
           </pre>
         </section>
 

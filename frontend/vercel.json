@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://technews-production-d18d.up.railway.app/api/v1/:path*"
+      "destination": "https://technews-production-d51a.up.railway.app/api/v1/:path*"
     }
   ],
   "headers": [
