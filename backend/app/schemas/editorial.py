@@ -27,7 +27,6 @@ class DraftVersionResponse(BaseModel):
     timestamp: datetime
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class EditorialPatchResponse(BaseModel):
@@ -46,7 +45,6 @@ class EditorialPatchResponse(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class EditorialReviewResponse(BaseModel):
@@ -58,7 +56,6 @@ class EditorialReviewResponse(BaseModel):
     patches: list[EditorialPatchResponse] = Field(default_factory=list)
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class EditorialDraftBase(BaseModel):
@@ -101,7 +98,6 @@ class DraftCommentResponse(BaseModel):
     timestamp: datetime
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class DiscussionThreadResponse(BaseModel):
@@ -115,7 +111,6 @@ class DiscussionThreadResponse(BaseModel):
     comments: list[DraftCommentResponse] = Field(default_factory=list)
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class PatchUpdate(BaseModel):
@@ -135,7 +130,6 @@ class PublicationRecordResponse(BaseModel):
     distribution_summary: dict[str, Any] | None
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class EditorialDraftResponse(EditorialDraftBase):
@@ -160,7 +154,6 @@ class EditorialDraftResponse(EditorialDraftBase):
     threads: list[DiscussionThreadResponse] = Field(default_factory=list)
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class FactCheckResponse(BaseModel):

@@ -32,7 +32,7 @@ class OpenAIBriefingGenerator:
         content_text += "2. The Future of Autonomous Agents\n"
         content_text += "3. Market Updates in Cloud Computing\n"
         
-        content_html = f\"\"\"
+        content_html = f"""
         <html>
             <body style="font-family: sans-serif; line-height: 1.6; color: #333;">
                 <h2>{title}</h2>
@@ -49,7 +49,7 @@ class OpenAIBriefingGenerator:
                 </p>
             </body>
         </html>
-        \"\"\"
+        """
         
         logger.info(f"Generated briefing: {title}")
         return {

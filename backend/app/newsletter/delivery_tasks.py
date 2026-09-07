@@ -35,7 +35,7 @@ def send_confirmation_email(self, subscriber_id: int):
         
         subject = "Please confirm your subscription to Tech News Today"
         text_content = f"Welcome! Please confirm your subscription by visiting this link: {full_confirm_url}"
-        html_content = f\"\"\"
+        html_content = f"""
         <html>
             <body>
                 <h2>Welcome to Tech News Today!</h2>
@@ -43,7 +43,7 @@ def send_confirmation_email(self, subscriber_id: int):
                 <a href="{full_confirm_url}" style="padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Confirm Subscription</a>
             </body>
         </html>
-        \"\"\"
+        """
 
         import asyncio
         provider_msg_id = asyncio.run(provider.send_email(

@@ -204,7 +204,8 @@ async def list_articles(
                 pass
 
         async def fetch_homepage_articles(db):
-            nonlocal ranked_ids, is_stale_state
+            nonlocal ranked_ids
+            is_stale_state = False
             resolved_articles = []
 
             # Path 1: Check Redis ranking cache & CQRS Identity Invariants
