@@ -1,25 +1,25 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { useCategoryDesks } from "@/components/hooks/articles/useArticles";
+import { useCategoryDesks, useTrending } from "@/components/hooks/articles/useArticles";
 import { 
   Sparkles, 
-  Link as LinkIcon,
+  Link as LinkIcon, 
   ShieldCheck, 
-  Cloud,
-  TrendingUp,
-  Infinity as InfinityIcon,
+  Cloud, 
+  TrendingUp, 
+  Infinity as InfinityIcon, 
   Atom, 
-  Globe,
-  LayoutGrid,
-  Smartphone,
+  Globe, 
+  LayoutGrid, 
+  Smartphone, 
   Cpu, 
   Rocket, 
   Scale, 
   Layers, 
-  ChevronDown,
-  Newspaper,
-  LucideIcon
+  ChevronDown, 
+  Newspaper, 
+  LucideIcon 
 } from "lucide-react";
 import { EmptyState, EmptyIllustration } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -147,8 +147,59 @@ const KNOWN_METADATA: Record<string, Omit<CategoryMeta, "key">> = {
   },
 };
 
+/** Automatic semantic category detection fallback for articles */
+function detectCategorySlug(article: any): string {
+  // 1. Direct category field
+  if (article.category && typeof article.category === "string") {
+    const raw = article.category.toLowerCase().trim();
+    if (KNOWN_METADATA[raw]) return raw;
+    if (raw.includes("ai") || raw.includes("intelligence") || raw.includes("neural") || raw.includes("llm")) return "artificial-intelligence";
+    if (raw.includes("cyber") || raw.includes("security") || raw.includes("hack")) return "cybersecurity";
+    if (raw.includes("hardware") || raw.includes("device") || raw.includes("chip") || raw.includes("semiconductor") || raw.includes("gpu")) return "hardware";
+    if (raw.includes("science") || raw.includes("quantum") || raw.includes("physics") || raw.includes("weather")) return "science";
+    if (raw.includes("startup") || raw.includes("business") || raw.includes("venture") || raw.includes("acqui")) return "startups-and-business";
+    if (raw.includes("policy") || raw.includes("govern") || raw.includes("law")) return "policy";
+    if (raw.includes("robot")) return "robotics";
+    if (raw.includes("cloud")) return "cloud-computing";
+  }
+
+  // 2. primary_topics or topics array
+  const topicList: string[] = [];
+  if (Array.isArray(article.primary_topics)) topicList.push(...article.primary_topics);
+  if (Array.isArray(article.topics)) topicList.push(...article.topics);
+  for (const t of topicList) {
+    const raw = String(t).toLowerCase();
+    if (raw.includes("ai") || raw.includes("intelligence") || raw.includes("neural") || raw.includes("llm")) return "artificial-intelligence";
+    if (raw.includes("cyber") || raw.includes("security") || raw.includes("breach")) return "cybersecurity";
+    if (raw.includes("hardware") || raw.includes("chip") || raw.includes("gpu") || raw.includes("device")) return "hardware";
+    if (raw.includes("science") || raw.includes("quantum") || raw.includes("weather")) return "science";
+    if (raw.includes("startup") || raw.includes("business") || raw.includes("funding")) return "startups-and-business";
+  }
+
+  // 3. Title + Summary lexical analysis
+  const text = `${article.title || ""} ${article.summary || ""}`.toLowerCase();
+  if (text.includes("cybersecurity") || text.includes("wiki incident") || text.includes("compromised") || text.includes("malware") || text.includes("breach") || text.includes("crowdstrike")) {
+    return "cybersecurity";
+  }
+  if (text.includes("weathernext") || text.includes("quantum") || text.includes("physics") || text.includes("scientific") || text.includes("biotech") || text.includes("climate")) {
+    return "science";
+  }
+  if (text.includes("acquire") || text.includes("acquisition") || text.includes("venture") || text.includes("funding") || text.includes("startup") || text.includes("series a") || text.includes("valuation")) {
+    return "startups-and-business";
+  }
+  if (text.includes("dlss") || text.includes("geforce") || text.includes("rtx") || text.includes("semiconductor") || text.includes("chip") || text.includes("ifa") || text.includes("hardware") || text.includes("processor")) {
+    return "hardware";
+  }
+  if (text.includes("gemini") || text.includes("ai-ready") || text.includes("agentic") || text.includes("llm") || text.includes("gpt") || text.includes("neural") || text.includes("model") || text.includes("hugging face") || text.includes("openai") || text.includes("artificial intelligence")) {
+    return "artificial-intelligence";
+  }
+
+  return "technology";
+}
+
 export function LatestNews() {
-  const { data: categoryGroups, isLoading, error } = useCategoryDesks();
+  const { data: categoryGroups, isLoading: isDesksLoading, error: desksError } = useCategoryDesks();
+  const { data: trendingArticles, isLoading: isTrendingLoading, error: trendingError } = useTrending();
   const { scrollYProgress } = useScroll();
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -179,25 +230,58 @@ export function LatestNews() {
   const sectionBgY = useTransform(scrollYProgress, [0, 1], [0, 40]);
   const contentY = useTransform(scrollYProgress, [0, 1], [0, 15]);
 
-  // Individual active category desks
+  // Individual active category desks (with API desks prioritized, falling back to client clustering)
   const individualCategories = useMemo(() => {
-    if (!categoryGroups || !Array.isArray(categoryGroups)) return [];
+    // 1. Check if categoryGroups from API has actual desks with articles
+    const activeDesks = Array.isArray(categoryGroups)
+      ? categoryGroups.filter((desk: any) => desk && Array.isArray(desk.articles) && desk.articles.length > 0)
+      : [];
 
-    const activeDesks = categoryGroups.filter(
-      (desk: any) => desk && Array.isArray(desk.articles) && desk.articles.length > 0
-    );
+    if (activeDesks.length > 0) {
+      return activeDesks
+        .map((desk: any) => {
+          const slug = (desk.slug || "").toLowerCase().trim();
+          const known = KNOWN_METADATA[slug];
 
-    if (activeDesks.length === 0) return [];
+          const title = known?.title || desk.headline || slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+          const icon = known?.icon || getCategoryIcon(slug);
+          const tags = known?.tags || `${desk.headline || title} • Featured Stories`;
+          const order = known?.order ?? (desk.display_order || 99);
 
-    return activeDesks
-      .map((desk: any) => {
-        const slug = (desk.slug || "").toLowerCase().trim();
+          return {
+            key: slug,
+            title,
+            icon,
+            tags,
+            order,
+            articlesCount: desk.articles.length,
+            desk,
+          };
+        })
+        .sort((a, b) => a.order - b.order);
+    }
+
+    // 2. Client-side grouping fallback from trendingArticles
+    const rawArticles = Array.isArray(trendingArticles)
+      ? trendingArticles
+      : (trendingArticles as any)?.data || [];
+
+    if (!rawArticles || rawArticles.length === 0) return [];
+
+    const grouped: Record<string, any[]> = {};
+    for (const art of rawArticles) {
+      const slug = detectCategorySlug(art);
+      if (!grouped[slug]) grouped[slug] = [];
+      grouped[slug].push(art);
+    }
+
+    return Object.entries(grouped)
+      .map(([slug, articles]) => {
         const known = KNOWN_METADATA[slug];
-
-        const title = known?.title || desk.headline || slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+        const title = known?.title || slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
         const icon = known?.icon || getCategoryIcon(slug);
-        const tags = known?.tags || `${desk.headline || title} • Featured Stories`;
-        const order = known?.order ?? (desk.display_order || 99);
+        const tags = known?.tags || `${title} • Deep Tech Intelligence`;
+        const order = known?.order ?? 99;
 
         return {
           key: slug,
@@ -205,12 +289,16 @@ export function LatestNews() {
           icon,
           tags,
           order,
-          articlesCount: desk.articles.length,
-          desk,
+          articlesCount: articles.length,
+          desk: {
+            slug,
+            headline: title,
+            articles,
+          },
         };
       })
       .sort((a, b) => a.order - b.order);
-  }, [categoryGroups]);
+  }, [categoryGroups, trendingArticles]);
 
   // Dynamically compute all categories + "All Categories" option
   const availableCategories = useMemo(() => {
@@ -253,6 +341,9 @@ export function LatestNews() {
     return activeCategory?.desk?.articles?.slice(0, 4) || [];
   }, [activeCategory]);
 
+  const isLoading = (isDesksLoading && isTrendingLoading) && individualCategories.length === 0;
+  const hasError = desksError && trendingError && individualCategories.length === 0;
+
   if (isLoading) {
     return (
       <section className="py-12 border-t border-border/20 mt-8 min-h-[400px] relative rounded-3xl overflow-hidden bg-gradient-to-b from-[#0e0f12]/40 via-background to-background p-4 sm:p-8 lg:p-10">
@@ -288,7 +379,7 @@ export function LatestNews() {
     );
   }
 
-  if (error) return (
+  if (hasError) return (
     <div className="py-8 mt-8">
       <ErrorState title="Error loading news" description="Could not load the category feed." />
     </div>
