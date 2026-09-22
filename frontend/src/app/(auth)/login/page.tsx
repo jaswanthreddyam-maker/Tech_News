@@ -235,7 +235,7 @@ export default function LoginPage() {
     <div className="min-h-screen w-full bg-black text-white relative flex flex-col justify-between overflow-x-hidden select-none">
       {/* Background Graphic: Realistic Space Earth Globe & Starfield (Bottom-Left Corner Aligned) */}
       <div className="fixed inset-0 pointer-events-none z-0 bg-black flex justify-start items-end overflow-hidden">
-        <div className="relative w-full max-w-[970px] xl:max-w-[1115px] 2xl:max-w-[1240px] max-h-[75vh] aspect-[16/9]">
+        <div className="relative w-full max-w-[970px] xl:max-w-[1115px] 2xl:max-w-[1240px] max-h-[75vh] aspect-[1000/564]">
           <Image
             src="/images/login/globe-8k.jpg"
             alt="Orbital intelligence background"
