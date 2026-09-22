@@ -133,15 +133,15 @@ export default function LoginPage() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-[#050608] flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-white/20 border-t-white animate-spin rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#050608] text-white relative flex flex-col justify-between overflow-x-hidden select-none">
-      {/* Background Graphic: Realistic Space Earth Globe & Starfield */}
+    <div className="min-h-screen w-full bg-black text-white relative flex flex-col justify-between overflow-x-hidden select-none">
+      {/* Background Graphic: Realistic Monochrome Space Earth Globe & Starfield */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <Image
           src="/images/login/globe-bg.jpg"
@@ -149,23 +149,23 @@ export default function LoginPage() {
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[70%_center] lg:object-[68%_center] opacity-45 mix-blend-screen scale-105"
+          className="object-cover object-[70%_center] lg:object-[68%_center] opacity-40 mix-blend-screen scale-105 grayscale contrast-125 brightness-95"
         />
-        {/* Cinematic Vignette & Ambient Radial Glows */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#050608] via-[#050608]/75 to-transparent w-full lg:w-3/5" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050608] via-transparent to-[#050608]/80" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_40%,rgba(14,165,233,0.06),transparent_60%)]" />
+        {/* Cinematic Vignette & Deep Neutral Contrast Layers */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent w-full lg:w-3/5" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/85" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_40%,rgba(255,255,255,0.03),transparent_60%)]" />
 
-        {/* Delicate Cyber Coordinate Lines & Planetary Orbital Arcs */}
+        {/* Delicate Cyber Coordinate Lines & Planetary Orbital Arcs (Pure Monochrome) */}
         <svg
-          className="absolute inset-0 w-full h-full opacity-35"
+          className="absolute inset-0 w-full h-full opacity-30"
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
             <linearGradient id="orbit-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
-              <stop offset="50%" stopColor="#818cf8" stopOpacity="0.1" />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.25" />
+              <stop offset="50%" stopColor="#ffffff" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
             </linearGradient>
           </defs>
           {/* Orbital Ellipses */}
@@ -185,10 +185,10 @@ export default function LoginPage() {
             rx="640"
             ry="290"
             fill="none"
-            stroke="#38bdf8"
+            stroke="#ffffff"
             strokeWidth="0.75"
             strokeDasharray="4 8"
-            strokeOpacity="0.25"
+            strokeOpacity="0.2"
             transform="rotate(-20 950 500)"
           />
           <ellipse
@@ -199,7 +199,7 @@ export default function LoginPage() {
             fill="none"
             stroke="#ffffff"
             strokeWidth="0.5"
-            strokeOpacity="0.15"
+            strokeOpacity="0.12"
             transform="rotate(-25 950 500)"
           />
 
@@ -217,26 +217,26 @@ export default function LoginPage() {
 
           {/* Starlight Constellation Dots */}
           <circle cx="15%" cy="32%" r="1.5" fill="#ffffff" fillOpacity="0.6" />
-          <circle cx="28%" cy="18%" r="1.2" fill="#38bdf8" fillOpacity="0.7" />
+          <circle cx="28%" cy="18%" r="1.2" fill="#ffffff" fillOpacity="0.5" />
           <circle cx="48%" cy="24%" r="1.5" fill="#ffffff" fillOpacity="0.5" />
-          <circle cx="58%" cy="16%" r="2" fill="#38bdf8" fillOpacity="0.8" />
+          <circle cx="58%" cy="16%" r="2" fill="#ffffff" fillOpacity="0.7" />
           <circle cx="74%" cy="28%" r="1" fill="#ffffff" fillOpacity="0.4" />
-          <circle cx="82%" cy="38%" r="1.8" fill="#ffffff" fillOpacity="0.7" />
-          <circle cx="92%" cy="22%" r="1.2" fill="#38bdf8" fillOpacity="0.5" />
-          <circle cx="68%" cy="82%" r="1.5" fill="#ffffff" fillOpacity="0.6" />
+          <circle cx="82%" cy="38%" r="1.8" fill="#ffffff" fillOpacity="0.6" />
+          <circle cx="92%" cy="22%" r="1.2" fill="#ffffff" fillOpacity="0.5" />
+          <circle cx="68%" cy="82%" r="1.5" fill="#ffffff" fillOpacity="0.5" />
         </svg>
       </div>
 
       {/* ================= TOP HEADER BAR ================= */}
       <header className="w-full px-6 md:px-12 py-5 flex items-center justify-between z-20 text-[11px] font-mono tracking-widest uppercase">
-        {/* Left: Global Desk Online indicator */}
+        {/* Left: Global Desk Online indicator (Clean Monochrome) */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#10b981] shadow-[0_0_10px_#10b981] animate-pulse" />
-            <span className="text-neutral-300 font-semibold tracking-[0.2em]">
+            <span className="w-2 h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.85)] animate-pulse" />
+            <span className="text-neutral-200 font-semibold tracking-[0.2em]">
               GLOBAL DESK
             </span>
-            <span className="text-neutral-500">•</span>
+            <span className="text-neutral-600">•</span>
             <span className="text-neutral-400 font-medium">ONLINE</span>
           </div>
 
@@ -248,18 +248,18 @@ export default function LoginPage() {
 
         {/* Right: Technical Pillar Header */}
         <div className="text-right text-neutral-500 text-[9px] font-mono leading-[1.35] tracking-[0.2em] hidden sm:block">
-          <div className="text-neutral-400 font-semibold">+ TECHNOLOGY</div>
+          <div className="text-neutral-300 font-semibold">+ TECHNOLOGY</div>
           <div>PEOPLE</div>
           <div className="text-neutral-400">A BRIGHTER TOMORROW</div>
         </div>
       </header>
 
       {/* ================= MAIN CONTENT ================= */}
-      <main className="w-full max-w-[1720px] mx-auto px-6 md:px-12 py-2 lg:py-6 flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-between gap-10 xl:gap-14 z-10">
-        {/* LEFT COLUMN: HERO INTELLIGENCE & NEWS CARDS */}
-        <section className="w-full lg:max-w-[57%] xl:max-w-[60%] flex flex-col justify-center">
+      <main className="w-full max-w-[1720px] mx-auto px-6 md:px-12 py-2 lg:py-4 flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-between gap-10 xl:gap-14 z-10">
+        {/* LEFT COLUMN: HERO INTELLIGENCE & 3D OVERLAPPING CARDS */}
+        <section className="w-full lg:max-w-[58%] xl:max-w-[62%] flex flex-col justify-center overflow-visible">
           {/* Eyebrow & Brand Headings */}
-          <div className="flex flex-col mb-7 lg:mb-8">
+          <div className="flex flex-col mb-6 lg:mb-7">
             <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.32em] text-neutral-400 uppercase font-medium mb-3">
               THE DAILY TECHNOLOGY INTELLIGENCE
             </p>
@@ -273,19 +273,19 @@ export default function LoginPage() {
             </p>
 
             {/* Pillar Subtitle Strip */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] sm:text-[10px] font-mono tracking-[0.2em] text-neutral-400 uppercase mt-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] sm:text-[10px] font-mono tracking-[0.2em] text-neutral-500 uppercase mt-4">
               <span>BREAKING NEWS</span>
-              <span className="text-neutral-600">/</span>
+              <span className="text-neutral-700">/</span>
               <span>DEEP ANALYSIS</span>
-              <span className="text-neutral-600">/</span>
+              <span className="text-neutral-700">/</span>
               <span>EXPERT PERSPECTIVE</span>
-              <span className="text-neutral-600">/</span>
+              <span className="text-neutral-700">/</span>
               <span>A MORE INFORMED TOMORROW</span>
             </div>
           </div>
 
           {/* Micro Tech Telemetry Text Overlay (matching image) */}
-          <div className="flex justify-end pr-2 mb-2 hidden lg:flex">
+          <div className="flex justify-end pr-8 mb-2 hidden lg:flex">
             <div className="text-right text-[9px] font-mono tracking-[0.22em] text-neutral-500 leading-tight uppercase">
               <div>REAL NEWS</div>
               <div>REAL PEOPLE</div>
@@ -293,50 +293,82 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* 4 FEATURED INTEL CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 xl:gap-4 w-full">
-            {FEATURED_CARDS.map((card) => (
-              <article
-                key={card.id}
-                className="bg-[#0b0e14]/85 backdrop-blur-md border border-white/[0.08] hover:border-white/20 transition-all duration-300 rounded-xl p-3.5 flex flex-col group shadow-lg shadow-black/60 relative overflow-hidden"
-              >
-                {/* Header Tag + Time */}
-                <div className="flex items-center justify-between text-[9px] font-mono tracking-wider mb-2.5">
-                  <span className="text-[#38bdf8] font-bold uppercase">
-                    {card.category}
-                  </span>
-                  <span className="text-neutral-500 uppercase">{card.time}</span>
-                </div>
+          {/* 4 3D EXTRUDED CARDS STANDING BEHIND EACH OTHER */}
+          <div className="w-full [perspective:1400px] py-4 overflow-visible">
+            <div
+              className="flex flex-row items-center w-full overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 scrollbar-none"
+              style={{ transformStyle: "preserve-3d" }}
+            >
+              {FEATURED_CARDS.map((card, idx) => {
+                // Stacking order: Card 1 is in front (40), Card 4 is furthest back (10)
+                const zIndex = 40 - idx * 10;
+                return (
+                  <article
+                    key={card.id}
+                    className={`relative shrink-0 w-[220px] sm:w-[235px] xl:w-[255px] rounded-2xl p-4 transition-all duration-300 group select-none cursor-pointer border border-neutral-800/90 border-t-white/35 border-l-white/20 border-r-black border-b-black ${
+                      idx > 0 ? "-ml-3.5 sm:-ml-4 xl:-ml-5" : ""
+                    } hover:!z-50 hover:-translate-y-3 hover:translate-x-1 hover:border-white/50 hover:shadow-[0_25px_50px_rgba(0,0,0,0.98),inset_0_2px_2px_rgba(255,255,255,0.4)]`}
+                    style={{
+                      zIndex,
+                      transform:
+                        "rotateY(-11deg) rotateX(1deg) rotateZ(0deg)",
+                      transformStyle: "preserve-3d",
+                      background:
+                        "linear-gradient(155deg, rgba(28,28,33,0.96) 0%, rgba(13,13,16,0.98) 50%, rgba(5,5,7,0.99) 100%)",
+                      boxShadow: `
+                        inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.32),
+                        inset 1.5px 0 1px 0 rgba(255, 255, 255, 0.18),
+                        inset -1px -1px 2px 0 rgba(0, 0, 0, 0.9),
+                        -3px 6px 12px rgba(0, 0, 0, 0.65),
+                        8px 16px 28px rgba(0, 0, 0, 0.88),
+                        18px 28px 48px rgba(0, 0, 0, 0.95)
+                      `,
+                    }}
+                  >
+                    {/* Flashy specular gloss sheen overlay */}
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.12] pointer-events-none" />
 
-                {/* Card Thumbnail Image */}
-                <div className="relative aspect-[16/10] w-full rounded-lg overflow-hidden bg-neutral-900 mb-3 border border-white/[0.05]">
-                  <Image
-                    src={card.image}
-                    alt={card.title}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 25vw"
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
-                </div>
+                    {/* Header Tag + Time (Pure Monochrome) */}
+                    <div className="flex items-center justify-between text-[9.5px] font-mono tracking-wider mb-3 relative z-10">
+                      <span className="text-white font-bold uppercase tracking-[0.14em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        {card.category}
+                      </span>
+                      <span className="text-neutral-500 uppercase tracking-widest text-[9px]">
+                        {card.time}
+                      </span>
+                    </div>
 
-                {/* Headline Title */}
-                <h2 className="text-[11.5px] xl:text-[12px] font-bold text-white leading-tight min-h-[28px] group-hover:text-neutral-100 transition-colors">
-                  {card.title}
-                </h2>
+                    {/* Card Thumbnail Image (Monochrome Black & White) */}
+                    <div className="relative aspect-[16/11] w-full rounded-xl overflow-hidden bg-black mb-3.5 border border-white/[0.08] shadow-inner">
+                      <Image
+                        src={card.image}
+                        alt={card.title}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 25vw"
+                        className="object-cover grayscale contrast-125 brightness-90 group-hover:scale-105 group-hover:contrast-130 transition-all duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                    </div>
 
-                {/* Narrative Excerpt */}
-                <p className="text-[9.5px] xl:text-[10px] text-neutral-400 font-normal leading-[1.35] mt-1.5">
-                  {card.description}
-                </p>
-              </article>
-            ))}
+                    {/* Headline Title */}
+                    <h2 className="text-[12px] xl:text-[12.5px] font-bold text-white leading-snug min-h-[32px] group-hover:text-neutral-100 transition-colors relative z-10">
+                      {card.title}
+                    </h2>
+
+                    {/* Narrative Excerpt */}
+                    <p className="text-[9.5px] xl:text-[10px] text-neutral-400 font-normal leading-[1.4] mt-2 line-clamp-3 relative z-10">
+                      {card.description}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         </section>
 
-        {/* RIGHT COLUMN: LOGIN FORM CARD */}
+        {/* RIGHT COLUMN: LOGIN FORM CARD (Pure Black Glassmorphic) */}
         <section className="w-full lg:w-[440px] xl:w-[470px] shrink-0">
-          <div className="bg-[#0b0d13]/95 backdrop-blur-2xl border border-white/[0.12] rounded-[28px] p-7 sm:p-9 shadow-2xl shadow-black/95 relative">
+          <div className="bg-[#070709]/95 backdrop-blur-2xl border border-white/[0.12] rounded-[28px] p-7 sm:p-9 shadow-2xl shadow-black/95 relative">
             {/* Form Title & Subtitle */}
             <div className="mb-7">
               <h2 className="text-3xl sm:text-[34px] font-bold tracking-tight text-white font-sans leading-tight">
@@ -377,7 +409,7 @@ export default function LoginPage() {
                     autoComplete="email"
                     required
                     placeholder="operator@technews.today"
-                    className="w-full bg-[#12151e]/90 border border-neutral-800 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20 transition-all font-sans"
+                    className="w-full bg-[#0e0e11] border border-neutral-800 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20 transition-all font-sans"
                   />
                 </div>
               </div>
@@ -400,7 +432,7 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     required
                     placeholder="••••••••••••"
-                    className="w-full bg-[#12151e]/90 border border-neutral-800 rounded-xl pl-11 pr-16 py-3 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20 transition-all font-sans"
+                    className="w-full bg-[#0e0e11] border border-neutral-800 rounded-xl pl-11 pr-16 py-3 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20 transition-all font-sans"
                   />
                   <button
                     type="button"
@@ -421,7 +453,7 @@ export default function LoginPage() {
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-4 h-4 rounded border border-neutral-700 bg-[#12151e] flex items-center justify-center peer-checked:bg-white peer-checked:border-white transition-all">
+                  <div className="w-4 h-4 rounded border border-neutral-700 bg-[#0e0e11] flex items-center justify-center peer-checked:bg-white peer-checked:border-white transition-all">
                     {rememberMe && (
                       <svg
                         className="w-3 h-3 text-black stroke-[3.5]"
@@ -483,23 +515,23 @@ export default function LoginPage() {
                 onClick={() => {
                   window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "/api/v1"}/auth/google`;
                 }}
-                className="w-full bg-[#12151e]/90 hover:bg-[#181d2a] border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all"
+                className="w-full bg-[#0e0e11] hover:bg-[#151518] border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all"
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
                   <path
-                    fill="#EA4335"
+                    fill="#ffffff"
                     d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
                   />
                   <path
-                    fill="#4285F4"
+                    fill="#ffffff"
                     d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
                   />
                   <path
-                    fill="#FBBC05"
+                    fill="#a1a1aa"
                     d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8s.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.8 0 12s.7 3.3 1.9 5.7l3.7-2.9z"
                   />
                   <path
-                    fill="#34A853"
+                    fill="#71717a"
                     d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
                   />
                 </svg>
@@ -512,7 +544,7 @@ export default function LoginPage() {
                 onClick={() => {
                   window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "/api/v1"}/auth/github`;
                 }}
-                className="w-full bg-[#12151e]/90 hover:bg-[#181d2a] border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all"
+                className="w-full bg-[#0e0e11] hover:bg-[#151518] border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all"
               >
                 <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                   <path
