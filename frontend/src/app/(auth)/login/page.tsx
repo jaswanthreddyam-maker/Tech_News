@@ -120,24 +120,7 @@ export default function LoginPage() {
       </div>
 
       {/* ================= TOP HEADER BAR ================= */}
-      <header className="w-full px-6 md:px-12 py-5 flex items-center justify-between z-20 text-[11px] font-mono tracking-widest uppercase">
-        {/* Left: Global Desk Online indicator (Clean Monochrome) */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.85)] animate-pulse" />
-            <span className="text-neutral-200 font-semibold tracking-[0.2em]">
-              GLOBAL DESK
-            </span>
-            <span className="text-neutral-600">•</span>
-            <span className="text-neutral-400 font-medium">ONLINE</span>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 pl-4 text-neutral-600">
-            <span className="w-16 h-[1px] bg-neutral-800" />
-            <span className="text-[10px] text-neutral-500">+</span>
-          </div>
-        </div>
-
+      <header className="w-full px-6 md:px-12 pt-5 pb-2 flex items-center justify-end z-20 text-[11px] font-mono tracking-widest uppercase">
         {/* Right: Technical Pillar Header */}
         <div className="text-right text-neutral-500 text-[9px] font-mono leading-[1.35] tracking-[0.2em] hidden sm:block">
           <div className="text-neutral-300 font-semibold">+ TECHNOLOGY</div>
@@ -147,12 +130,12 @@ export default function LoginPage() {
       </header>
 
       {/* ================= MAIN CONTENT ================= */}
-      <main className="w-full max-w-[1720px] mx-auto px-6 md:px-12 py-2 lg:py-4 flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-between gap-10 xl:gap-14 z-10">
-        {/* LEFT COLUMN: HERO INTELLIGENCE & 3D OVERLAPPING CARDS */}
-        <section className="w-full lg:max-w-[58%] xl:max-w-[62%] flex flex-col justify-center overflow-visible">
+      <main className="w-full max-w-[1720px] mx-auto px-6 md:px-12 py-1 lg:py-3 flex-1 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-10 xl:gap-14 z-10">
+        {/* LEFT COLUMN: HERO INTELLIGENCE (Top-Aligned) */}
+        <section className="w-full lg:max-w-[58%] xl:max-w-[62%] flex flex-col justify-start self-start pt-0">
           {/* Eyebrow & Brand Headings */}
-          <div className="flex flex-col mb-6 lg:mb-7">
-            <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.32em] text-neutral-400 uppercase font-medium mb-3">
+          <div className="flex flex-col mb-4">
+            <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.32em] text-neutral-400 uppercase font-medium mb-2.5">
               THE DAILY TECHNOLOGY INTELLIGENCE
             </p>
 
@@ -160,12 +143,12 @@ export default function LoginPage() {
               TECH NEWS TODAY
             </h1>
 
-            <p className="text-lg sm:text-xl lg:text-2xl text-neutral-300 font-light mt-3 leading-relaxed max-w-2xl">
+            <p className="text-base sm:text-lg lg:text-xl text-neutral-300 font-light mt-2.5 leading-relaxed max-w-2xl">
               Your personal gateway to the technology that matters.
             </p>
 
             {/* Pillar Subtitle Strip */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] sm:text-[10px] font-mono tracking-[0.2em] text-neutral-500 uppercase mt-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] sm:text-[10px] font-mono tracking-[0.2em] text-neutral-500 uppercase mt-3.5">
               <span>BREAKING NEWS</span>
               <span className="text-neutral-700">/</span>
               <span>DEEP ANALYSIS</span>
@@ -175,11 +158,10 @@ export default function LoginPage() {
               <span>A MORE INFORMED TOMORROW</span>
             </div>
           </div>
-
         </section>
 
         {/* RIGHT COLUMN: LOGIN FORM CARD (Pure Black Glassmorphic) */}
-        <section className="w-full lg:w-[440px] xl:w-[470px] shrink-0">
+        <section className="w-full lg:w-[440px] xl:w-[470px] shrink-0 self-center">
           <div className="bg-[#070709]/95 backdrop-blur-2xl border border-white/[0.12] rounded-[28px] p-7 sm:p-9 shadow-2xl shadow-black/95 relative">
             {/* Form Title & Subtitle */}
             <div className="mb-7">
