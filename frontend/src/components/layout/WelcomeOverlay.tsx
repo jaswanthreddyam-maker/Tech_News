@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import WelcomeOverlayClient from "./WelcomeOverlayClient";
 
 interface WelcomeOverlayProps {
@@ -8,12 +9,18 @@ interface WelcomeOverlayProps {
 }
 
 export function WelcomeOverlay({ children }: WelcomeOverlayProps) {
+  const pathname = usePathname();
   // null = loading, false = show overlay (desktop only), true = already played / mobile
   const [hasPlayed, setHasPlayed] = useState<boolean | null>(null);
   const completedRef = useRef(false);
 
   useEffect(() => {
     try {
+      // Auth routes (/login, /signup) bypass welcome overlay completely
+      if (pathname?.startsWith("/login") || pathname?.startsWith("/signup")) {
+        setHasPlayed(true);
+        return;
+      }
       // Mobile viewports (< 768px) bypass welcome overlay completely
       const isMobile = window.matchMedia("(max-width: 767px)").matches;
       if (isMobile) {
@@ -24,7 +31,7 @@ export function WelcomeOverlay({ children }: WelcomeOverlayProps) {
     } catch {
       setHasPlayed(false);
     }
-  }, []);
+  }, [pathname]);
 
   const handleComplete = useCallback(() => {
     if (completedRef.current) return;
@@ -40,6 +47,10 @@ export function WelcomeOverlay({ children }: WelcomeOverlayProps) {
     }
     setHasPlayed(true);
   }, []);
+
+  if (pathname?.startsWith("/login") || pathname?.startsWith("/signup")) {
+    return <>{children}</>;
+  }
 
   return (
     <>

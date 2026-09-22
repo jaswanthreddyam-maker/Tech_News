@@ -3,14 +3,11 @@
 import { useState, useEffect, FormEvent, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GoogleLogin } from "@react-oauth/google";
-import { useAppStore, User } from "@/store/useStore";
-import { canAccessAdmin } from "@/lib/auth/permissions";
+import Image from "next/image";
+import { Mail, Lock, Shield, ArrowRight } from "lucide-react";
+import { useAppStore } from "@/store/useStore";
 import { apiFetch, APIClientError } from "@/services/api";
-import { Mail, Lock, ShieldCheck } from "lucide-react";
 import { sanitizeReturnUrl } from "@/lib/auth/safeReturnUrl";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 interface AuthResponse {
   access_token: string;
@@ -24,17 +21,54 @@ interface AuthResponse {
   };
 }
 
+const FEATURED_CARDS = [
+  {
+    id: "ai-card",
+    category: "ARTIFICIAL INTELLIGENCE",
+    time: "2H AGO",
+    title: "Next-generation AI models reshape the enterprise landscape",
+    description:
+      "From autonomous agents to multimodal systems, a new wave of AI is changing how work gets done.",
+    image: "/images/login/card-ai.jpg",
+  },
+  {
+    id: "nvidia-card",
+    category: "TECH INDUSTRY",
+    time: "4H AGO",
+    title: "NVIDIA signals next chapter in accelerated computing",
+    description:
+      "New infrastructure, broader partnerships, and a growing developer ecosystem point to an AI-native future.",
+    image: "/images/login/card-nvidia.jpg",
+  },
+  {
+    id: "security-card",
+    category: "CYBERSECURITY",
+    time: "6H AGO",
+    title: "Major cloud providers unite on new security standards",
+    description:
+      "A coordinated push aims to raise the bar for AI-era infrastructure security.",
+    image: "/images/login/card-security.jpg",
+  },
+  {
+    id: "space-card",
+    category: "SPACE & SCIENCE",
+    time: "8H AGO",
+    title: "Private space companies accelerate global connectivity",
+    description:
+      "New launches and tighter regulation could reshape the next decade of internet access.",
+    image: "/images/login/card-space.jpg",
+  },
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const { user, loginUser } = useAppStore();
-
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -45,11 +79,12 @@ export default function LoginPage() {
   const getReturnUrl = useCallback(() => {
     if (typeof window === "undefined") return "/";
     const params = new URLSearchParams(window.location.search);
-    const candidate = params.get("returnUrl") || params.get("redirect") || params.get("next");
+    const candidate =
+      params.get("returnUrl") || params.get("redirect") || params.get("next");
     return sanitizeReturnUrl(candidate);
   }, []);
 
-  // If already authenticated, redirect
+  // Redirect if already authenticated
   useEffect(() => {
     if (mounted && user) {
       router.push(getReturnUrl());
@@ -68,7 +103,11 @@ export default function LoginPage() {
     try {
       const data = await apiFetch<AuthResponse>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email: email.trim(), password, remember_me: rememberMe }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          remember_me: rememberMe,
+        }),
       });
 
       loginUser(data.user, data.access_token);
@@ -92,318 +131,434 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse: any) => {
-    setError(null);
-    setGoogleLoading(true);
-    try {
-      const data = await apiFetch<AuthResponse>("/auth/google", {
-        method: "POST",
-        body: JSON.stringify({ credential: credentialResponse.credential }),
-      });
-      loginUser(data.user, data.access_token);
-      router.push(getReturnUrl());
-    } catch (err: any) {
-      setError(err.message || "Google authentication failed.");
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleGoogleError = () => {
-    setError("Google Sign-In failed.");
-  };
-
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-neutral-300 dark:border-neutral-700 border-t-neutral-950 dark:border-t-white animate-spin rounded-full" />
+      <div className="min-h-screen bg-[#050608] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/20 border-t-white animate-spin rounded-full" />
       </div>
     );
   }
 
-  const googleTheme = "filled_black";
-
-
   return (
-    <div className="min-h-screen w-full bg-background flex flex-col items-center justify-center px-4 relative overflow-hidden animate-entrance select-none">
-      {/* Background Engineering Grid and Circuit Traces */}
-      <div className="absolute inset-0 border-grid opacity-[0.04] pointer-events-none" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,transparent_40%,var(--background)_100%)] pointer-events-none" />
-      
-      {/* CSS-only faint circuit traces */}
-      <div className="absolute top-[15%] left-[5%] w-[150px] h-[1px] bg-neutral-300 dark:bg-neutral-800 opacity-20 hidden md:block">
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-700" />
+    <div className="min-h-screen w-full bg-[#050608] text-white relative flex flex-col justify-between overflow-x-hidden select-none">
+      {/* Background Graphic: Realistic Space Earth Globe & Starfield */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <Image
+          src="/images/login/globe-bg.jpg"
+          alt="Orbital intelligence background"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[70%_center] lg:object-[68%_center] opacity-45 mix-blend-screen scale-105"
+        />
+        {/* Cinematic Vignette & Ambient Radial Glows */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#050608] via-[#050608]/75 to-transparent w-full lg:w-3/5" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050608] via-transparent to-[#050608]/80" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_40%,rgba(14,165,233,0.06),transparent_60%)]" />
+
+        {/* Delicate Cyber Coordinate Lines & Planetary Orbital Arcs */}
+        <svg
+          className="absolute inset-0 w-full h-full opacity-35"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <linearGradient id="orbit-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
+              <stop offset="50%" stopColor="#818cf8" stopOpacity="0.1" />
+              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {/* Orbital Ellipses */}
+          <ellipse
+            cx="66%"
+            cy="52%"
+            rx="520"
+            ry="240"
+            fill="none"
+            stroke="url(#orbit-grad)"
+            strokeWidth="1"
+            transform="rotate(-22 950 500)"
+          />
+          <ellipse
+            cx="68%"
+            cy="50%"
+            rx="640"
+            ry="290"
+            fill="none"
+            stroke="#38bdf8"
+            strokeWidth="0.75"
+            strokeDasharray="4 8"
+            strokeOpacity="0.25"
+            transform="rotate(-20 950 500)"
+          />
+          <ellipse
+            cx="65%"
+            cy="53%"
+            rx="420"
+            ry="180"
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="0.5"
+            strokeOpacity="0.15"
+            transform="rotate(-25 950 500)"
+          />
+
+          {/* Grid crosshairs and coordinate tick marks */}
+          <g stroke="#ffffff" strokeWidth="0.75" strokeOpacity="0.3">
+            <line x1="120" y1="90" x2="128" y2="90" />
+            <line x1="124" y1="86" x2="124" y2="94" />
+
+            <line x1="88%" y1="140" x2="calc(88% + 8px)" y2="140" />
+            <line x1="calc(88% + 4px)" y1="136" x2="calc(88% + 4px)" y2="144" />
+
+            <line x1="42%" y1="78%" x2="calc(42% + 6px)" y2="78%" />
+            <line x1="calc(42% + 3px)" y1="calc(78% - 3px)" x2="calc(42% + 3px)" y2="calc(78% + 3px)" />
+          </g>
+
+          {/* Starlight Constellation Dots */}
+          <circle cx="15%" cy="32%" r="1.5" fill="#ffffff" fillOpacity="0.6" />
+          <circle cx="28%" cy="18%" r="1.2" fill="#38bdf8" fillOpacity="0.7" />
+          <circle cx="48%" cy="24%" r="1.5" fill="#ffffff" fillOpacity="0.5" />
+          <circle cx="58%" cy="16%" r="2" fill="#38bdf8" fillOpacity="0.8" />
+          <circle cx="74%" cy="28%" r="1" fill="#ffffff" fillOpacity="0.4" />
+          <circle cx="82%" cy="38%" r="1.8" fill="#ffffff" fillOpacity="0.7" />
+          <circle cx="92%" cy="22%" r="1.2" fill="#38bdf8" fillOpacity="0.5" />
+          <circle cx="68%" cy="82%" r="1.5" fill="#ffffff" fillOpacity="0.6" />
+        </svg>
       </div>
-      <div className="absolute top-[15%] left-[5%] w-[1px] h-[120px] bg-neutral-300 dark:bg-neutral-800 opacity-20 hidden md:block" />
-      <div className="absolute top-[15%] left-[calc(5%+150px)] w-[100px] h-[1px] bg-neutral-300 dark:bg-neutral-800 opacity-20 origin-left rotate-[35deg] hidden md:block" />
-      
-      <div className="absolute bottom-[20%] right-[5%] w-[180px] h-[1px] bg-neutral-300 dark:bg-neutral-800 opacity-20 hidden md:block">
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-700" />
-      </div>
-      <div className="absolute bottom-[20%] right-[5%] w-[1px] h-[150px] bg-neutral-300 dark:bg-neutral-800 opacity-20 hidden md:block" />
-      
-      {/* Custom keyframes style for animated star and entrance */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes breathe {
-          0%, 100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.05);
-          }
-        }
-        .animate-breathe {
-          animation: breathe 4s ease-in-out infinite;
-        }
-        @keyframes entrance {
-          from {
-            opacity: 0;
-            transform: translateY(16px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-entrance {
-          animation: entrance 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .animate-entrance {
-            animation: none;
-            opacity: 1;
-            transform: none;
-          }
-          .animate-breathe {
-            animation: none;
-          }
-        }
-      `}} />
 
-      {/* Main viewport-constrained center content */}
-      <div className="w-full max-w-[520px] flex flex-col gap-6 relative py-12">
-        
-        {/* Corner Brackets */}
-        <div className="absolute top-2 left-2 w-8 h-8 border-t border-l border-neutral-300 dark:border-neutral-800 pointer-events-none" />
-        <div className="absolute top-2 right-2 w-8 h-8 border-t border-r border-neutral-300 dark:border-neutral-800 pointer-events-none" />
-        <div className="absolute bottom-2 left-2 w-8 h-8 border-b border-l border-neutral-300 dark:border-neutral-800 pointer-events-none" />
-        <div className="absolute bottom-2 right-2 w-8 h-8 border-b border-r border-neutral-300 dark:border-neutral-800 pointer-events-none" />
-
-        {/* Top Status Bar */}
-        <div className="flex items-center justify-center gap-2 font-mono text-[9px] tracking-[0.25em] uppercase text-neutral-400 dark:text-neutral-500 py-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-neutral-950 dark:bg-white inline-block animate-pulse shrink-0" />
-          <span>TECH NEWS TODAY • AUTONOMOUS NEWSROOM ACCESS</span>
-        </div>
-
-        {/* Logo and Titles */}
-        <div className="text-center flex flex-col gap-4 mt-4">
-          <div className="relative w-16 h-16 mx-auto rounded-full flex items-center justify-center border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] shadow-sm animate-breathe">
-            <div className="absolute inset-0 rounded-full bg-neutral-200/20 dark:bg-white/5 blur-md pointer-events-none" />
-            <svg className="w-8 h-8 text-neutral-900 dark:text-white relative z-10" viewBox="0 0 100 100" fill="currentColor">
-              <path d="M 50 15 Q 50 50 85 50 Q 50 50 50 85 Q 50 50 15 50 Q 50 50 50 15 Z" />
-            </svg>
+      {/* ================= TOP HEADER BAR ================= */}
+      <header className="w-full px-6 md:px-12 py-5 flex items-center justify-between z-20 text-[11px] font-mono tracking-widest uppercase">
+        {/* Left: Global Desk Online indicator */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#10b981] shadow-[0_0_10px_#10b981] animate-pulse" />
+            <span className="text-neutral-300 font-semibold tracking-[0.2em]">
+              GLOBAL DESK
+            </span>
+            <span className="text-neutral-500">•</span>
+            <span className="text-neutral-400 font-medium">ONLINE</span>
           </div>
 
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tighter text-neutral-950 dark:text-white font-sans uppercase">
+          <div className="hidden sm:flex items-center gap-2 pl-4 text-neutral-600">
+            <span className="w-16 h-[1px] bg-neutral-800" />
+            <span className="text-[10px] text-neutral-500">+</span>
+          </div>
+        </div>
+
+        {/* Right: Technical Pillar Header */}
+        <div className="text-right text-neutral-500 text-[9px] font-mono leading-[1.35] tracking-[0.2em] hidden sm:block">
+          <div className="text-neutral-400 font-semibold">+ TECHNOLOGY</div>
+          <div>PEOPLE</div>
+          <div className="text-neutral-400">A BRIGHTER TOMORROW</div>
+        </div>
+      </header>
+
+      {/* ================= MAIN CONTENT ================= */}
+      <main className="w-full max-w-[1720px] mx-auto px-6 md:px-12 py-2 lg:py-6 flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-between gap-10 xl:gap-14 z-10">
+        {/* LEFT COLUMN: HERO INTELLIGENCE & NEWS CARDS */}
+        <section className="w-full lg:max-w-[57%] xl:max-w-[60%] flex flex-col justify-center">
+          {/* Eyebrow & Brand Headings */}
+          <div className="flex flex-col mb-7 lg:mb-8">
+            <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.32em] text-neutral-400 uppercase font-medium mb-3">
+              THE DAILY TECHNOLOGY INTELLIGENCE
+            </p>
+
+            <h1 className="text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight text-white uppercase font-sans leading-[1.05]">
               TECH NEWS TODAY
             </h1>
-            <p className="font-mono text-[10px] tracking-[0.35em] uppercase text-neutral-500 dark:text-neutral-400 mt-2 font-bold">
-              SECURE OPERATIONS PORTAL
+
+            <p className="text-lg sm:text-xl lg:text-2xl text-neutral-300 font-light mt-3 leading-relaxed max-w-2xl">
+              Your personal gateway to the technology that matters.
             </p>
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-              Protected access for authorized operators only.
-            </p>
+
+            {/* Pillar Subtitle Strip */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] sm:text-[10px] font-mono tracking-[0.2em] text-neutral-400 uppercase mt-4">
+              <span>BREAKING NEWS</span>
+              <span className="text-neutral-600">/</span>
+              <span>DEEP ANALYSIS</span>
+              <span className="text-neutral-600">/</span>
+              <span>EXPERT PERSPECTIVE</span>
+              <span className="text-neutral-600">/</span>
+              <span>A MORE INFORMED TOMORROW</span>
+            </div>
           </div>
-        </div>
 
-        {/* Main Login Card */}
-        <div className="w-full rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#0c0c0c] p-8 md:p-10 shadow-xl shadow-neutral-200/30 dark:shadow-none transition-all duration-300">
-          
-          {/* Error Banner */}
-          {error && (
-            <div className="mb-6 border border-red-500/20 bg-red-500/5 rounded-xl p-4 flex items-start gap-3" aria-live="polite">
-              <svg className="w-4 h-4 text-red-500 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <p className="font-mono text-[11px] text-red-500 leading-relaxed font-semibold">{error}</p>
+          {/* Micro Tech Telemetry Text Overlay (matching image) */}
+          <div className="flex justify-end pr-2 mb-2 hidden lg:flex">
+            <div className="text-right text-[9px] font-mono tracking-[0.22em] text-neutral-500 leading-tight uppercase">
+              <div>REAL NEWS</div>
+              <div>REAL PEOPLE</div>
+              <div>REAL IMPACT</div>
             </div>
-          )}
+          </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
-            {/* Email Address */}
-            <div>
-              <label htmlFor="login-email" className="block font-mono text-[10px] tracking-widest uppercase text-neutral-500 dark:text-neutral-400 mb-2 font-bold">
-                EMAIL ADDRESS
-              </label>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-neutral-500 group-focus-within:text-neutral-900 dark:group-focus-within:text-white transition-colors duration-150">
-                  <Mail className="w-4 h-4" />
+          {/* 4 FEATURED INTEL CARDS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 xl:gap-4 w-full">
+            {FEATURED_CARDS.map((card) => (
+              <article
+                key={card.id}
+                className="bg-[#0b0e14]/85 backdrop-blur-md border border-white/[0.08] hover:border-white/20 transition-all duration-300 rounded-xl p-3.5 flex flex-col group shadow-lg shadow-black/60 relative overflow-hidden"
+              >
+                {/* Header Tag + Time */}
+                <div className="flex items-center justify-between text-[9px] font-mono tracking-wider mb-2.5">
+                  <span className="text-[#38bdf8] font-bold uppercase">
+                    {card.category}
+                  </span>
+                  <span className="text-neutral-500 uppercase">{card.time}</span>
                 </div>
-                <input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                  placeholder="operator@technews.today"
-                  aria-invalid={error ? "true" : "false"}
-                  className="w-full bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-sm text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-600 outline-none transition-all duration-100 focus:border-neutral-950 dark:focus:border-white focus:ring-2 focus:ring-neutral-950 dark:focus:ring-white/80 focus:ring-offset-2 dark:focus:ring-offset-[#0c0c0c] aria-[invalid=true]:border-red-500/50"
-                />
+
+                {/* Card Thumbnail Image */}
+                <div className="relative aspect-[16/10] w-full rounded-lg overflow-hidden bg-neutral-900 mb-3 border border-white/[0.05]">
+                  <Image
+                    src={card.image}
+                    alt={card.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 25vw"
+                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                </div>
+
+                {/* Headline Title */}
+                <h2 className="text-[11.5px] xl:text-[12px] font-bold text-white leading-tight min-h-[28px] group-hover:text-neutral-100 transition-colors">
+                  {card.title}
+                </h2>
+
+                {/* Narrative Excerpt */}
+                <p className="text-[9.5px] xl:text-[10px] text-neutral-400 font-normal leading-[1.35] mt-1.5">
+                  {card.description}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* RIGHT COLUMN: LOGIN FORM CARD */}
+        <section className="w-full lg:w-[440px] xl:w-[470px] shrink-0">
+          <div className="bg-[#0b0d13]/95 backdrop-blur-2xl border border-white/[0.12] rounded-[28px] p-7 sm:p-9 shadow-2xl shadow-black/95 relative">
+            {/* Form Title & Subtitle */}
+            <div className="mb-7">
+              <h2 className="text-3xl sm:text-[34px] font-bold tracking-tight text-white font-sans leading-tight">
+                Welcome back.
+              </h2>
+              <p className="text-xs sm:text-sm text-neutral-400 mt-2 font-normal">
+                Sign in to continue to your intelligence desk.
+              </p>
+            </div>
+
+            {/* Error Message Box */}
+            {error && (
+              <div
+                className="mb-5 border border-red-500/30 bg-red-500/10 rounded-xl p-3 flex items-start gap-2.5 text-xs text-red-400 font-mono"
+                aria-live="polite"
+              >
+                <span className="shrink-0 mt-0.5 font-bold">✕</span>
+                <p className="leading-snug">{error}</p>
               </div>
-            </div>
+            )}
 
-            {/* Password */}
-            <div>
-              <label htmlFor="login-password" className="block font-mono text-[10px] tracking-widest uppercase text-neutral-500 dark:text-neutral-400 mb-2 font-bold">
-                PASSWORD
-              </label>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-neutral-500 group-focus-within:text-neutral-900 dark:group-focus-within:text-white transition-colors duration-150">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <input
-                  id="login-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                  placeholder="••••••••••••"
-                  aria-invalid={error ? "true" : "false"}
-                  className="w-full bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded-xl pl-11 pr-16 py-3.5 text-sm text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-600 outline-none transition-all duration-100 focus:border-neutral-950 dark:focus:border-white focus:ring-2 focus:ring-neutral-950 dark:focus:ring-white/80 focus:ring-offset-2 dark:focus:ring-offset-[#0c0c0c] aria-[invalid=true]:border-red-500/50"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center font-mono text-[10px] tracking-widest uppercase text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 dark:focus-visible:ring-white rounded-md select-none"
+            <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
+              {/* Email Address */}
+              <div>
+                <label
+                  htmlFor="email-field"
+                  className="block font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-semibold mb-2"
                 >
-                  {showPassword ? "HIDE" : "SHOW"}
-                </button>
-              </div>
-            </div>
-
-            {/* Remember Session & Forgot Password */}
-            <div className="flex items-center justify-between min-h-[44px]">
-              <label className="flex items-center gap-3 cursor-pointer select-none group min-h-[44px]">
-                <div className="relative flex items-center justify-center">
+                  EMAIL ADDRESS
+                </label>
+                <div className="relative flex items-center">
+                  <Mail className="w-4 h-4 text-neutral-500 absolute left-4 pointer-events-none" />
                   <input
-                    id="login-remember"
+                    id="email-field"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    required
+                    placeholder="operator@technews.today"
+                    className="w-full bg-[#12151e]/90 border border-neutral-800 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20 transition-all font-sans"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label
+                  htmlFor="password-field"
+                  className="block font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-semibold mb-2"
+                >
+                  PASSWORD
+                </label>
+                <div className="relative flex items-center">
+                  <Lock className="w-4 h-4 text-neutral-500 absolute left-4 pointer-events-none" />
+                  <input
+                    id="password-field"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    placeholder="••••••••••••"
+                    className="w-full bg-[#12151e]/90 border border-neutral-800 rounded-xl pl-11 pr-16 py-3 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20 transition-all font-sans"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 text-[10px] font-mono font-bold tracking-wider text-neutral-400 hover:text-white uppercase px-1 py-1 transition-colors"
+                  >
+                    {showPassword ? "HIDE" : "SHOW"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Me & Forgot Password Row */}
+              <div className="flex items-center justify-between text-xs pt-1">
+                <label className="flex items-center gap-2.5 cursor-pointer text-neutral-400 select-none group">
+                  <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-5.5 h-5.5 rounded-md border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900/50 flex items-center justify-center transition-all duration-100 peer-focus-visible:ring-2 peer-focus-visible:ring-neutral-950 dark:peer-focus-visible:ring-white peer-checked:bg-neutral-950 dark:peer-checked:bg-white peer-checked:border-neutral-950 dark:peer-checked:border-white">
+                  <div className="w-4 h-4 rounded border border-neutral-700 bg-[#12151e] flex items-center justify-center peer-checked:bg-white peer-checked:border-white transition-all">
                     {rememberMe && (
-                      <svg className="w-3.5 h-3.5 text-white dark:text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                      <svg
+                        className="w-3 h-3 text-black stroke-[3.5]"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                      >
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
                   </div>
-                </div>
-                <span className="font-mono text-[11px] tracking-wider uppercase text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors duration-150">
-                  Remember Session
-                </span>
-              </label>
+                  <span className="group-hover:text-neutral-300 transition-colors">
+                    Remember me
+                  </span>
+                </label>
+
+                <Link
+                  href="/forgot-password"
+                  className="text-neutral-400 hover:text-white transition-colors underline-offset-4 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
+              {/* Primary Sign In Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-white hover:bg-neutral-100 active:scale-[0.99] text-black font-bold text-sm py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-white/5 transition-all mt-2 disabled:opacity-60 disabled:cursor-not-allowed font-sans"
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                    <span>Signing in...</span>
+                  </div>
+                ) : (
+                  <>
+                    <span>Sign in</span>
+                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Social Divider */}
+            <div className="flex items-center gap-3 my-6">
+              <div className="flex-1 h-[1px] bg-neutral-800" />
+              <span className="font-mono text-[9px] tracking-[0.25em] text-neutral-500 uppercase font-semibold">
+                OR CONTINUE WITH
+              </span>
+              <div className="flex-1 h-[1px] bg-neutral-800" />
+            </div>
+
+            {/* Social Authentication Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Continue with Google */}
               <button
                 type="button"
-                className="font-mono text-[11px] tracking-wider text-neutral-500 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 dark:focus-visible:ring-white rounded px-1"
+                onClick={() => {
+                  window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "/api/v1"}/auth/google`;
+                }}
+                className="w-full bg-[#12151e]/90 hover:bg-[#181d2a] border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all"
               >
-                Forgot Password?
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                  <path
+                    fill="#EA4335"
+                    d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8s.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.8 0 12s.7 3.3 1.9 5.7l3.7-2.9z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
+                  />
+                </svg>
+                <span className="truncate">Continue with Google</span>
+              </button>
+
+              {/* Continue with GitHub */}
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "/api/v1"}/auth/github`;
+                }}
+                className="w-full bg-[#12151e]/90 hover:bg-[#181d2a] border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all"
+              >
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                  <path
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                    d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                  />
+                </svg>
+                <span className="truncate">Continue with GitHub</span>
               </button>
             </div>
 
-            {/* Submit Button */}
-            <button
-              id="login-submit"
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-[0.2em] font-bold py-4 rounded-xl transition-all duration-300 cubic-bezier(0.34, 1.56, 0.64, 1) hover:-translate-y-0.5 hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-neutral-950 dark:focus-visible:ring-white bg-neutral-950 dark:bg-white text-white dark:text-black hover:bg-neutral-900 dark:hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:scale-100 shadow-md"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                  </svg>
-                  <span>AUTHENTICATING</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4" />
-                  <span>SECURE LOGIN</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Google Sign In (only if configured) */}
-          {Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) && (
-            <>
-              {/* Divider */}
-              <div className="flex items-center gap-4 my-6">
-                <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
-                <span className="font-mono text-[10px] text-neutral-400 dark:text-neutral-500 tracking-[0.2em] font-bold">OR</span>
-                <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
-              </div>
-
-              <div className="w-full flex justify-center min-h-[44px]">
-                {googleLoading ? (
-                  <div className="w-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 rounded-xl py-3.5 flex items-center justify-center">
-                    <svg className="animate-spin h-4 w-4 text-neutral-500" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                    </svg>
-                  </div>
-                ) : (
-                  <div className="w-full relative [&>div]:!w-full [&>div>div]:!w-full [&_iframe]:!w-full">
-                    <GoogleLogin
-                      onSuccess={handleGoogleSuccess}
-                      onError={handleGoogleError}
-                      theme={googleTheme}
-                      shape="rectangular"
-                      text="signin_with"
-                      size="large"
-                      width="340"
-                    />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Create Account redirect */}
-          <div className="mt-6 text-center font-mono text-[10px] tracking-wider text-neutral-500 dark:text-neutral-400 border-t border-neutral-200 dark:border-neutral-800 pt-6 select-none">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/signup"
-              className="text-neutral-950 dark:text-white hover:underline uppercase font-bold transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-neutral-950 dark:focus-visible:ring-white rounded px-1"
-            >
-              Create Account
-            </Link>
-          </div>
-        </div>
-
-        {/* Bottom System Status */}
-        <div className="w-full rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#0c0c0c] p-4 flex items-center justify-between shadow-md dark:shadow-none transition-all duration-300">
-          <div className="flex items-start gap-3">
-            <span className="h-2 w-2 rounded-full bg-neutral-950 dark:bg-white inline-block animate-pulse mt-1.5 shrink-0" />
-            <div>
-              <h3 className="font-mono text-[10px] tracking-wider font-bold text-neutral-950 dark:text-white uppercase">
-                SYSTEM STATUS: OPERATIONAL
-              </h3>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5 font-medium">
-                All systems secure and monitored
-              </p>
+            {/* Create Account Link */}
+            <div className="mt-6 text-center text-xs text-neutral-400">
+              <span>New to Tech News Today? </span>
+              <Link
+                href="/signup"
+                className="text-white hover:underline font-semibold inline-flex items-center gap-1 transition-colors"
+              >
+                <span>Create an account</span>
+                <ArrowRight className="w-3 h-3 stroke-[2.5]" />
+              </Link>
             </div>
           </div>
-          <ShieldCheck className="w-5 h-5 text-neutral-950 dark:text-white shrink-0" />
+
+          {/* Secure Session Guarantee */}
+          <div className="flex items-center justify-center gap-2 mt-4 text-[11px] text-neutral-500 font-mono">
+            <Shield className="w-3.5 h-3.5 text-neutral-500" />
+            <span>Encrypted session</span>
+            <span>•</span>
+            <span>Secure authentication</span>
+          </div>
+        </section>
+      </main>
+
+      {/* ================= BOTTOM FOOTER BAR ================= */}
+      <footer className="w-full px-6 md:px-12 py-4 flex items-center justify-between text-[10px] font-mono tracking-widest text-neutral-500 uppercase border-t border-white/[0.04] z-20">
+        <div className="text-neutral-500">
+          — IDEAS MOVE THE WORLD FORWARD.
         </div>
-      </div>
+
+        <div className="flex items-center gap-2 text-neutral-400 font-medium">
+          <span className="text-[11px]">❖</span>
+          <span>TECH NEWS TODAY</span>
+        </div>
+      </footer>
     </div>
   );
 }
