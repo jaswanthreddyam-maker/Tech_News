@@ -148,6 +148,8 @@ export default function LoginPage() {
           alt="Orbital intelligence background"
           fill
           priority
+          unoptimized={true}
+          quality={100}
           sizes="100vw"
           className="object-cover object-[70%_center] lg:object-[68%_center]"
         />
@@ -304,6 +306,8 @@ export default function LoginPage() {
                           src={card.image}
                           alt={card.title}
                           fill
+                          unoptimized={true}
+                          quality={100}
                           sizes="(max-width: 768px) 100vw, 25vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-500"
                         />
