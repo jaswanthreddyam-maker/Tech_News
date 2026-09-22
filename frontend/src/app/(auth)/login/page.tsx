@@ -141,18 +141,20 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full bg-black text-white relative flex flex-col justify-between overflow-x-hidden select-none">
-      {/* Background Graphic: Realistic Space Earth Globe & Starfield */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <Image
-          src="/images/login/globe-8k.jpg"
-          alt="Orbital intelligence background"
-          fill
-          priority
-          unoptimized={true}
-          quality={100}
-          sizes="100vw"
-          className="object-cover object-[60%_center] lg:object-[58%_center]"
-        />
+      {/* Background Graphic: Realistic Space Earth Globe & Starfield (Contained Proportional Display) */}
+      <div className="fixed inset-0 pointer-events-none z-0 bg-black flex items-center justify-center overflow-hidden">
+        <div className="relative w-full max-w-[1080px] xl:max-w-[1240px] 2xl:max-w-[1380px] max-h-[84vh] aspect-[16/9]">
+          <Image
+            src="/images/login/globe-8k.jpg"
+            alt="Orbital intelligence background"
+            fill
+            priority
+            unoptimized={true}
+            quality={100}
+            sizes="(max-width: 1280px) 100vw, 1380px"
+            className="object-contain"
+          />
+        </div>
       </div>
 
       {/* ================= TOP HEADER BAR ================= */}
