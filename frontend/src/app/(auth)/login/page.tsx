@@ -144,7 +144,7 @@ export default function LoginPage() {
       {/* Background Graphic: Realistic Space Earth Globe & Starfield */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <Image
-          src="/images/login/globe-bg.jpg"
+          src="/images/login/globe-8k.jpg"
           alt="Orbital intelligence background"
           fill
           priority
