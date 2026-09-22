@@ -151,7 +151,7 @@ export default function LoginPage() {
           unoptimized={true}
           quality={100}
           sizes="100vw"
-          className="object-cover object-[70%_center] lg:object-[68%_center]"
+          className="object-cover object-[60%_center] lg:object-[58%_center]"
         />
       </div>
 
