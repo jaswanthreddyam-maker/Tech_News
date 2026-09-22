@@ -298,14 +298,14 @@ export default function LoginPage() {
                         </span>
                       </div>
 
-                      {/* Card Thumbnail Image (Monochrome Black & White) */}
+                      {/* Card Thumbnail Image (Full Color Media) */}
                       <div className="relative aspect-[16/11] w-full shrink-0 rounded-xl overflow-hidden bg-black mb-2.5 border border-white/[0.08] shadow-inner relative z-10">
                         <Image
                           src={card.image}
                           alt={card.title}
                           fill
                           sizes="(max-width: 768px) 100vw, 25vw"
-                          className="object-cover grayscale contrast-125 brightness-90 group-hover:scale-105 group-hover:contrast-130 transition-all duration-500"
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
                       </div>
