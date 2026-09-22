@@ -231,7 +231,7 @@ export default function LoginPage() {
                 return (
                   <article
                     key={card.id}
-                    className={`group relative shrink-0 w-[200px] sm:w-[215px] xl:w-[230px] h-[335px] sm:h-[345px] xl:h-[355px] cursor-pointer select-none transition-all duration-500 ${
+                    className={`group relative shrink-0 w-[195px] sm:w-[210px] xl:w-[225px] h-[285px] sm:h-[295px] xl:h-[305px] cursor-pointer select-none transition-all duration-500 ${
                       idx > 0 ? "-ml-3 sm:-ml-3.5 xl:-ml-4" : ""
                     } hover:!z-50 hover:-translate-y-3 hover:translate-x-1`}
                     style={{
@@ -243,7 +243,7 @@ export default function LoginPage() {
                   >
                     {/* 3D Physical Extruded Slab Back Plate (from HeroMediaCard) */}
                     <div
-                      className="absolute inset-0 rounded-2xl bg-neutral-950 border border-white/20 shadow-[0_30px_60px_rgba(0,0,0,0.95)] pointer-events-none"
+                      className="absolute inset-0 rounded-lg bg-neutral-950 border border-white/20 shadow-[0_30px_60px_rgba(0,0,0,0.95)] pointer-events-none"
                       style={{
                         transform: "translateZ(-14px)",
                       }}
@@ -251,7 +251,7 @@ export default function LoginPage() {
 
                     {/* 3D Slab Thickness Ring Frame (from HeroMediaCard) */}
                     <div
-                      className="absolute inset-0 rounded-2xl border border-white/10 bg-white/[0.03] pointer-events-none"
+                      className="absolute inset-0 rounded-lg border border-white/10 bg-white/[0.03] pointer-events-none"
                       style={{
                         transform: "translateZ(-7px)",
                       }}
@@ -259,7 +259,7 @@ export default function LoginPage() {
 
                     {/* Front Face Glass Card Container (from HeroMediaCard) */}
                     <div
-                      className={`relative w-full h-full flex flex-col p-4 bg-black rounded-2xl overflow-hidden border transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${
+                      className={`relative w-full h-full flex flex-col p-3 sm:p-3.5 bg-black rounded-lg overflow-hidden border transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${
                         idx === 0
                           ? "border-white/45 ring-1 ring-white/30 shadow-[0_25px_50px_-10px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.15),inset_0_1px_1px_rgba(255,255,255,0.5)] group-hover:border-white/70 group-hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.95),0_0_40px_rgba(255,255,255,0.25)]"
                           : "border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_15px_30px_rgba(0,0,0,0.8)] opacity-95 group-hover:opacity-100 group-hover:border-white/45 group-hover:shadow-[0_0_28px_rgba(255,255,255,0.2)]"
@@ -286,10 +286,10 @@ export default function LoginPage() {
                       </div>
 
                       {/* Layer 4: Fresnel Top-Edge Specular Catch (from HeroMediaCard) */}
-                      <div className="absolute inset-0 pointer-events-none z-30 rounded-2xl border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.6)] group-hover:border-white/40 transition-colors duration-500" />
+                      <div className="absolute inset-0 pointer-events-none z-30 rounded-lg border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.6)] group-hover:border-white/40 transition-colors duration-500" />
 
                       {/* Header Tag + Time (Strict single-line across all cards) */}
-                      <div className="flex items-center justify-between text-[8.5px] sm:text-[9px] font-mono mb-2.5 relative z-10 shrink-0 h-4">
+                      <div className="flex items-center justify-between text-[8.5px] sm:text-[9px] font-mono mb-2 relative z-10 shrink-0 h-4">
                         <span className="text-white font-bold uppercase tracking-[0.08em] sm:tracking-[0.1em] whitespace-nowrap overflow-hidden text-ellipsis drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {card.category}
                         </span>
@@ -299,7 +299,7 @@ export default function LoginPage() {
                       </div>
 
                       {/* Card Thumbnail Image (Full Color Media) */}
-                      <div className="relative aspect-[16/11] w-full shrink-0 rounded-xl overflow-hidden bg-black mb-2.5 border border-white/[0.08] shadow-inner relative z-10">
+                      <div className="relative aspect-[16/10] w-full shrink-0 rounded-md overflow-hidden bg-black mb-2 border border-white/[0.08] shadow-inner relative z-10">
                         <Image
                           src={card.image}
                           alt={card.title}
@@ -311,12 +311,12 @@ export default function LoginPage() {
                       </div>
 
                       {/* Headline Title (Fixed 2-line height across all cards) */}
-                      <h2 className="text-[11.5px] xl:text-[12px] font-bold text-white leading-snug line-clamp-2 h-[34px] sm:h-[36px] shrink-0 group-hover:text-neutral-100 transition-colors relative z-10">
+                      <h2 className="text-[11px] xl:text-[11.5px] font-bold text-white leading-snug line-clamp-2 h-[30px] sm:h-[32px] shrink-0 group-hover:text-neutral-100 transition-colors relative z-10">
                         {card.title}
                       </h2>
 
                       {/* Narrative Excerpt (Uniform fit) */}
-                      <p className="text-[9px] xl:text-[9.5px] text-neutral-400 font-normal leading-[1.38] line-clamp-3 overflow-hidden mt-1 relative z-10">
+                      <p className="text-[8.5px] xl:text-[9px] text-neutral-400 font-normal leading-[1.35] line-clamp-2 overflow-hidden mt-1 relative z-10">
                         {card.description}
                       </p>
                     </div>
