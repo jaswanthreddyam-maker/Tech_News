@@ -141,7 +141,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full bg-black text-white relative flex flex-col justify-between overflow-x-hidden select-none">
-      {/* Background Graphic: Realistic Monochrome Space Earth Globe & Starfield */}
+      {/* Background Graphic: Realistic Space Earth Globe & Starfield */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <Image
           src="/images/login/globe-bg.jpg"
@@ -149,7 +149,7 @@ export default function LoginPage() {
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[70%_center] lg:object-[68%_center] grayscale"
+          className="object-cover object-[70%_center] lg:object-[68%_center]"
         />
       </div>
 
@@ -231,8 +231,8 @@ export default function LoginPage() {
                 return (
                   <article
                     key={card.id}
-                    className={`group relative shrink-0 w-[220px] sm:w-[235px] xl:w-[255px] cursor-pointer select-none transition-all duration-500 ${
-                      idx > 0 ? "-ml-3.5 sm:-ml-4 xl:-ml-5" : ""
+                    className={`group relative shrink-0 w-[200px] sm:w-[215px] xl:w-[230px] cursor-pointer select-none transition-all duration-500 ${
+                      idx > 0 ? "-ml-3 sm:-ml-3.5 xl:-ml-4" : ""
                     } hover:!z-50 hover:-translate-y-3 hover:translate-x-1`}
                     style={{
                       zIndex,
