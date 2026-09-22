@@ -119,18 +119,8 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ================= TOP HEADER BAR ================= */}
-      <header className="w-full px-6 md:px-12 pt-5 pb-2 flex items-center justify-end z-20 text-[11px] font-mono tracking-widest uppercase">
-        {/* Right: Technical Pillar Header */}
-        <div className="text-right text-neutral-500 text-[9px] font-mono leading-[1.35] tracking-[0.2em] hidden sm:block">
-          <div className="text-neutral-300 font-semibold">+ TECHNOLOGY</div>
-          <div>PEOPLE</div>
-          <div className="text-neutral-400">A BRIGHTER TOMORROW</div>
-        </div>
-      </header>
-
       {/* ================= MAIN CONTENT ================= */}
-      <main className="w-full max-w-[1720px] mx-auto px-6 md:px-12 py-1 lg:py-3 flex-1 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-10 xl:gap-14 z-10">
+      <main className="w-full max-w-[1720px] mx-auto px-6 md:px-12 pt-6 sm:pt-8 md:pt-10 pb-4 flex-1 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-10 xl:gap-14 z-10">
         {/* LEFT COLUMN: HERO INTELLIGENCE (Top-Aligned) */}
         <section className="w-full lg:max-w-[58%] xl:max-w-[62%] flex flex-col justify-start self-start pt-0">
           {/* Eyebrow & Brand Headings */}
