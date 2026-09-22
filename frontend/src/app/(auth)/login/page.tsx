@@ -288,12 +288,12 @@ export default function LoginPage() {
                       {/* Layer 4: Fresnel Top-Edge Specular Catch (from HeroMediaCard) */}
                       <div className="absolute inset-0 pointer-events-none z-30 rounded-2xl border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.6)] group-hover:border-white/40 transition-colors duration-500" />
 
-                      {/* Header Tag + Time (Uniform 1-line height across all cards) */}
-                      <div className="flex items-center justify-between text-[9px] sm:text-[9.5px] font-mono tracking-wider mb-2.5 relative z-10 shrink-0 h-4">
-                        <span className="text-white font-bold uppercase tracking-[0.12em] truncate max-w-[130px] sm:max-w-[140px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                      {/* Header Tag + Time (Strict single-line across all cards) */}
+                      <div className="flex items-center justify-between text-[8.5px] sm:text-[9px] font-mono mb-2.5 relative z-10 shrink-0 h-4">
+                        <span className="text-white font-bold uppercase tracking-[0.08em] sm:tracking-[0.1em] whitespace-nowrap overflow-hidden text-ellipsis drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {card.category}
                         </span>
-                        <span className="text-neutral-500 uppercase tracking-widest text-[8.5px] sm:text-[9px] shrink-0 ml-1">
+                        <span className="text-neutral-500 uppercase tracking-widest text-[8px] sm:text-[8.5px] shrink-0 ml-1 font-medium">
                           {card.time}
                         </span>
                       </div>
