@@ -231,7 +231,7 @@ export default function LoginPage() {
                 return (
                   <article
                     key={card.id}
-                    className={`group relative shrink-0 w-[200px] sm:w-[215px] xl:w-[230px] cursor-pointer select-none transition-all duration-500 ${
+                    className={`group relative shrink-0 w-[200px] sm:w-[215px] xl:w-[230px] h-[335px] sm:h-[345px] xl:h-[355px] cursor-pointer select-none transition-all duration-500 ${
                       idx > 0 ? "-ml-3 sm:-ml-3.5 xl:-ml-4" : ""
                     } hover:!z-50 hover:-translate-y-3 hover:translate-x-1`}
                     style={{
@@ -241,102 +241,82 @@ export default function LoginPage() {
                       transformStyle: "preserve-3d",
                     }}
                   >
-                    {/* 3D Physical Extruded Slab Back Plate */}
+                    {/* 3D Physical Extruded Slab Back Plate (from HeroMediaCard) */}
                     <div
-                      className="absolute inset-0 rounded-2xl bg-[#040508]/90 border border-white/25 shadow-[0_30px_60px_rgba(0,0,0,0.95)] pointer-events-none"
+                      className="absolute inset-0 rounded-2xl bg-neutral-950 border border-white/20 shadow-[0_30px_60px_rgba(0,0,0,0.95)] pointer-events-none"
                       style={{
                         transform: "translateZ(-14px)",
                       }}
                     />
 
-                    {/* 3D Slab Thickness Ring Frame */}
+                    {/* 3D Slab Thickness Ring Frame (from HeroMediaCard) */}
                     <div
-                      className="absolute inset-0 rounded-2xl border border-white/20 bg-white/[0.04] pointer-events-none"
+                      className="absolute inset-0 rounded-2xl border border-white/10 bg-white/[0.03] pointer-events-none"
                       style={{
                         transform: "translateZ(-7px)",
                       }}
                     />
 
-                    {/* Front Face Polished Glass Card Container */}
+                    {/* Front Face Glass Card Container (from HeroMediaCard) */}
                     <div
-                      className={`relative w-full h-full flex flex-col p-4 rounded-2xl overflow-hidden border backdrop-blur-2xl transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${
+                      className={`relative w-full h-full flex flex-col p-4 bg-black rounded-2xl overflow-hidden border transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${
                         idx === 0
-                          ? "bg-gradient-to-b from-white/[0.10] via-[#08090d]/85 to-black/95 border-white/40 ring-1 ring-white/30 shadow-[0_25px_50px_-10px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.18),inset_0_1.5px_1px_rgba(255,255,255,0.75)] group-hover:border-white/75 group-hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.98),0_0_45px_rgba(255,255,255,0.3),inset_0_2px_1.5px_rgba(255,255,255,0.9)]"
-                          : "bg-gradient-to-b from-white/[0.06] via-[#08090d]/80 to-black/95 border-white/25 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.55),0_15px_35px_rgba(0,0,0,0.85),0_0_15px_rgba(255,255,255,0.06)] group-hover:border-white/50 group-hover:shadow-[0_0_35px_rgba(255,255,255,0.25),inset_0_2px_1.5px_rgba(255,255,255,0.85)]"
+                          ? "border-white/45 ring-1 ring-white/30 shadow-[0_25px_50px_-10px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.15),inset_0_1px_1px_rgba(255,255,255,0.5)] group-hover:border-white/70 group-hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.95),0_0_40px_rgba(255,255,255,0.25)]"
+                          : "border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_15px_30px_rgba(0,0,0,0.8)] opacity-95 group-hover:opacity-100 group-hover:border-white/45 group-hover:shadow-[0_0_28px_rgba(255,255,255,0.2)]"
                       }`}
                       style={{
                         transformStyle: "preserve-3d",
                       }}
                     >
-                      {/* High-Gloss Glass Reflection Wedge (Direct Specular Sheen) */}
-                      <div className="absolute inset-0 pointer-events-none z-30 rounded-2xl overflow-hidden">
-                        {/* Curved Glossy Specular Sheen across top-left */}
-                        <div
-                          className="absolute -top-[25%] -left-[30%] w-[160%] h-[85%] rounded-full opacity-40 group-hover:opacity-70 transition-opacity duration-500 pointer-events-none"
-                          style={{
-                            background:
-                              "radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.16) 35%, transparent 68%)",
-                            transform: "rotate(-18deg)",
-                          }}
-                        />
-                        {/* Diagonal Glass Crisp Glare Sheet */}
-                        <div
-                          className="absolute top-0 left-0 right-0 h-3/5 opacity-30 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
-                          style={{
-                            background:
-                              "linear-gradient(130deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.12) 32%, transparent 60%)",
-                          }}
-                        />
-                      </div>
+                      {/* Layer 2: Photorealistic Specular Sheen (from HeroMediaCard) */}
+                      <div
+                        className="absolute inset-0 pointer-events-none z-20 mix-blend-overlay transition-opacity duration-500 opacity-40 group-hover:opacity-85"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.12) 25%, transparent 55%, rgba(0,0,0,0.3) 100%)",
+                        }}
+                      />
 
-                      {/* Photorealistic Dynamic Optical Glare Sweep */}
-                      <div className="absolute inset-0 pointer-events-none z-35 overflow-hidden rounded-2xl">
+                      {/* Layer 3: Photorealistic Optical Glare Sweep (from HeroMediaCard) */}
+                      <div className="absolute inset-0 pointer-events-none z-25 overflow-hidden">
                         <div
-                          className="absolute -top-[60%] -bottom-[60%] -left-[160%] w-[320%] bg-[linear-gradient(115deg,transparent_38%,rgba(255,255,255,0.06)_45%,rgba(255,255,255,0.5)_50%,rgba(255,255,255,0.06)_55%,transparent_62%)] group-hover:translate-x-[72%] transition-transform duration-[1000ms] cubic-bezier(0.16,1,0.3,1)"
+                          className="absolute -top-[50%] -bottom-[50%] -left-[160%] w-[320%] bg-[linear-gradient(115deg,transparent_40%,rgba(255,255,255,0.03)_47%,rgba(255,255,255,0.25)_50%,rgba(255,255,255,0.03)_53%,transparent_60%)] group-hover:translate-x-[70%] transition-transform duration-[1100ms] cubic-bezier(0.16,1,0.3,1)"
                           style={{ willChange: "transform" }}
                         />
                       </div>
 
-                      {/* Fresnel Chamfered Top-Edge & Inner Bevel Specular Catch */}
-                      <div className="absolute inset-0 pointer-events-none z-40 rounded-2xl border border-white/20 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.7),inset_1px_0_1px_rgba(255,255,255,0.3),inset_0_-1px_1px_rgba(0,0,0,0.8)] group-hover:border-white/50 transition-colors duration-500" />
+                      {/* Layer 4: Fresnel Top-Edge Specular Catch (from HeroMediaCard) */}
+                      <div className="absolute inset-0 pointer-events-none z-30 rounded-2xl border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.6)] group-hover:border-white/40 transition-colors duration-500" />
 
-                      {/* Header Tag + Time (Pure Monochrome) */}
-                      <div className="flex items-center justify-between text-[9.5px] font-mono tracking-wider mb-3 relative z-10">
-                        <span className="text-white font-bold uppercase tracking-[0.14em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                      {/* Header Tag + Time (Uniform 1-line height across all cards) */}
+                      <div className="flex items-center justify-between text-[9px] sm:text-[9.5px] font-mono tracking-wider mb-2.5 relative z-10 shrink-0 h-4">
+                        <span className="text-white font-bold uppercase tracking-[0.12em] truncate max-w-[130px] sm:max-w-[140px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {card.category}
                         </span>
-                        <span className="text-neutral-500 uppercase tracking-widest text-[9px]">
+                        <span className="text-neutral-500 uppercase tracking-widest text-[8.5px] sm:text-[9px] shrink-0 ml-1">
                           {card.time}
                         </span>
                       </div>
 
-                      {/* Card Thumbnail Image (with Glass Surface Lamination) */}
-                      <div className="relative aspect-[16/11] w-full rounded-xl overflow-hidden bg-black mb-3.5 border border-white/[0.12] shadow-inner relative z-10">
+                      {/* Card Thumbnail Image (Monochrome Black & White) */}
+                      <div className="relative aspect-[16/11] w-full shrink-0 rounded-xl overflow-hidden bg-black mb-2.5 border border-white/[0.08] shadow-inner relative z-10">
                         <Image
                           src={card.image}
                           alt={card.title}
                           fill
                           sizes="(max-width: 768px) 100vw, 25vw"
-                          className="object-cover grayscale contrast-125 brightness-95 group-hover:scale-105 group-hover:contrast-130 transition-all duration-500"
-                        />
-                        {/* Glass Lamination Reflection Over Thumbnail */}
-                        <div
-                          className="absolute inset-0 pointer-events-none z-15"
-                          style={{
-                            background:
-                              "linear-gradient(130deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.06) 35%, transparent 58%)",
-                          }}
+                          className="object-cover grayscale contrast-125 brightness-90 group-hover:scale-105 group-hover:contrast-130 transition-all duration-500"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
                       </div>
 
-                      {/* Headline Title */}
-                      <h2 className="text-[12px] xl:text-[12.5px] font-bold text-white leading-snug min-h-[32px] group-hover:text-neutral-100 transition-colors relative z-10">
+                      {/* Headline Title (Fixed 2-line height across all cards) */}
+                      <h2 className="text-[11.5px] xl:text-[12px] font-bold text-white leading-snug line-clamp-2 h-[34px] sm:h-[36px] shrink-0 group-hover:text-neutral-100 transition-colors relative z-10">
                         {card.title}
                       </h2>
 
-                      {/* Narrative Excerpt */}
-                      <p className="text-[9.5px] xl:text-[10px] text-neutral-400 font-normal leading-[1.4] mt-2 line-clamp-3 relative z-10">
+                      {/* Narrative Excerpt (Uniform fit) */}
+                      <p className="text-[9px] xl:text-[9.5px] text-neutral-400 font-normal leading-[1.38] line-clamp-3 overflow-hidden mt-1 relative z-10">
                         {card.description}
                       </p>
                     </div>
