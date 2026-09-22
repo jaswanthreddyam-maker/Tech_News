@@ -149,82 +149,8 @@ export default function LoginPage() {
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[70%_center] lg:object-[68%_center] opacity-40 mix-blend-screen scale-105 grayscale contrast-125 brightness-95"
+          className="object-cover object-[70%_center] lg:object-[68%_center] grayscale"
         />
-        {/* Cinematic Vignette & Deep Neutral Contrast Layers */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent w-full lg:w-3/5" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/85" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_40%,rgba(255,255,255,0.03),transparent_60%)]" />
-
-        {/* Delicate Cyber Coordinate Lines & Planetary Orbital Arcs (Pure Monochrome) */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-30"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <linearGradient id="orbit-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.25" />
-              <stop offset="50%" stopColor="#ffffff" stopOpacity="0.08" />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {/* Orbital Ellipses */}
-          <ellipse
-            cx="66%"
-            cy="52%"
-            rx="520"
-            ry="240"
-            fill="none"
-            stroke="url(#orbit-grad)"
-            strokeWidth="1"
-            transform="rotate(-22 950 500)"
-          />
-          <ellipse
-            cx="68%"
-            cy="50%"
-            rx="640"
-            ry="290"
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth="0.75"
-            strokeDasharray="4 8"
-            strokeOpacity="0.2"
-            transform="rotate(-20 950 500)"
-          />
-          <ellipse
-            cx="65%"
-            cy="53%"
-            rx="420"
-            ry="180"
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth="0.5"
-            strokeOpacity="0.12"
-            transform="rotate(-25 950 500)"
-          />
-
-          {/* Grid crosshairs and coordinate tick marks */}
-          <g stroke="#ffffff" strokeWidth="0.75" strokeOpacity="0.3">
-            <line x1="120" y1="90" x2="128" y2="90" />
-            <line x1="124" y1="86" x2="124" y2="94" />
-
-            <line x1="88%" y1="140" x2="calc(88% + 8px)" y2="140" />
-            <line x1="calc(88% + 4px)" y1="136" x2="calc(88% + 4px)" y2="144" />
-
-            <line x1="42%" y1="78%" x2="calc(42% + 6px)" y2="78%" />
-            <line x1="calc(42% + 3px)" y1="calc(78% - 3px)" x2="calc(42% + 3px)" y2="calc(78% + 3px)" />
-          </g>
-
-          {/* Starlight Constellation Dots */}
-          <circle cx="15%" cy="32%" r="1.5" fill="#ffffff" fillOpacity="0.6" />
-          <circle cx="28%" cy="18%" r="1.2" fill="#ffffff" fillOpacity="0.5" />
-          <circle cx="48%" cy="24%" r="1.5" fill="#ffffff" fillOpacity="0.5" />
-          <circle cx="58%" cy="16%" r="2" fill="#ffffff" fillOpacity="0.7" />
-          <circle cx="74%" cy="28%" r="1" fill="#ffffff" fillOpacity="0.4" />
-          <circle cx="82%" cy="38%" r="1.8" fill="#ffffff" fillOpacity="0.6" />
-          <circle cx="92%" cy="22%" r="1.2" fill="#ffffff" fillOpacity="0.5" />
-          <circle cx="68%" cy="82%" r="1.5" fill="#ffffff" fillOpacity="0.5" />
-        </svg>
       </div>
 
       {/* ================= TOP HEADER BAR ================= */}
