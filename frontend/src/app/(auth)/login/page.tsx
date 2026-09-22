@@ -231,60 +231,95 @@ export default function LoginPage() {
                 return (
                   <article
                     key={card.id}
-                    className={`relative shrink-0 w-[220px] sm:w-[235px] xl:w-[255px] rounded-2xl p-4 transition-all duration-300 group select-none cursor-pointer border border-neutral-800/90 border-t-white/35 border-l-white/20 border-r-black border-b-black ${
+                    className={`group relative shrink-0 w-[220px] sm:w-[235px] xl:w-[255px] cursor-pointer select-none transition-all duration-500 ${
                       idx > 0 ? "-ml-3.5 sm:-ml-4 xl:-ml-5" : ""
-                    } hover:!z-50 hover:-translate-y-3 hover:translate-x-1 hover:border-white/50 hover:shadow-[0_25px_50px_rgba(0,0,0,0.98),inset_0_2px_2px_rgba(255,255,255,0.4)]`}
+                    } hover:!z-50 hover:-translate-y-3 hover:translate-x-1`}
                     style={{
                       zIndex,
                       transform:
                         "rotateY(-11deg) rotateX(1deg) rotateZ(0deg)",
                       transformStyle: "preserve-3d",
-                      background:
-                        "linear-gradient(155deg, rgba(28,28,33,0.96) 0%, rgba(13,13,16,0.98) 50%, rgba(5,5,7,0.99) 100%)",
-                      boxShadow: `
-                        inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.32),
-                        inset 1.5px 0 1px 0 rgba(255, 255, 255, 0.18),
-                        inset -1px -1px 2px 0 rgba(0, 0, 0, 0.9),
-                        -3px 6px 12px rgba(0, 0, 0, 0.65),
-                        8px 16px 28px rgba(0, 0, 0, 0.88),
-                        18px 28px 48px rgba(0, 0, 0, 0.95)
-                      `,
                     }}
                   >
-                    {/* Flashy specular gloss sheen overlay */}
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.12] pointer-events-none" />
+                    {/* 3D Physical Extruded Slab Back Plate (from HeroMediaCard) */}
+                    <div
+                      className="absolute inset-0 rounded-2xl bg-neutral-950 border border-white/20 shadow-[0_30px_60px_rgba(0,0,0,0.95)] pointer-events-none"
+                      style={{
+                        transform: "translateZ(-14px)",
+                      }}
+                    />
 
-                    {/* Header Tag + Time (Pure Monochrome) */}
-                    <div className="flex items-center justify-between text-[9.5px] font-mono tracking-wider mb-3 relative z-10">
-                      <span className="text-white font-bold uppercase tracking-[0.14em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                        {card.category}
-                      </span>
-                      <span className="text-neutral-500 uppercase tracking-widest text-[9px]">
-                        {card.time}
-                      </span>
-                    </div>
+                    {/* 3D Slab Thickness Ring Frame (from HeroMediaCard) */}
+                    <div
+                      className="absolute inset-0 rounded-2xl border border-white/10 bg-white/[0.03] pointer-events-none"
+                      style={{
+                        transform: "translateZ(-7px)",
+                      }}
+                    />
 
-                    {/* Card Thumbnail Image (Monochrome Black & White) */}
-                    <div className="relative aspect-[16/11] w-full rounded-xl overflow-hidden bg-black mb-3.5 border border-white/[0.08] shadow-inner">
-                      <Image
-                        src={card.image}
-                        alt={card.title}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 25vw"
-                        className="object-cover grayscale contrast-125 brightness-90 group-hover:scale-105 group-hover:contrast-130 transition-all duration-500"
+                    {/* Front Face Glass Card Container (from HeroMediaCard) */}
+                    <div
+                      className={`relative w-full h-full flex flex-col p-4 bg-black rounded-2xl overflow-hidden border transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${
+                        idx === 0
+                          ? "border-white/45 ring-1 ring-white/30 shadow-[0_25px_50px_-10px_rgba(0,0,0,0.95),0_0_30px_rgba(255,255,255,0.15),inset_0_1px_1px_rgba(255,255,255,0.5)] group-hover:border-white/70 group-hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.95),0_0_40px_rgba(255,255,255,0.25)]"
+                          : "border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_15px_30px_rgba(0,0,0,0.8)] opacity-95 group-hover:opacity-100 group-hover:border-white/45 group-hover:shadow-[0_0_28px_rgba(255,255,255,0.2)]"
+                      }`}
+                      style={{
+                        transformStyle: "preserve-3d",
+                      }}
+                    >
+                      {/* Layer 2: Photorealistic Specular Sheen (from HeroMediaCard) */}
+                      <div
+                        className="absolute inset-0 pointer-events-none z-20 mix-blend-overlay transition-opacity duration-500 opacity-40 group-hover:opacity-85"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.12) 25%, transparent 55%, rgba(0,0,0,0.3) 100%)",
+                        }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+
+                      {/* Layer 3: Photorealistic Optical Glare Sweep (from HeroMediaCard) */}
+                      <div className="absolute inset-0 pointer-events-none z-25 overflow-hidden">
+                        <div
+                          className="absolute -top-[50%] -bottom-[50%] -left-[160%] w-[320%] bg-[linear-gradient(115deg,transparent_40%,rgba(255,255,255,0.03)_47%,rgba(255,255,255,0.25)_50%,rgba(255,255,255,0.03)_53%,transparent_60%)] group-hover:translate-x-[70%] transition-transform duration-[1100ms] cubic-bezier(0.16,1,0.3,1)"
+                          style={{ willChange: "transform" }}
+                        />
+                      </div>
+
+                      {/* Layer 4: Fresnel Top-Edge Specular Catch (from HeroMediaCard) */}
+                      <div className="absolute inset-0 pointer-events-none z-30 rounded-2xl border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.6)] group-hover:border-white/40 transition-colors duration-500" />
+
+                      {/* Header Tag + Time (Pure Monochrome) */}
+                      <div className="flex items-center justify-between text-[9.5px] font-mono tracking-wider mb-3 relative z-10">
+                        <span className="text-white font-bold uppercase tracking-[0.14em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                          {card.category}
+                        </span>
+                        <span className="text-neutral-500 uppercase tracking-widest text-[9px]">
+                          {card.time}
+                        </span>
+                      </div>
+
+                      {/* Card Thumbnail Image (Monochrome Black & White) */}
+                      <div className="relative aspect-[16/11] w-full rounded-xl overflow-hidden bg-black mb-3.5 border border-white/[0.08] shadow-inner relative z-10">
+                        <Image
+                          src={card.image}
+                          alt={card.title}
+                          fill
+                          sizes="(max-width: 768px) 100vw, 25vw"
+                          className="object-cover grayscale contrast-125 brightness-90 group-hover:scale-105 group-hover:contrast-130 transition-all duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                      </div>
+
+                      {/* Headline Title */}
+                      <h2 className="text-[12px] xl:text-[12.5px] font-bold text-white leading-snug min-h-[32px] group-hover:text-neutral-100 transition-colors relative z-10">
+                        {card.title}
+                      </h2>
+
+                      {/* Narrative Excerpt */}
+                      <p className="text-[9.5px] xl:text-[10px] text-neutral-400 font-normal leading-[1.4] mt-2 line-clamp-3 relative z-10">
+                        {card.description}
+                      </p>
                     </div>
-
-                    {/* Headline Title */}
-                    <h2 className="text-[12px] xl:text-[12.5px] font-bold text-white leading-snug min-h-[32px] group-hover:text-neutral-100 transition-colors relative z-10">
-                      {card.title}
-                    </h2>
-
-                    {/* Narrative Excerpt */}
-                    <p className="text-[9.5px] xl:text-[10px] text-neutral-400 font-normal leading-[1.4] mt-2 line-clamp-3 relative z-10">
-                      {card.description}
-                    </p>
                   </article>
                 );
               })}
