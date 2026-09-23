@@ -37,7 +37,47 @@ router = APIRouter()
 
 # Cookie configuration constants
 REFRESH_COOKIE_NAME = "refresh_token"
-REFRESH_COOKIE_PATH = "/api/v1/auth"
+REFRESH_COOKIE_PATH = "/"
+
+
+def _is_production_or_secure(request: Request | None = None) -> bool:
+    """Determine if running in production or a secure HTTPS deployment."""
+    app_env = (settings.APP_ENV or settings.ENV or "").lower()
+    if app_env in {"production", "staging"} or not settings.DEBUG:
+        return True
+    if request:
+        return (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto", "").lower() == "https"
+        )
+    return False
+
+
+def _set_refresh_cookie(
+    response: Response,
+    token: str,
+    max_age: int,
+    request: Request | None = None,
+) -> None:
+    """Set the HttpOnly refresh token cookie on the response."""
+    is_secure = _is_production_or_secure(request)
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+        max_age=max_age,
+    )
+
+
+def _delete_refresh_cookie(response: Response) -> None:
+    """Delete the refresh token cookie from the response."""
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+    )
 
 
 def _extract_client_info(request: Request) -> tuple:
@@ -75,28 +115,6 @@ async def _build_token_response(
             "role": role_name,
             "status": user.status,
         },
-    )
-
-
-def _set_refresh_cookie(response: Response, token: str, max_age: int) -> None:
-    """Set the HttpOnly refresh token cookie on the response."""
-    is_production = settings.ENV == "production"
-    response.set_cookie(
-        key=REFRESH_COOKIE_NAME,
-        value=token,
-        httponly=True,
-        secure=is_production,
-        samesite="lax",
-        path=REFRESH_COOKIE_PATH,
-        max_age=max_age,
-    )
-
-
-def _delete_refresh_cookie(response: Response) -> None:
-    """Delete the refresh token cookie from the response."""
-    response.delete_cookie(
-        key=REFRESH_COOKIE_NAME,
-        path=REFRESH_COOKIE_PATH,
     )
 
 
@@ -183,7 +201,7 @@ async def register(
 
     # Set refresh cookie
     max_age_seconds = expire_days * 24 * 60 * 60
-    _set_refresh_cookie(response, refresh, max_age_seconds)
+    _set_refresh_cookie(response, refresh, max_age_seconds, request=request)
 
     # Build token response
     token_response = await _build_token_response(db, new_user)
@@ -298,7 +316,7 @@ async def login(
 
     # Set refresh cookie
     max_age_seconds = expire_days * 24 * 60 * 60
-    _set_refresh_cookie(response, refresh, max_age_seconds)
+    _set_refresh_cookie(response, refresh, max_age_seconds, request=request)
 
     # Build token response
     token_response = await _build_token_response(db, user)
@@ -433,7 +451,7 @@ async def refresh_token(
 
     # Set new cookie
     remaining_seconds = max(int(remaining_ttl.total_seconds()), 0)
-    _set_refresh_cookie(response, new_refresh, remaining_seconds)
+    _set_refresh_cookie(response, new_refresh, remaining_seconds, request=request)
 
     # Build new access token
     token_response = await _build_token_response(db, user)
@@ -692,7 +710,7 @@ async def google_auth(
     await db.flush()
 
     max_age_seconds = expire_days * 24 * 60 * 60
-    _set_refresh_cookie(response, refresh, max_age_seconds)
+    _set_refresh_cookie(response, refresh, max_age_seconds, request=request)
 
     token_response = await _build_token_response(db, user)
 

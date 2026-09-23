@@ -2,14 +2,30 @@ import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
 const API_BASE_URL = getApiBaseUrl();
 
-// In-memory access token storage (never stored in localStorage)
+// In-memory access token storage (hydrated from sessionStorage across F5 page refreshes)
 let accessToken: string | null = null;
 let tokenExpiresAt: number | null = null;
 
-// The backend handles the HttpOnly refresh token cookie automatically
-
 export const sessionManager = {
   isAuthenticated(): boolean {
+    if (!accessToken && typeof window !== "undefined") {
+      try {
+        const storedToken = sessionStorage.getItem("access_token");
+        const storedExp = sessionStorage.getItem("token_expires_at");
+        if (storedToken && storedExp) {
+          const exp = parseInt(storedExp, 10);
+          if (Date.now() < exp - 10000) {
+            accessToken = storedToken;
+            tokenExpiresAt = exp;
+          } else {
+            sessionStorage.removeItem("access_token");
+            sessionStorage.removeItem("token_expires_at");
+          }
+        }
+      } catch {
+        // Ignore storage access errors
+      }
+    }
     if (!accessToken || !tokenExpiresAt) return false;
     return Date.now() < tokenExpiresAt - 10000;
   },
@@ -22,8 +38,14 @@ export const sessionManager = {
     accessToken = token;
     tokenExpiresAt = Date.now() + (expiresInSeconds * 1000);
     if (typeof window !== "undefined") {
-      localStorage.setItem("has_session", "true");
-      localStorage.setItem("session_event", `login_${Date.now()}`);
+      try {
+        sessionStorage.setItem("access_token", token);
+        sessionStorage.setItem("token_expires_at", String(tokenExpiresAt));
+        localStorage.setItem("has_session", "true");
+        localStorage.setItem("session_event", `login_${Date.now()}`);
+      } catch {
+        // Ignore storage access errors
+      }
     }
   },
 
@@ -31,14 +53,22 @@ export const sessionManager = {
     accessToken = null;
     tokenExpiresAt = null;
     if (typeof window !== "undefined") {
-      localStorage.removeItem("has_session");
-      localStorage.setItem("session_event", `logout_${Date.now()}`);
+      try {
+        sessionStorage.removeItem("access_token");
+        sessionStorage.removeItem("token_expires_at");
+        localStorage.removeItem("has_session");
+        localStorage.removeItem("cached_user");
+        localStorage.setItem("session_event", `logout_${Date.now()}`);
+      } catch {
+        // Ignore storage access errors
+      }
     }
   },
 
   async login(credentials: any): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(credentials)
     });
@@ -50,6 +80,11 @@ export const sessionManager = {
     
     if (data.access_token) {
       this.setSession(data.access_token);
+      if (data.user && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("cached_user", JSON.stringify(data.user));
+        } catch {}
+      }
     }
     return data;
   },
@@ -57,6 +92,7 @@ export const sessionManager = {
   async register(details: any): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(details)
     });
@@ -73,17 +109,23 @@ export const sessionManager = {
 
     if (data.access_token) {
       this.setSession(data.access_token);
+      if (data.user && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("cached_user", JSON.stringify(data.user));
+        } catch {}
+      }
     }
     return data;
   },
 
   async logout(): Promise<void> {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST" });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (e) {
-      // eslint-disable-next-line no-console
-
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Ignore network errors on logout
     } finally {
       this.clearSession();
     }
@@ -94,13 +136,22 @@ export const sessionManager = {
       return null;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: "POST",
-        credentials: "include"
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       if (!res.ok) {
-        this.clearSession();
+        if (res.status === 401 || res.status === 403) {
+          this.clearSession();
+        }
         return null;
       }
       
@@ -109,11 +160,17 @@ export const sessionManager = {
       
       if (data.access_token) {
         this.setSession(data.access_token);
+        if (data.user && typeof window !== "undefined") {
+          try {
+            localStorage.setItem("cached_user", JSON.stringify(data.user));
+          } catch {}
+        }
         return data;
       }
       return null;
-    } catch (e) {
-      this.clearSession();
+    } catch {
+      clearTimeout(timeoutId);
+      // Transient error / timeout — do NOT clear valid session marker
       return null;
     }
   }

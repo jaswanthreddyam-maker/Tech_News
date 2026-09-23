@@ -9,6 +9,30 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const initializeSession = useCallback(
     async (force = false) => {
+      // 1. Optimistic hydration on mount: restore cached user & token to prevent UI flash
+      if (typeof window !== "undefined") {
+        const hadSession = localStorage.getItem("has_session") === "true";
+        const cachedUserStr = localStorage.getItem("cached_user");
+        const activeToken = sessionManager.getAccessToken();
+
+        if (hadSession && cachedUserStr && !useAppStore.getState().user) {
+          try {
+            const cachedUser = JSON.parse(cachedUserStr);
+            if (cachedUser && cachedUser.id) {
+              loginUser(cachedUser, activeToken || "");
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+
+        if (!hadSession) {
+          setRestoringSession(false);
+          return;
+        }
+      }
+
+      // 2. Check refresh suppression guard
       if (!force) {
         const suppressUntil = useAppStore.getState().authRefreshSuppressUntil;
         if (suppressUntil && suppressUntil > Date.now()) {
@@ -17,21 +41,25 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         }
       }
 
+      // 3. Perform background silent token refresh via Next.js proxy
       try {
         const data = await sessionManager.refresh();
         if (data && data.user && data.access_token) {
           setAuthRefreshSuppressUntil(null);
           loginUser(data.user, data.access_token);
-        } else {
-          setAuthRefreshSuppressUntil(Date.now() + 300000);
+        } else if (!sessionManager.isAuthenticated()) {
+          // If refresh returned nothing and no valid token in session, clean up
+          logoutUser();
         }
-      } catch (e: any) {
-        setAuthRefreshSuppressUntil(Date.now() + 300000);
+      } catch {
+        if (!sessionManager.isAuthenticated()) {
+          logoutUser();
+        }
       } finally {
         setRestoringSession(false);
       }
     },
-    [loginUser, setRestoringSession, setAuthRefreshSuppressUntil]
+    [loginUser, logoutUser, setRestoringSession, setAuthRefreshSuppressUntil]
   );
 
   useEffect(() => {

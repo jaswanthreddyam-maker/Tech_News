@@ -116,12 +116,23 @@ export const useAppStore = create<AppState>((set) => ({
     }),
 
   loginUser: (user, accessToken) => {
-    sessionManager.setSession(accessToken);
+    if (accessToken && !sessionManager.isAuthenticated()) {
+      sessionManager.setSession(accessToken);
+    }
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("cached_user", JSON.stringify(user));
+        localStorage.setItem("has_session", "true");
+      } catch {
+        // Ignore storage errors
+      }
+    }
+    const activeToken = accessToken || sessionManager.getAccessToken();
     set({
       user,
-      accessToken,
+      accessToken: activeToken,
       isAdminAuthenticated: true,
-      adminToken: accessToken,
+      adminToken: activeToken,
       authGate: { isOpen: false, feature: null, returnUrl: null },
       authRefreshSuppressUntil: null,
     });
@@ -129,6 +140,14 @@ export const useAppStore = create<AppState>((set) => ({
   logoutUser: () => {
     sessionManager.clearSession();
     clearUserQueryCache();
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("cached_user");
+        localStorage.removeItem("has_session");
+      } catch {
+        // Ignore storage errors
+      }
+    }
     set({
       user: null,
       accessToken: null,
