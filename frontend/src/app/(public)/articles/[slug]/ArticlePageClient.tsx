@@ -125,7 +125,7 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
 
 
   // Unpack API response fields
-  const { article, content, clean_html, images, knowledge, related, navigation, scoring_debug } = rawData;
+  const { article, content, clean_html, images, knowledge, related, navigation } = rawData;
 
   // Reset scroll position to top (0, 0) immediately upon article page mount and after layout paint
   useEffect(() => {
@@ -317,44 +317,6 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
     </div>
   ) : null;
 
-  // Explainability Diagnostics Panel
-  const explainabilityPanel = scoring_debug ? (
-    <div className="bg-card border border-border/60 rounded-xl p-5 my-8 font-mono text-xs text-muted-foreground">
-      <h4 className="text-foreground font-bold mb-3 flex items-center gap-2">
-        <span>⚙️ Diagnostic: Why this story?</span>
-      </h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <div className="flex justify-between">
-            <span>Base Impact Score:</span>
-            <span className="text-foreground">{scoring_debug.base_impact_score}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Freshness Multiplier:</span>
-            <span className="text-foreground">{scoring_debug.freshness_multiplier}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Effective Score:</span>
-            <span className="text-primary font-bold">{scoring_debug.effective_score}</span>
-          </div>
-        </div>
-        <div className="space-y-1.5 border-t md:border-t-0 md:border-l border-border/40 pt-3 md:pt-0 md:pl-4">
-          <div className="flex justify-between">
-            <span>Decay Model:</span>
-            <span className="text-foreground">{scoring_debug.decay_model}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Time Window:</span>
-            <span className="text-foreground">{scoring_debug.window_hours}h</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Algorithm Version:</span>
-            <span className="text-foreground">{scoring_debug.algorithm_version}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : null;
 
   // Prev / Next Navigation Footer Card
   const footerNavigationNode = navigation ? (
@@ -565,18 +527,15 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
         }
         keyTakeaways={keyTakeawaysNode}
         askAI={
-          <div className="space-y-6">
-            <ConversationalSearch
-              conversationId={conversationId}
-              articleId={article.id}
-              articleTitle={article.title}
-              keywords={[]}
-              initialMode="ARTICLE"
-              hideModeSelector={true}
-              showOpenFullChat={true}
-            />
-            {explainabilityPanel}
-          </div>
+          <ConversationalSearch
+            conversationId={conversationId}
+            articleId={article.id}
+            articleTitle={article.title}
+            keywords={[]}
+            initialMode="ARTICLE"
+            hideModeSelector={true}
+            showOpenFullChat={true}
+          />
         }
         timeline={timelineNode}
         knowledgePanel={
