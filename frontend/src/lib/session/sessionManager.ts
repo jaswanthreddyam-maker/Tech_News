@@ -130,7 +130,14 @@ export const sessionManager = {
     });
 
     if (!res.ok) {
-      const err: any = new Error("Registration failed");
+      let detail = "Registration failed";
+      try {
+        const errorBody = await res.json();
+        detail = errorBody?.detail || errorBody?.error?.message || detail;
+      } catch {
+        // Ignore parse errors
+      }
+      const err: any = new Error(detail);
       err.status = res.status;
       throw err;
     }

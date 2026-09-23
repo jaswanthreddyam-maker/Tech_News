@@ -40,3 +40,17 @@ class GoogleAuthRequest(BaseModel):
     """Schema for Google OAuth ID token submission."""
 
     credential: str = Field(..., description="Google ID token from client-side sign-in")
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema for requesting a password reset OTP code."""
+
+    email: EmailStr = Field(..., description="Email address for the account to reset")
+
+
+class ResetPasswordRequest(BaseModel):
+    """Schema for completing a password reset with an OTP code."""
+
+    email: EmailStr = Field(..., description="Email address for the account to reset")
+    code: str = Field(..., min_length=6, max_length=6, description="6-digit OTP code from email")
+    new_password: str = Field(..., min_length=8, max_length=128, description="New password (minimum 8 characters)")

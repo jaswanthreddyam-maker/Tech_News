@@ -1,4 +1,6 @@
+import hashlib
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -12,6 +14,7 @@ from app.core.audit import log_audit
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import correlation_id_ctx
+from app.core.redis import get_redis_client
 from app.core.security import (
     _load_user_permissions,
     apply_rate_limit,
@@ -23,10 +26,13 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import OAuthAccount, Role, User, UserSession
+from app.notifications.email.provider import EmailPayload, get_email_provider
 from app.schemas.auth import (
+    ForgotPasswordRequest,
     GoogleAuthRequest,
     LoginRequest,
     RegisterRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserResponse,
 )
@@ -766,4 +772,217 @@ async def get_me(
     return StandardResponse(
         correlation_id=correlation_id,
         data=user_response,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /forgot-password
+# ---------------------------------------------------------------------------
+
+
+PASSWORD_RESET_PREFIX = "password_reset:"
+PASSWORD_RESET_TTL = 900  # 15 minutes
+
+
+def _hash_otp(code: str) -> str:
+    """SHA-256 hash the OTP code so it's not stored in plaintext in Redis."""
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+@router.post("/forgot-password", response_model=StandardResponse[dict])
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Request a password reset OTP code. Sends a 6-digit code to the user's email.
+    Always returns success to prevent email enumeration.
+    """
+    correlation_id = correlation_id_ctx.get() or "system"
+    ip, device = _extract_client_info(request)
+
+    # Rate limit: 3 requests per minute per IP
+    try:
+        await apply_rate_limit(request, action="forgot_password", max_requests=3)
+    except HTTPException as e:
+        await log_audit(db, "forgot_password_rate_limit", "auth", metadata={"ip": ip}, ip_address=ip, device=device)
+        raise e
+
+    email = payload.email.lower().strip()
+
+    # Generate 6-digit OTP
+    otp_code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+    hashed_code = _hash_otp(otp_code)
+
+    # Store hashed OTP in Redis with 15-minute TTL
+    try:
+        redis = get_redis_client()
+        redis_key = f"{PASSWORD_RESET_PREFIX}{email}"
+        await redis.set(redis_key, hashed_code, ex=PASSWORD_RESET_TTL)
+    except Exception as e:
+        logger.error(f"Redis error storing password reset OTP: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to process password reset request. Please try again.",
+        )
+
+    # Check if user exists (but always return success for anti-enumeration)
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalars().first()
+
+    if user:
+        # Send OTP via email
+        try:
+            provider = get_email_provider()
+            email_payload = EmailPayload(
+                to=email,
+                subject="Your Password Reset Code — Tech News Today",
+                html=(
+                    f'<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; background: #080808; color: #ffffff;">'
+                    f'<h1 style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 8px;">TECH NEWS TODAY</h1>'
+                    f'<p style="font-size: 11px; letter-spacing: 2px; color: #888; text-transform: uppercase; margin: 0 0 32px;">Password Reset Request</p>'
+                    f'<p style="font-size: 14px; color: #ccc; line-height: 1.6; margin: 0 0 24px;">Use the following code to reset your password. This code expires in 15 minutes.</p>'
+                    f'<div style="background: #111; border: 1px solid #222; padding: 20px; text-align: center; margin: 0 0 24px;">'
+                    f'<span style="font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #fff;">{otp_code}</span>'
+                    f'</div>'
+                    f'<p style="font-size: 12px; color: #666; line-height: 1.5;">If you did not request this reset, you can safely ignore this email. Your password will not be changed.</p>'
+                    f'</div>'
+                ),
+                text=f"Your Tech News Today password reset code is: {otp_code}\n\nThis code expires in 15 minutes. If you did not request this, ignore this email.",
+                idempotency_key=f"pwd-reset-{email}-{correlation_id}",
+                tags={"category": "password_reset"},
+            )
+            await provider.send(email_payload)
+            logger.info(f"Password reset OTP sent to {email}")
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {email}: {e}")
+            # Don't expose email delivery failures to the client
+
+        await log_audit(
+            db,
+            "forgot_password_requested",
+            "auth",
+            user_id=user.id,
+            metadata={"email": email},
+            ip_address=ip,
+            device=device,
+        )
+    else:
+        await log_audit(
+            db,
+            "forgot_password_unknown_email",
+            "auth",
+            metadata={"email": email},
+            ip_address=ip,
+            device=device,
+        )
+
+    # Always return success to prevent email enumeration
+    return StandardResponse(
+        correlation_id=correlation_id,
+        data={"message": "If an account exists with this email, a reset code has been sent."},
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /reset-password
+# ---------------------------------------------------------------------------
+
+
+@router.post("/reset-password", response_model=StandardResponse[dict])
+async def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Complete a password reset using a 6-digit OTP code.
+    Verifies the OTP, updates the password hash, and revokes all existing sessions.
+    """
+    correlation_id = correlation_id_ctx.get() or "system"
+    ip, device = _extract_client_info(request)
+
+    # Rate limit: 5 attempts per minute per IP
+    try:
+        await apply_rate_limit(request, action="reset_password", max_requests=5)
+    except HTTPException as e:
+        await log_audit(db, "reset_password_rate_limit", "auth", metadata={"ip": ip}, ip_address=ip, device=device)
+        raise e
+
+    email = payload.email.lower().strip()
+    submitted_hash = _hash_otp(payload.code.strip())
+
+    # Verify OTP from Redis
+    try:
+        redis = get_redis_client()
+        redis_key = f"{PASSWORD_RESET_PREFIX}{email}"
+        stored_hash = await redis.get(redis_key)
+    except Exception as e:
+        logger.error(f"Redis error verifying password reset OTP: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to verify reset code. Please try again.",
+        )
+
+    if not stored_hash or stored_hash != submitted_hash:
+        await log_audit(
+            db,
+            "reset_password_invalid_code",
+            "auth",
+            metadata={"email": email},
+            ip_address=ip,
+            device=device,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset code. Please request a new one.",
+        )
+
+    # Find user
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset code. Please request a new one.",
+        )
+
+    # Update password hash
+    user.password_hash = hash_password(payload.new_password)
+    await db.flush()
+
+    # Delete the used OTP from Redis
+    try:
+        await redis.delete(redis_key)
+    except Exception:
+        pass  # Non-critical: OTP will expire naturally
+
+    # Revoke all active sessions for security
+    sessions_result = await db.execute(
+        select(UserSession).where(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        )
+    )
+    for session_rec in sessions_result.scalars().all():
+        session_rec.revoked_at = datetime.now(timezone.utc)
+        session_rec.revocation_reason = "password_reset"
+    await db.flush()
+
+    await log_audit(
+        db,
+        "reset_password_success",
+        "auth",
+        user_id=user.id,
+        metadata={"email": email},
+        ip_address=ip,
+        device=device,
+    )
+    logger.info(f"Password reset completed for user: {email} (ID: {user.id})")
+
+    return StandardResponse(
+        correlation_id=correlation_id,
+        data={"message": "Password has been reset successfully. You can now sign in with your new password."},
     )

@@ -34,14 +34,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         }
       }
 
-      // 3. Perform background silent token refresh via Next.js proxy
+      // 3. If local access token is still valid and we have a cached user, skip server refresh
+      if (sessionManager.isAuthenticated() && useAppStore.getState().user) {
+        setRestoringSession(false);
+        return;
+      }
+
+      // 4. Perform background silent token refresh via cookie-based refresh token
       try {
         const data = await sessionManager.refresh();
         if (data && data.user && data.access_token) {
           setAuthRefreshSuppressUntil(null);
           loginUser(data.user, data.access_token);
         } else if (!sessionManager.isAuthenticated()) {
-          // If refresh returned nothing AND local token has expired, clean up
           logoutUser();
         }
       } catch {
