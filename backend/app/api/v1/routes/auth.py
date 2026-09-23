@@ -567,13 +567,45 @@ async def google_auth(
         await log_audit(db, "google_rate_limit", "auth", ip_address=ip, device=device)
         raise e
 
-    try:
-        id_info = id_token.verify_oauth2_token(payload.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID)
-    except ValueError as e:
-        await log_audit(
-            db, "google_login_failed", "auth", metadata={"reason": "invalid_token"}, ip_address=ip, device=device
-        )
-        raise HTTPException(status_code=401, detail=f"Invalid Google ID token: {e}")
+    id_info = None
+    # Support both Google ID token (JWT) and OAuth2 access token (ya29...)
+    if payload.credential.startswith("ya29.") or payload.credential.count(".") != 2:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    "https://www.googleapis.com/oauth2/v3/userinfo",
+                    headers={"Authorization": f"Bearer {payload.credential}"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    id_info = {
+                        "iss": "https://accounts.google.com",
+                        "email_verified": data.get("email_verified", True),
+                        "email": data.get("email"),
+                        "sub": data.get("sub"),
+                        "name": data.get("name", "Google User"),
+                        "given_name": data.get("given_name"),
+                        "family_name": data.get("family_name"),
+                        "picture": data.get("picture"),
+                    }
+                else:
+                    await log_audit(
+                        db, "google_login_failed", "auth", metadata={"reason": "invalid_access_token"}, ip_address=ip, device=device
+                    )
+                    raise HTTPException(status_code=401, detail="Invalid Google access token.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=401, detail=f"Failed to verify Google access token: {e}")
+    else:
+        try:
+            id_info = id_token.verify_oauth2_token(payload.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID)
+        except ValueError as e:
+            await log_audit(
+                db, "google_login_failed", "auth", metadata={"reason": "invalid_token"}, ip_address=ip, device=device
+            )
+            raise HTTPException(status_code=401, detail=f"Invalid Google ID token: {e}")
 
     if id_info.get("iss") not in ["accounts.google.com", "https://accounts.google.com"]:
         await log_audit(

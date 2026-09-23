@@ -10,6 +10,7 @@ import { apiFetch, APIClientError } from "@/services/api";
 import { sanitizeReturnUrl } from "@/lib/auth/safeReturnUrl";
 import { sessionManager } from "@/lib/session/sessionManager";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { useGoogleLogin } from "@react-oauth/google";
 
 interface AuthResponse {
   access_token: string;
@@ -30,6 +31,59 @@ interface OAuthState {
   provider: "google" | "github";
   status: "connecting" | "error";
   message?: string;
+}
+
+interface GoogleLoginButtonProps {
+  onSuccess: (tokenResponse: any) => void;
+  onError: (msg: string) => void;
+  disabled?: boolean;
+  connecting?: boolean;
+}
+
+function GoogleLoginButton({ onSuccess, onError, disabled, connecting }: GoogleLoginButtonProps) {
+  const login = useGoogleLogin({
+    onSuccess,
+    onError: () => onError("Google sign-in was cancelled or failed."),
+  });
+
+  return (
+    <button
+      type="button"
+      onClick={() => login()}
+      disabled={disabled}
+      aria-label="Continue with Google"
+      className="h-[48px] bg-[#0E1013] hover:bg-[#15181C] active:scale-[0.99] border border-neutral-700/80 hover:border-neutral-600 text-neutral-200 text-xs font-medium px-3 rounded-[12px] flex items-center justify-center gap-2.5 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      {connecting ? (
+        <div className="flex items-center gap-2">
+          <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" aria-hidden="true" />
+          <span className="truncate">Connecting...</span>
+        </div>
+      ) : (
+        <>
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="#ffffff"
+              d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
+            />
+            <path
+              fill="#ffffff"
+              d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+            />
+            <path
+              fill="#a1a1aa"
+              d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8s.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.8 0 12s.7 3.3 1.9 5.7l3.7-2.9z"
+            />
+            <path
+              fill="#71717a"
+              d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
+            />
+          </svg>
+          <span className="truncate">Google</span>
+        </>
+      )}
+    </button>
+  );
 }
 
 export default function LoginPage() {
@@ -104,6 +158,29 @@ export default function LoginPage() {
         }),
       });
 
+      handleAuthSuccess(data);
+    } catch (err: any) {
+      if (err instanceof APIClientError) {
+        if (err.status === 401 || err.status === 403) {
+          // OWASP Anti-enumeration: Generic response for missing or mismatched accounts
+          setAuthStatus("ERROR");
+          setErrorMessage("Invalid email or password.");
+        } else if (err.status === 429) {
+          setAuthStatus("RATE_LIMITED");
+          setErrorMessage("Too many sign-in attempts. Please wait a moment and try again.");
+        } else {
+          setAuthStatus("ERROR");
+          setErrorMessage("Unable to sign you in right now. Please try again in a moment.");
+        }
+      } else {
+        setAuthStatus("NETWORK_ERROR");
+        setErrorMessage("Unable to sign you in right now. Please check your connection.");
+      }
+    }
+  };
+
+  const handleAuthSuccess = useCallback(
+    (data: AuthResponse) => {
       // Extract permissions from JWT payload claims if available
       let permissions: string[] = [];
       try {
@@ -148,44 +225,34 @@ export default function LoginPage() {
       } else {
         router.push(targetUrl);
       }
+    },
+    [rememberMe, loginUser, getReturnUrl, router]
+  );
+
+  const handleGoogleSuccess = async (tokenResponse: any) => {
+    setErrorMessage(null);
+    setOauthState({ provider: "google", status: "connecting" });
+    try {
+      const data = await apiFetch<AuthResponse>("/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ credential: tokenResponse.access_token }),
+      });
+      handleAuthSuccess(data);
     } catch (err: any) {
-      if (err instanceof APIClientError) {
-        if (err.status === 401 || err.status === 403) {
-          // OWASP Anti-enumeration: Generic response for missing or mismatched accounts
-          setAuthStatus("ERROR");
-          setErrorMessage("Invalid email or password.");
-        } else if (err.status === 429) {
-          setAuthStatus("RATE_LIMITED");
-          setErrorMessage("Too many sign-in attempts. Please wait a moment and try again.");
-        } else {
-          setAuthStatus("ERROR");
-          setErrorMessage("Unable to sign you in right now. Please try again in a moment.");
-        }
-      } else {
-        setAuthStatus("NETWORK_ERROR");
-        setErrorMessage("Unable to sign you in right now. Please check your connection.");
-      }
+      setOauthState({
+        provider: "google",
+        status: "error",
+        message: err?.message || "Unable to complete Google sign-in. Please try again.",
+      });
     }
   };
 
-  const handleGoogleOAuth = () => {
-    setErrorMessage(null);
-    setOauthState({ provider: "google", status: "connecting" });
-
-    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (googleClientId && googleClientId !== "disabled" && googleClientId !== "undefined") {
-      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&response_type=code&redirect_uri=${encodeURIComponent(
-        typeof window !== "undefined" ? `${window.location.origin}/api/v1/auth/google/callback` : ""
-      )}&scope=openid%20profile%20email`;
-    } else {
-      setTimeout(() => {
-        setOauthState({
-          provider: "google",
-          status: "error",
-          message: "Unable to complete Google sign-in. Please sign in with your email.",
-        });
-      }, 400);
-    }
+  const handleGoogleError = (msg: string) => {
+    setOauthState({
+      provider: "google",
+      status: "error",
+      message: msg,
+    });
   };
 
   const handleGitHubOAuth = () => {
@@ -465,42 +532,50 @@ export default function LoginPage() {
             {/* Social Authentication Buttons */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Continue with Google */}
-              <button
-                type="button"
-                onClick={handleGoogleOAuth}
-                disabled={oauthState?.status === "connecting"}
-                aria-label="Continue with Google"
-                className="h-[48px] bg-[#0E1013] hover:bg-[#15181C] active:scale-[0.99] border border-neutral-700/80 hover:border-neutral-600 text-neutral-200 text-xs font-medium px-3 rounded-[12px] flex items-center justify-center gap-2.5 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {oauthState?.provider === "google" && oauthState.status === "connecting" ? (
-                  <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" aria-hidden="true" />
-                    <span className="truncate">Connecting...</span>
-                  </div>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        fill="#ffffff"
-                        d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
-                      />
-                      <path
-                        fill="#ffffff"
-                        d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                      />
-                      <path
-                        fill="#a1a1aa"
-                        d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8s.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.8 0 12s.7 3.3 1.9 5.7l3.7-2.9z"
-                      />
-                      <path
-                        fill="#71717a"
-                        d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
-                      />
-                    </svg>
-                    <span className="truncate">Google</span>
-                  </>
-                )}
-              </button>
+              {Boolean(
+                process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID &&
+                process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID !== "disabled" &&
+                process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID !== "undefined"
+              ) ? (
+                <GoogleLoginButton
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                  disabled={oauthState?.status === "connecting"}
+                  connecting={oauthState?.provider === "google" && oauthState.status === "connecting"}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOauthState({
+                      provider: "google",
+                      status: "error",
+                      message: "Google sign-in is not configured. Please sign in with your email.",
+                    });
+                  }}
+                  className="h-[48px] bg-[#0E1013] hover:bg-[#15181C] active:scale-[0.99] border border-neutral-700/80 hover:border-neutral-600 text-neutral-200 text-xs font-medium px-3 rounded-[12px] flex items-center justify-center gap-2.5 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B]"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="#ffffff"
+                      d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
+                    />
+                    <path
+                      fill="#ffffff"
+                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                    />
+                    <path
+                      fill="#a1a1aa"
+                      d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8s.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.8 0 12s.7 3.3 1.9 5.7l3.7-2.9z"
+                    />
+                    <path
+                      fill="#71717a"
+                      d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
+                    />
+                  </svg>
+                  <span className="truncate">Google</span>
+                </button>
+              )}
 
               {/* Continue with GitHub */}
               <button
