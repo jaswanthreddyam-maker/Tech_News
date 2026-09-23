@@ -109,7 +109,7 @@ export function ArticleHeader({
           initial={isColdLoad ? "hidden" : false}
           animate="visible"
           variants={metaVariants}
-          className="text-lg md:text-xl text-muted-foreground font-sans leading-relaxed tracking-normal mt-3 max-w-prose"
+          className="text-lg md:text-xl text-muted-foreground font-sans leading-relaxed tracking-normal mt-3 max-w-4xl"
         >
           {description}
         </m.p>

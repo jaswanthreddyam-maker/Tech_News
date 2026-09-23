@@ -9,7 +9,6 @@ import {
   ReadingProgress,
   ReadingPreferences,
   AISummaryCard,
-  SourceCredibility,
   TableOfContents,
   FloatingActions,
 } from "@/components/article";
@@ -529,15 +528,6 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
               summary={article.summary || ""}
             />
           </ArticleRevealSection>
-        }
-        sourceCredibility={
-          <SourceCredibility
-            sourceName={article.source}
-            sourceUrl={article.url}
-            credibilityScore={"85"}
-            aiConfidence={"95"}
-            publishedAt={article.published_at ? new Date(article.published_at).toISOString() : new Date().toISOString()}
-          />
         }
         toc={
           <TableOfContents selector="div.prose-theme" />
