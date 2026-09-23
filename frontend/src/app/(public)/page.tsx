@@ -10,13 +10,20 @@ import {
   StoryEvolution,
 } from "@/components/homepage";
 import { HeroCarousel } from "@/components/home/hero/HeroCarousel";
+import { HeroCarouselSkeleton } from "@/components/home/hero/HeroCarouselSkeleton";
 import { HeroLcpPreloader } from "@/components/home/hero/HeroLcpPreloader";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 import { ResumeReading } from "@/components/reading/ResumeReading";
 import { SPACING } from "@/design-system/tokens";
 import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary";
 import { Container } from "@/components/layout/Container";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  TrendingSkeleton,
+  CategoryNewsSkeleton,
+  StoryEvolutionSkeleton,
+  BreakingNewsSkeleton,
+  NewsletterSkeleton,
+} from "@/components/skeletons";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +104,7 @@ export default async function HomePage() {
       {/* Hero Spatial Stage Object */}
       <Container size="wide" className={`mt-2 ${SPACING.SECTION_GAP_XL}`}>
         <SectionErrorBoundary
-          fallback={<Skeleton className="w-full h-[500px]" />}
+          fallback={<HeroCarouselSkeleton />}
         >
           <HeroCarousel items={initialItems} />
         </SectionErrorBoundary>
@@ -115,9 +122,9 @@ export default async function HomePage() {
       {/* Trending Stories */}
       <Container size="wide" className={SPACING.SECTION_GAP_XL}>
         <SectionErrorBoundary
-          fallback={<Skeleton className="w-full h-[500px]" />}
+          fallback={<TrendingSkeleton />}
         >
-          <Suspense fallback={<Skeleton className="w-full h-[500px]" />}>
+          <Suspense fallback={<TrendingSkeleton />}>
             <TrendingStories />
           </Suspense>
         </SectionErrorBoundary>
@@ -126,9 +133,9 @@ export default async function HomePage() {
       {/* Story Evolution Timeline */}
       <Container size="wide" className={SPACING.SECTION_GAP_XL}>
         <SectionErrorBoundary
-          fallback={<Skeleton className="w-full h-[300px]" />}
+          fallback={<StoryEvolutionSkeleton />}
         >
-          <Suspense fallback={<Skeleton className="w-full h-[300px]" />}>
+          <Suspense fallback={<StoryEvolutionSkeleton />}>
             <StoryEvolution />
           </Suspense>
         </SectionErrorBoundary>
@@ -137,9 +144,9 @@ export default async function HomePage() {
       {/* Explore by Category */}
       <Container size="wide" className={SPACING.SECTION_GAP_XL}>
         <SectionErrorBoundary
-          fallback={<Skeleton className="w-full h-[800px]" />}
+          fallback={<CategoryNewsSkeleton />}
         >
-          <Suspense fallback={<Skeleton className="w-full h-[800px]" />}>
+          <Suspense fallback={<CategoryNewsSkeleton />}>
             <LatestNews />
           </Suspense>
         </SectionErrorBoundary>
@@ -148,7 +155,7 @@ export default async function HomePage() {
       {/* Latest Stories */}
       <Container size="wide" className={SPACING.SECTION_GAP_XL}>
         <SectionErrorBoundary fallback={<div className="h-[140px]" />}>
-          <Suspense fallback={<Skeleton className="w-full h-[140px]" />}>
+          <Suspense fallback={<BreakingNewsSkeleton />}>
             <BreakingNews />
           </Suspense>
         </SectionErrorBoundary>
@@ -157,9 +164,9 @@ export default async function HomePage() {
       {/* Newsletter Spatial Object */}
       <Container size="wide" className={SPACING.SECTION_GAP_L}>
         <SectionErrorBoundary
-          fallback={<Skeleton className="w-full h-[400px]" />}
+          fallback={<NewsletterSkeleton />}
         >
-          <Suspense fallback={<Skeleton className="w-full h-[400px]" />}>
+          <Suspense fallback={<NewsletterSkeleton />}>
             <Newsletter />
           </Suspense>
         </SectionErrorBoundary>

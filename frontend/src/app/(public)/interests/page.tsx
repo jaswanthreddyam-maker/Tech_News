@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Lock, UserCircle, Activity } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/api/getApiBaseUrl';
+import { InterestsGridSkeleton } from './loading';
 
 function getLocalAnonymousId() {
   if (typeof window === 'undefined') return null;
@@ -93,14 +94,7 @@ export default function InterestsPage() {
           </CardHeader>
           <CardContent className="pt-6">
             {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex flex-col gap-2 p-4 rounded-lg bg-muted/20 animate-pulse">
-                    <div className="h-6 w-32 bg-muted/40 rounded"></div>
-                    <div className="h-2 w-full bg-muted/40 rounded"></div>
-                  </div>
-                ))}
-              </div>
+              <InterestsGridSkeleton />
             ) : interests.length === 0 ? (
               <div className="text-center py-12 px-4 rounded-xl border border-dashed border-border">
                 <p className="text-muted-foreground mb-2">We haven&apos;t built your profile yet.</p>
