@@ -10,24 +10,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const initializeSession = useCallback(
     async (force = false) => {
-      // 1. Optimistic hydration on mount: restore cached user & token to prevent UI flash
+      // 1. Optimistic hydration on mount: restore cached user & token
       if (typeof window !== "undefined") {
-        const hadSession = localStorage.getItem("has_session") === "true";
-        const cachedUserStr = localStorage.getItem("cached_user");
+        const cachedUser = sessionManager.getCachedUser();
         const activeToken = sessionManager.getAccessToken();
 
-        if (hadSession && cachedUserStr && !useAppStore.getState().user) {
-          try {
-            const cachedUser = JSON.parse(cachedUserStr);
-            if (cachedUser && cachedUser.id) {
-              loginUser(cachedUser, activeToken || "");
-            }
-          } catch {
-            // Ignore parse errors
-          }
+        if (cachedUser && activeToken && !useAppStore.getState().user) {
+          loginUser(cachedUser, activeToken);
         }
 
-        if (!hadSession) {
+        if (!sessionManager.isAuthenticated() && !localStorage.getItem("has_session")) {
           setRestoringSession(false);
           return;
         }
@@ -49,7 +41,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           setAuthRefreshSuppressUntil(null);
           loginUser(data.user, data.access_token);
         } else if (!sessionManager.isAuthenticated()) {
-          // If refresh returned nothing and no valid token in session, clean up
+          // If refresh returned nothing AND local token has expired, clean up
           logoutUser();
         }
       } catch {

@@ -2,24 +2,32 @@ import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 
 const API_BASE_URL = getApiBaseUrl();
 
-// In-memory access token storage (hydrated from sessionStorage across F5 page refreshes)
+// Storage keys
+const ACCESS_TOKEN_KEY = "access_token";
+const TOKEN_EXPIRES_KEY = "token_expires_at";
+const HAS_SESSION_KEY = "has_session";
+const CACHED_USER_KEY = "cached_user";
+
+// In-memory access token storage (hydrated from localStorage across page refreshes)
 let accessToken: string | null = null;
 let tokenExpiresAt: number | null = null;
+
+// Default session expiration: 7 days (604800 seconds)
+const DEFAULT_SESSION_EXPIRY = 7 * 86400;
 
 export const sessionManager = {
   isAuthenticated(): boolean {
     if (!accessToken && typeof window !== "undefined") {
       try {
-        const storedToken = sessionStorage.getItem("access_token");
-        const storedExp = sessionStorage.getItem("token_expires_at");
+        const storedToken = localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY);
+        const storedExp = localStorage.getItem(TOKEN_EXPIRES_KEY) || sessionStorage.getItem(TOKEN_EXPIRES_KEY);
         if (storedToken && storedExp) {
           const exp = parseInt(storedExp, 10);
           if (Date.now() < exp - 10000) {
             accessToken = storedToken;
             tokenExpiresAt = exp;
           } else {
-            sessionStorage.removeItem("access_token");
-            sessionStorage.removeItem("token_expires_at");
+            this.clearSession();
           }
         }
       } catch {
@@ -34,15 +42,38 @@ export const sessionManager = {
     return this.isAuthenticated() ? accessToken : null;
   },
 
-  setSession(token: string, expiresInSeconds: number = 900) {
+  getCachedUser(): any | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const userStr = localStorage.getItem(CACHED_USER_KEY);
+      return userStr ? JSON.parse(userStr) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  setSession(token: string, expiresInSeconds: number = DEFAULT_SESSION_EXPIRY) {
     accessToken = token;
     tokenExpiresAt = Date.now() + (expiresInSeconds * 1000);
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.setItem("access_token", token);
-        sessionStorage.setItem("token_expires_at", String(tokenExpiresAt));
-        localStorage.setItem("has_session", "true");
+        localStorage.setItem(ACCESS_TOKEN_KEY, token);
+        localStorage.setItem(TOKEN_EXPIRES_KEY, String(tokenExpiresAt));
+        sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+        sessionStorage.setItem(TOKEN_EXPIRES_KEY, String(tokenExpiresAt));
+        localStorage.setItem(HAS_SESSION_KEY, "true");
         localStorage.setItem("session_event", `login_${Date.now()}`);
+      } catch {
+        // Ignore storage access errors
+      }
+    }
+  },
+
+  setCachedUser(user: any) {
+    if (typeof window !== "undefined" && user) {
+      try {
+        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+        localStorage.setItem(HAS_SESSION_KEY, "true");
       } catch {
         // Ignore storage access errors
       }
@@ -54,10 +85,12 @@ export const sessionManager = {
     tokenExpiresAt = null;
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.removeItem("access_token");
-        sessionStorage.removeItem("token_expires_at");
-        localStorage.removeItem("has_session");
-        localStorage.removeItem("cached_user");
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
+        localStorage.removeItem(TOKEN_EXPIRES_KEY);
+        sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+        sessionStorage.removeItem(TOKEN_EXPIRES_KEY);
+        localStorage.removeItem(HAS_SESSION_KEY);
+        localStorage.removeItem(CACHED_USER_KEY);
         localStorage.setItem("session_event", `logout_${Date.now()}`);
       } catch {
         // Ignore storage access errors
@@ -79,11 +112,10 @@ export const sessionManager = {
     const data = payload.data || payload;
     
     if (data.access_token) {
-      this.setSession(data.access_token);
-      if (data.user && typeof window !== "undefined") {
-        try {
-          localStorage.setItem("cached_user", JSON.stringify(data.user));
-        } catch {}
+      const ttl = credentials.remember_me ? 28 * 86400 : DEFAULT_SESSION_EXPIRY;
+      this.setSession(data.access_token, ttl);
+      if (data.user) {
+        this.setCachedUser(data.user);
       }
     }
     return data;
@@ -98,7 +130,6 @@ export const sessionManager = {
     });
 
     if (!res.ok) {
-      // Pass through HTTP status to allow proper error handling in UI
       const err: any = new Error("Registration failed");
       err.status = res.status;
       throw err;
@@ -108,11 +139,9 @@ export const sessionManager = {
     const data = payload.data || payload;
 
     if (data.access_token) {
-      this.setSession(data.access_token);
-      if (data.user && typeof window !== "undefined") {
-        try {
-          localStorage.setItem("cached_user", JSON.stringify(data.user));
-        } catch {}
+      this.setSession(data.access_token, DEFAULT_SESSION_EXPIRY);
+      if (data.user) {
+        this.setCachedUser(data.user);
       }
     }
     return data;
@@ -132,7 +161,7 @@ export const sessionManager = {
   },
 
   async refresh(): Promise<any> {
-    if (typeof window !== "undefined" && !localStorage.getItem("has_session")) {
+    if (typeof window !== "undefined" && !localStorage.getItem(HAS_SESSION_KEY)) {
       return null;
     }
 
@@ -149,7 +178,8 @@ export const sessionManager = {
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
+        // ONLY clear session if our locally stored token is ALSO expired
+        if ((res.status === 401 || res.status === 403) && !this.isAuthenticated()) {
           this.clearSession();
         }
         return null;
@@ -160,17 +190,14 @@ export const sessionManager = {
       
       if (data.access_token) {
         this.setSession(data.access_token);
-        if (data.user && typeof window !== "undefined") {
-          try {
-            localStorage.setItem("cached_user", JSON.stringify(data.user));
-          } catch {}
+        if (data.user) {
+          this.setCachedUser(data.user);
         }
         return data;
       }
       return null;
     } catch {
       clearTimeout(timeoutId);
-      // Transient error / timeout — do NOT clear valid session marker
       return null;
     }
   }

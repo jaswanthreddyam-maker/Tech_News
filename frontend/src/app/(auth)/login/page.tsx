@@ -158,8 +158,10 @@ export default function LoginPage() {
         permissions: data.user.permissions || permissions,
       };
 
-      // Extended session persistence: 28 days if Remember me is checked, standard 15 min otherwise
-      sessionManager.setSession(data.access_token, rememberMe ? 28 * 86400 : 900);
+      // Extended session persistence: 28 days if Remember me is checked, standard 7 days otherwise
+      const sessionTtl = rememberMe ? 28 * 86400 : 7 * 86400;
+      sessionManager.setSession(data.access_token, sessionTtl);
+      sessionManager.setCachedUser(fullUser);
       loginUser(fullUser, data.access_token);
       setAuthStatus("SUCCESS");
 

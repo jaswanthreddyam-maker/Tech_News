@@ -21,6 +21,11 @@ import { Sliders2Icon } from "@/components/common/icons/Sliders2Icon";
 export function UserMenu() {
   const { user, logoutUser } = useAppStore();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -31,6 +36,10 @@ export function UserMenu() {
     logoutUser();
     window.location.href = "/login";
   };
+
+  if (!mounted) {
+    return <div className="flex items-center gap-1.5 h-8 w-[96px]" />;
+  }
 
   if (!user) {
     return (
