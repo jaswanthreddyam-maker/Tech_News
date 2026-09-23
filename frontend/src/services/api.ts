@@ -1,5 +1,5 @@
 import { useAppStore } from "../store/useStore";
-
+import { sessionManager } from "@/lib/session/sessionManager";
 import { getApiBaseUrl } from "../lib/api/getApiBaseUrl";
 
 const API_BASE_URL = getApiBaseUrl();
@@ -161,8 +161,10 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
               });
             }
           }
-          // Refresh failed or suppressed — log out user and throw
-          useAppStore.getState().logoutUser();
+          // Only log out user if local access token has actually expired
+          if (!sessionManager.isAuthenticated()) {
+            useAppStore.getState().logoutUser();
+          }
         }
 
         throw apiError;

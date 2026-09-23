@@ -98,8 +98,17 @@ export default function SignupPage() {
         password: password,
       });
 
-      // Session binding (Auto-login)
-      loginUser(data.user, data.access_token);
+      const fullUser = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        role: data.user.role,
+        permissions: data.user.permissions || ["read_articles", "save_bookmarks", "manage_profile"],
+      };
+
+      sessionManager.setSession(data.access_token, 7 * 86400);
+      sessionManager.setCachedUser(fullUser);
+      loginUser(fullUser, data.access_token);
       
       // Trigger Welcome Toast with progress animation and delayed redirect
       setShowWelcomeToast(true);

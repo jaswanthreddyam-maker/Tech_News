@@ -221,6 +221,7 @@ async def register(
         ip_address=ip,
         device=device,
     )
+    await db.commit()
     logger.info(f"New user registered and logged in: {payload.email} (ID: {new_user.id})")
 
     return StandardResponse(
@@ -336,6 +337,7 @@ async def login(
         ip_address=ip,
         device=device,
     )
+    await db.commit()
     logger.info(f"User logged in: {user.email} (ID: {user.id}) from {ip}")
 
     return StandardResponse(
@@ -471,6 +473,7 @@ async def refresh_token(
         ip_address=ip,
         device=device,
     )
+    await db.commit()
     logger.info(f"Token refreshed for user: {user.email} (ID: {user.id})")
 
     return StandardResponse(
@@ -503,6 +506,7 @@ async def logout(
             session_record.revoked_at = datetime.now(timezone.utc)
             session_record.revocation_reason = "user_logout"
             await db.flush()
+            await db.commit()
 
     _delete_refresh_cookie(response)
 
@@ -544,6 +548,7 @@ async def logout_all(
         revoked_count += 1
 
     await db.flush()
+    await db.commit()
     _delete_refresh_cookie(response)
 
     logger.info(f"User {current_user.email} logged out of all {revoked_count} sessions.")
@@ -729,6 +734,7 @@ async def google_auth(
         ip_address=ip,
         device=device,
     )
+    await db.commit()
     logger.info(f"User logged in via Google: {user.email} (ID: {user.id})")
 
     return StandardResponse(
@@ -980,6 +986,7 @@ async def reset_password(
         ip_address=ip,
         device=device,
     )
+    await db.commit()
     logger.info(f"Password reset completed for user: {email} (ID: {user.id})")
 
     return StandardResponse(

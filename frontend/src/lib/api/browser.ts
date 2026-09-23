@@ -106,7 +106,9 @@ export class BrowserTransport implements ApiTransport {
             } as any);
           }
         }
-        useAppStore.getState().logoutUser();
+        if (!sessionManager.isAuthenticated()) {
+          useAppStore.getState().logoutUser();
+        }
       }
 
       return response;
