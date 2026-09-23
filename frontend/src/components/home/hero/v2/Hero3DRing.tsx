@@ -114,20 +114,35 @@ export function Hero3DRing() {
 
   // Pure Ref Arrival Drag Lock Flag
   const isArrivingRef = useRef(true);
+  const hasStartedArrivalRef = useRef(false);
+  const arrivalRafRef = useRef<number | null>(null);
+  const settleRafRef = useRef<number | null>(null);
+
+  // Dedicated unmount teardown for rAF loops
+  useEffect(() => {
+    return () => {
+      if (arrivalRafRef.current) cancelAnimationFrame(arrivalRafRef.current);
+      if (settleRafRef.current) cancelAnimationFrame(settleRafRef.current);
+    };
+  }, []);
 
   // Master Physical Machine Arrival Engine
   useEffect(() => {
     if (!items || items.length === 0) return;
     if (!isArrivingRef.current || arrivalFinished) {
+      isArrivingRef.current = false;
+      hasStartedArrivalRef.current = true;
       if (arrivalRef.current) arrivalRef.current.style.transform = "translateZ(0px) scale(1)";
       if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
       return;
     }
 
+    // Strictly prevent double execution on re-renders, item updates, or event repeats
+    if (hasStartedArrivalRef.current) return;
+    hasStartedArrivalRef.current = true;
+
     let startTime: number | null = null;
     let lastFrameTimestamp: number | null = null;
-    let rafId: number;
-    let settleRafId: number | null = null;
 
     const {
       TOTAL_DURATION,
@@ -186,7 +201,7 @@ export function Hero3DRing() {
       if (spinRef.current) spinRef.current.style.transform = `rotateY(${spinAngle}deg)`;
 
       if (elapsed < TOTAL_DURATION) {
-        rafId = requestAnimationFrame(animateArrival);
+        arrivalRafRef.current = requestAnimationFrame(animateArrival);
       } else {
         if (arrivalRef.current) arrivalRef.current.style.transform = "translateZ(0px) scale(1)";
         if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
@@ -203,7 +218,7 @@ export function Hero3DRing() {
           }
 
           if (p < 1) {
-            settleRafId = requestAnimationFrame(animateSettle);
+            settleRafRef.current = requestAnimationFrame(animateSettle);
           } else {
             // Handoff executes directly from animation completion
             isArrivingRef.current = false;
@@ -223,7 +238,7 @@ export function Hero3DRing() {
           }
         };
 
-        settleRafId = requestAnimationFrame(animateSettle);
+        settleRafRef.current = requestAnimationFrame(animateSettle);
       }
     };
 
@@ -239,30 +254,29 @@ export function Hero3DRing() {
       if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
 
       let isStarted = false;
+      let fallbackTimeout: NodeJS.Timeout | null = null;
+
       const startArrival = () => {
         if (isStarted) return;
         isStarted = true;
         window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
-        rafId = requestAnimationFrame(animateArrival);
+        if (fallbackTimeout) clearTimeout(fallbackTimeout);
+        arrivalRafRef.current = requestAnimationFrame(animateArrival);
       };
 
       const handleOverlayComplete = () => {
         startArrival();
       };
 
-      window.addEventListener("welcome-overlay-complete", handleOverlayComplete);
+      window.addEventListener("welcome-overlay-complete", handleOverlayComplete, { once: true });
+      fallbackTimeout = setTimeout(startArrival, 4500);
 
       return () => {
         window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
-        if (rafId) cancelAnimationFrame(rafId);
-        if (settleRafId) cancelAnimationFrame(settleRafId);
+        if (fallbackTimeout) clearTimeout(fallbackTimeout);
       };
     } else {
-      rafId = requestAnimationFrame(animateArrival);
-      return () => {
-        if (rafId) cancelAnimationFrame(rafId);
-        if (settleRafId) cancelAnimationFrame(settleRafId);
-      };
+      arrivalRafRef.current = requestAnimationFrame(animateArrival);
     }
   }, [items, arrivalFinished, setContextArrivalFinished]);
 
@@ -378,7 +392,7 @@ export function Hero3DRing() {
         className="relative w-full h-full flex items-center justify-center"
         style={{
           transformStyle: "preserve-3d",
-          transform: "translateZ(-2200px)",
+          transform: arrivalFinished ? "translateZ(0px) scale(1)" : "translateZ(-2200px) scale(0.6)",
           willChange: "transform",
         }}
       >

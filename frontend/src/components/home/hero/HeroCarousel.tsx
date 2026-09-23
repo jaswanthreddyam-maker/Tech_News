@@ -9,6 +9,13 @@ import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 
 import { MediaService } from "@/domains/article/media";
 
+const SKELETON_ITEMS: FeaturedArticle[] = Array.from({ length: 12 }).map((_, i) => ({
+  id: `skeleton-${i}`,
+  title: "",
+  url: "#",
+  thumbnail: "",
+} as FeaturedArticle));
+
 interface HeroCarouselProps {
   items?: FeaturedArticle[];
   editorPicks?: FeaturedArticle[];
@@ -76,17 +83,25 @@ export function HeroCarousel({
   const isError = activePool.length === 0 && trendingQuery.isError && desksQuery.isError;
   const isEmpty = activePool.length === 0 && !trendingQuery.isLoading && !desksQuery.isLoading;
 
-  const skeletonItems = Array.from({ length: 12 }).map((_, i) => ({
-    id: `skeleton-${i}`,
-    title: "",
-    url: "#",
-    thumbnail: "",
-  } as FeaturedArticle));
+  const items = React.useMemo(() => {
+    if (isLoading) return SKELETON_ITEMS;
+    return activePool.length > 0 ? activePool.slice(0, 12) : SKELETON_ITEMS;
+  }, [isLoading, activePool]);
 
-  const items = isLoading ? skeletonItems : (activePool.length > 0 ? activePool.slice(0, 12) : skeletonItems);
-  const editorPicks = isLoading ? skeletonItems.slice(0, 4) : (initialEditorPicks.length > 0 ? initialEditorPicks : items.slice(1, 5));
-  const latest = isLoading ? skeletonItems.slice(0, 4) : (initialLatest.length > 0 ? initialLatest : items.slice(1, 5));
-  const aiInsights = isLoading ? skeletonItems.slice(0, 4) : (initialAiInsights.length > 0 ? initialAiInsights : items.slice(1, 5));
+  const editorPicks = React.useMemo(() => {
+    if (isLoading) return SKELETON_ITEMS.slice(0, 4);
+    return initialEditorPicks.length > 0 ? initialEditorPicks : items.slice(1, 5);
+  }, [isLoading, initialEditorPicks, items]);
+
+  const latest = React.useMemo(() => {
+    if (isLoading) return SKELETON_ITEMS.slice(0, 4);
+    return initialLatest.length > 0 ? initialLatest : items.slice(1, 5);
+  }, [isLoading, initialLatest, items]);
+
+  const aiInsights = React.useMemo(() => {
+    if (isLoading) return SKELETON_ITEMS.slice(0, 4);
+    return initialAiInsights.length > 0 ? initialAiInsights : items.slice(1, 5);
+  }, [isLoading, initialAiInsights, items]);
 
   useEffect(() => {
     setMounted(true);

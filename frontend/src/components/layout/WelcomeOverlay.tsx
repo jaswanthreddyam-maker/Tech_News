@@ -42,7 +42,8 @@ export function WelcomeOverlay({ children }: WelcomeOverlayProps) {
     if (typeof document !== "undefined") {
       document.body.style.overflow = "";
     }
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !(window as any).__welcomeOverlayDispatched) {
+      (window as any).__welcomeOverlayDispatched = true;
       window.dispatchEvent(new Event("welcome-overlay-complete"));
     }
     setHasPlayed(true);
