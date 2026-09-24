@@ -431,6 +431,29 @@ async def list_articles(
 
                 resolved_articles = matching_arts
 
+            # If no category filter, but resolved_articles is fewer than limit, backfill from latest published articles
+            if not category and len(resolved_articles) < limit:
+                seen_ids = {str(art.id) for art in resolved_articles}
+                needed = limit - len(resolved_articles)
+                backfill_query = (
+                    select(ArticleReadModel)
+                    .where(
+                        ArticleReadModel.is_test_data == False,
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                    )
+                )
+                if seen_ids:
+                    backfill_query = backfill_query.where(ArticleReadModel.id.notin_(list(seen_ids)))
+                backfill_query = (
+                    backfill_query
+                    .order_by(desc(ArticleReadModel.published_at))
+                    .limit(needed)
+                    .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+                )
+                bf_res = await db.execute(backfill_query)
+                for additional_art in bf_res.scalars().all():
+                    resolved_articles.append(additional_art)
+
             # Paginate by slicing
             resolved_articles = resolved_articles[:limit]
 
@@ -604,7 +627,9 @@ async def get_category_desks():
         if redis:
             cached_desks = await asyncio.wait_for(redis.get(cache_key_desks), timeout=1.0)
             if cached_desks:
-                return json.loads(cached_desks)
+                parsed = json.loads(cached_desks)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    return parsed
     except Exception:
         pass
 
@@ -634,7 +659,7 @@ async def get_category_desks():
         res = await db.execute(stmt)
         projections = res.scalars().all()
 
-        # Auto-heal: rebuild ONLY if projections don't exist at all
+        # Auto-heal: rebuild if projections don't exist at all
         if not projections or not any(p.article_ids for p in projections if p.article_ids):
             from app.core.redis import RedisDistributedLock
             from app.editorial.homepage_builder import HomepageBuilder
@@ -672,6 +697,42 @@ async def get_category_desks():
             )
             res = await db.execute(art_stmt)
             articles_map = {str(a.id): a for a in res.scalars().all()}
+
+        # If projection articles are mostly expired/stale, trigger category desks rebuild
+        if len(articles_map) < 5:
+            from app.core.redis import RedisDistributedLock
+            from app.editorial.homepage_builder import HomepageBuilder
+            lock = RedisDistributedLock("category_desks_rebuild", expire_seconds=30)
+            try:
+                async with lock:
+                    await HomepageBuilder.build_and_persist_category_desks(db)
+            except Exception as lock_err:
+                logger.warning(f"Could not acquire category desks rebuild lock: {lock_err}")
+            stmt = select(CategoryDeskProjection)
+            res = await db.execute(stmt)
+            projections = res.scalars().all()
+
+            all_article_ids = set()
+            for p in projections:
+                if p.article_ids:
+                    all_article_ids.update(p.article_ids)
+
+            if all_article_ids:
+                art_stmt = (
+                    select(ArticleReadModel)
+                    .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                    .where(
+                        ArticleReadModel.id.in_(all_article_ids),
+                        ArticleReadModel.is_test_data == False,
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                        or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
+                    )
+                    .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+                )
+                res = await db.execute(art_stmt)
+                articles_map = {str(a.id): a for a in res.scalars().all()}
 
         # 4. Fetch topics and entities in bulk
         topics_by_art: dict[str, list[str]] = {}

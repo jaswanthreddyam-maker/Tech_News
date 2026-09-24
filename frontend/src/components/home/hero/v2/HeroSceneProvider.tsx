@@ -32,7 +32,15 @@ export function HeroSceneProvider({
   onInsightClick,
   children,
 }: React.PropsWithChildren<HeroSceneProps>) {
-  const items = useMemo(() => rawItems.filter((a) => MediaService.hasGenuineThumbnail(a)), [rawItems]);
+  const items = useMemo(() => {
+    if (!rawItems || rawItems.length === 0) return [];
+    const genuine = rawItems.filter((a) => MediaService.hasGenuineThumbnail(a));
+    if (genuine.length >= 12) {
+      return genuine.slice(0, 12);
+    }
+    const remaining = rawItems.filter((a) => !MediaService.hasGenuineThumbnail(a));
+    return [...genuine, ...remaining].slice(0, 12);
+  }, [rawItems]);
   const itemCount = items.length;
   const anglePerItem = useMemo(() => (itemCount > 0 ? 360 / itemCount : 0), [itemCount]);
 

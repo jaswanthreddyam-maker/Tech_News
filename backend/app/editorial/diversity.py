@@ -8,7 +8,7 @@ logger = logging.getLogger("tech_news.editorial.diversity")
 
 
 def apply_diversity_filter(
-    candidates: list, article_topics: dict[str, list[str]], max_per_category: int = 3, max_total: int = 10
+    candidates: list, article_topics: dict[str, list[str]], max_per_category: int | None = None, max_total: int | None = None
 ) -> tuple[list, list[tuple[any, str, dict]]]:
     """
     Applies multi-dimensional diversity rules to candidates.
@@ -25,10 +25,10 @@ def apply_diversity_filter(
     topic_cfg = div_cfg.get("topic_dedup", {})
     home_cfg = div_cfg.get("homepage", {})
     
-    max_per_pub = pub_cfg.get("max_per_publisher", 3)
-    max_per_cat = cat_cfg.get("max_per_category", 4)
+    max_per_pub = pub_cfg.get("max_per_publisher", 5)
+    max_per_cat = max_per_category if max_per_category is not None else cat_cfg.get("max_per_category", 6)
     sim_thresh = topic_cfg.get("similarity_threshold", 0.65)
-    total_slots = home_cfg.get("total_slots", max_total)
+    total_slots = max_total if max_total is not None else home_cfg.get("total_slots", 25)
 
     selected = []
     skipped_pub = []
@@ -65,11 +65,14 @@ def apply_diversity_filter(
             
         # 3. Topic Dedup
         is_duplicate = False
-        for s_item in selected:
-            s_article = s_item["article"]
-            if compute_title_similarity(article.title, s_article.title) > sim_thresh:
-                is_duplicate = True
-                break
+        t_cur = getattr(article, "title", None)
+        if isinstance(t_cur, str):
+            for s_item in selected:
+                s_article = s_item["article"]
+                s_title = getattr(s_article, "title", None)
+                if isinstance(s_title, str) and compute_title_similarity(t_cur, s_title) > sim_thresh:
+                    is_duplicate = True
+                    break
                 
         if is_duplicate:
             skipped_dedup.append(item)
@@ -98,11 +101,14 @@ def apply_diversity_filter(
             # Still apply dedup during backfill
             article = item["article"]
             is_duplicate = False
-            for s_item in selected:
-                s_article = s_item["article"]
-                if compute_title_similarity(article.title, s_article.title) > sim_thresh:
-                    is_duplicate = True
-                    break
+            t_cur = getattr(article, "title", None)
+            if isinstance(t_cur, str):
+                for s_item in selected:
+                    s_article = s_item["article"]
+                    s_title = getattr(s_article, "title", None)
+                    if isinstance(s_title, str) and compute_title_similarity(t_cur, s_title) > sim_thresh:
+                        is_duplicate = True
+                        break
             if not is_duplicate:
                 selected.append(item)
                 decisions.append(
@@ -115,11 +121,14 @@ def apply_diversity_filter(
                 break
             article = item["article"]
             is_duplicate = False
-            for s_item in selected:
-                s_article = s_item["article"]
-                if compute_title_similarity(article.title, s_article.title) > sim_thresh:
-                    is_duplicate = True
-                    break
+            t_cur = getattr(article, "title", None)
+            if isinstance(t_cur, str):
+                for s_item in selected:
+                    s_article = s_item["article"]
+                    s_title = getattr(s_article, "title", None)
+                    if isinstance(s_title, str) and compute_title_similarity(t_cur, s_title) > sim_thresh:
+                        is_duplicate = True
+                        break
             if not is_duplicate:
                 selected.append(item)
                 decisions.append(

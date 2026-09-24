@@ -211,8 +211,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Editorial & Homepage Settings
-    MAX_HOMEPAGE_ARTICLES: int = 10
-    MAX_ARTICLES_PER_CATEGORY: int = 3
+    MAX_HOMEPAGE_ARTICLES: int = 25
+    MAX_ARTICLES_PER_CATEGORY: int = 6
 
     # Initial Admin Provisioning
     INITIAL_ADMIN_EMAIL: str = ""

@@ -73,12 +73,12 @@ class PolicyLoader:
         return {
             "diversity": {
                 "publisher": {
-                    "max_per_publisher": 3,
+                    "max_per_publisher": 5,
                     "min_publishers_target": 3,
                     "enforcement": "post_ranking"
                 },
                 "category": {
-                    "max_per_category": 4,
+                    "max_per_category": 6,
                     "enforcement": "post_publisher"
                 },
                 "topic_dedup": {
@@ -86,7 +86,7 @@ class PolicyLoader:
                     "keep_policy": "highest_score"
                 },
                 "homepage": {
-                    "total_slots": 10,
+                    "total_slots": 25,
                     "backfill_policy": "score_order"
                 },
                 "degradation": {

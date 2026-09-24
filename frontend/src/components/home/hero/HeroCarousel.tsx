@@ -77,7 +77,33 @@ export function HeroCarousel({
     return Array.from(map.values());
   }, [initialItems, clientFeatured, deskFeatured]);
 
-  const activePool = genuinePool.length > 0 ? genuinePool : allPool;
+  // Ensure activePool prioritizes genuine thumbnails, and backfills from allPool to ensure 12 items
+  const activePool = React.useMemo(() => {
+    const pool: FeaturedArticle[] = [];
+    const seen = new Set<string>();
+
+    for (const art of genuinePool) {
+      const artId = String(art.id || art.slug || art.title);
+      if (!seen.has(artId)) {
+        seen.add(artId);
+        pool.push(art);
+      }
+      if (pool.length >= 12) break;
+    }
+
+    if (pool.length < 12) {
+      for (const art of allPool) {
+        const artId = String(art.id || art.slug || art.title);
+        if (!seen.has(artId)) {
+          seen.add(artId);
+          pool.push(art);
+        }
+        if (pool.length >= 12) break;
+      }
+    }
+
+    return pool;
+  }, [genuinePool, allPool]);
 
   const isLoading = activePool.length === 0 && (trendingQuery.isLoading || desksQuery.isLoading);
   const isError = activePool.length === 0 && trendingQuery.isError && desksQuery.isError;

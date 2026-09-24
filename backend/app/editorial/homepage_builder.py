@@ -89,7 +89,7 @@ class HomepageBuilder:
                         or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
                         or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now)
                     )
-                ).order_by(ArticleReadModel.published_at.desc()).limit(15).options(
+                ).order_by(ArticleReadModel.published_at.desc()).limit(50).options(
                     defer(ArticleReadModel.content),
                     defer(ArticleReadModel.embedding)
                 )
@@ -146,7 +146,7 @@ class HomepageBuilder:
         sorted_candidates = sort_candidates_deterministically(candidates)
 
         # 5. Apply multi-dimensional diversity filtering
-        max_total = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 20)
+        max_total = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 25)
         selected_items, decisions = apply_diversity_filter(
             sorted_candidates, article_topics, max_total=max_total
         )
@@ -402,6 +402,28 @@ class HomepageBuilder:
             res_fb = await db.execute(stmt_fb)
             rows = res_fb.all()
 
+        if not rows or len(rows) < 10:
+            logger.info("HomepageBuilder Category Fallback: Expanding selection to recent published articles.")
+            is_fallback = True
+            stmt_recent = (
+                select(ArticleReadModel, cat_slug_expr)
+                .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
+                .outerjoin(Category, ProcessedArticle.category_id == Category.id)
+                .where(
+                    and_(
+                        ArticleReadModel.is_test_data == False,
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
+                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
+                    )
+                ).order_by(ArticleReadModel.published_at.desc()).limit(100).options(
+                    defer(ArticleReadModel.content),
+                    defer(ArticleReadModel.embedding)
+                )
+            )
+            res_recent = await db.execute(stmt_recent)
+            rows = res_recent.all()
+
         decay_model = getattr(settings, "FRESHNESS_DECAY_MODEL", "curved")
         min_eff_score = getattr(settings, "MINIMUM_EFFECTIVE_SCORE", 20.0)
         
@@ -466,7 +488,14 @@ class HomepageBuilder:
         # Upsert category desk projections for all allowed categories
         for cat_slug in allowed_cats:
             candidates = candidates_by_cat.get(cat_slug, [])
-            sorted_candidates = sorted(candidates, key=lambda x: x["effective_score"], reverse=True) if candidates else []
+            if candidates:
+                def desk_candidate_sort_key(x):
+                    art = x["article"]
+                    has_thumb = 1 if (art.thumbnail_url and str(art.thumbnail_url).startswith("http")) else 0
+                    return (-has_thumb, -x["effective_score"])
+                sorted_candidates = sorted(candidates, key=desk_candidate_sort_key)
+            else:
+                sorted_candidates = []
             top_arts = sorted_candidates[:max_per_desk]
             article_ids = [str(item["article"].id) for item in top_arts]
 
