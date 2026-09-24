@@ -82,24 +82,24 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
       }}
       className={`group absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[247px] sm:w-[285px] md:w-[304px] aspect-[4/5] cursor-pointer transition-[border-color,box-shadow] duration-500 select-none outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
     >
-      {/* 3D Physical Extruded Slab Back Plate (Gives True 3D Depth — 18px behind front) */}
+      {/* 3D Physical Extruded Slab Back Plate (Gives True 3D Depth — 22px behind front) */}
       <div 
         className={`absolute inset-0 rounded-2xl bg-neutral-950 border transition-all duration-500 pointer-events-none ${
           isActive
-            ? "border-white/35 shadow-[0_30px_60px_rgba(0,0,0,0.98),0_0_25px_rgba(255,255,255,0.12)]"
-            : "border-white/15 shadow-[0_25px_50px_rgba(0,0,0,0.92)]"
+            ? "border-white/40 shadow-[0_35px_70px_rgba(0,0,0,0.98),-8px_8px_25px_rgba(0,0,0,0.85),8px_8px_25px_rgba(0,0,0,0.85),0_0_30px_rgba(255,255,255,0.15)]"
+            : "border-white/20 shadow-[0_28px_56px_rgba(0,0,0,0.92),-6px_6px_20px_rgba(0,0,0,0.8),6px_6px_20px_rgba(0,0,0,0.8)]"
         }`}
         style={{
-          transform: "translateZ(-18px)",
+          transform: "translateZ(-22px)",
           transformStyle: "preserve-3d",
         }}
       />
 
-      {/* 3D Slab Thickness Ring Frame (Mid-depth bevel at -9px) */}
+      {/* 3D Slab Thickness Ring Frame (Mid-depth bevel at -11px) */}
       <div 
-        className="absolute inset-0 rounded-2xl border border-white/10 bg-white/[0.02] pointer-events-none"
+        className="absolute inset-0 rounded-2xl border border-white/20 bg-white/[0.04] pointer-events-none"
         style={{
-          transform: "translateZ(-9px)",
+          transform: "translateZ(-11px)",
           transformStyle: "preserve-3d",
         }}
       />
