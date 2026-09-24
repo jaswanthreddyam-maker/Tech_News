@@ -16,8 +16,7 @@ interface HeroMediaCardProps {
 }
 
 /**
- * HeroMediaCard — High-Performance True 3D Extruded Slab Card
- * 24px physical slab extrusion, zero-flicker double-sided rendering
+ * HeroMediaCard — True 3D Extruded Slab Card
  */
 export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(function HeroMediaCard(
   { article, index, isActive, arrivalFinished: propArrivalFinished, style, className = "" }: HeroMediaCardProps,
@@ -25,7 +24,6 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
 ) {
   const { arrivalFinished: contextArrivalFinished, setActiveIndex, setInteractionMode, setFocusedCardId, onPrimaryAction } = useHeroScene();
   const arrivalFinished = propArrivalFinished ?? contextArrivalFinished;
-
   const getHeroImg = (art: FeaturedArticle) => {
     const isVal = (u?: string | null) => u && typeof u === "string" && (u.startsWith("http://") || u.startsWith("https://")) && !u.includes("example.com");
 
@@ -49,10 +47,7 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
   const [imgSrc, setImgSrc] = React.useState(getHeroImg(article));
 
   React.useEffect(() => {
-    const nextImg = getHeroImg(article);
-    if (nextImg) {
-      setImgSrc(nextImg);
-    }
+    setImgSrc(getHeroImg(article));
   }, [article]);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -62,6 +57,18 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
       setActiveIndex(index);
     } else if (onPrimaryAction) {
       onPrimaryAction(article);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      if (!isActive) {
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveIndex(index);
+      } else if (onPrimaryAction) {
+        onPrimaryAction(article);
+      }
     }
   };
 
@@ -83,18 +90,18 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
         ...style,
         transformStyle: "preserve-3d",
       }}
-      className={`group absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[247px] sm:w-[285px] md:w-[304px] aspect-[4/5] cursor-pointer transition-[border-color,box-shadow] duration-500 select-none outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-[0_25px_50px_rgba(0,0,0,0.95),-6px_6px_20px_rgba(0,0,0,0.8),6px_6px_20px_rgba(0,0,0,0.8)] ${className}`}
+      className={`group absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[247px] sm:w-[285px] md:w-[304px] aspect-[4/5] cursor-pointer transition-[transform,opacity,border-color,box-shadow] duration-500 select-none outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
     >
-      {/* 3D Slab Thickness Core Bevel Frame (Mid-depth at Z = 0px between front and back) */}
+      {/* 3D Slab Thickness Ring Frame */}
       <div 
-        className="absolute inset-0 rounded-2xl border-2 border-white/20 bg-neutral-950/80 pointer-events-none"
+        className="absolute inset-0 rounded-2xl border border-white/10 bg-white/[0.03] pointer-events-none"
         style={{
-          transform: "translateZ(0px)",
+          transform: "translateZ(-7px)",
           transformStyle: "preserve-3d",
         }}
       />
 
-      {/* Render Front Face (+12px) and Back Face (-12px) for true 24px thick physical slab */}
+      {/* Render both Front Face (faces camera at 0°-90°) and Back Face (faces camera at 90°-180° on opposite side of 3D ring) */}
       {[false, true].map((isBack) => (
         <div
           key={isBack ? "back-face" : "front-face"}
@@ -104,7 +111,7 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
               : "border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_15px_30px_rgba(0,0,0,0.8)] opacity-100 hover:border-white/45 hover:shadow-[0_0_28px_rgba(255,255,255,0.2)]"
           }`}
           style={{
-            transform: isBack ? "rotateY(180deg) translateZ(12px)" : "translateZ(12px)",
+            transform: isBack ? "rotateY(180deg) translateZ(14px)" : "translateZ(0px)",
             transformStyle: "preserve-3d",
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
@@ -120,20 +127,38 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
             </div>
           ) : (
             <>
-              {/* Layer 1: High-Performance Media Showcase (Clean Obsidian Ambient Fill) */}
-              <div className="absolute inset-0 w-full h-full overflow-hidden bg-gradient-to-b from-neutral-900 via-neutral-950 to-black">
+              {/* Layer 1: Full Bleed Media Showcase (Full Width Image + Blurred Ambient Fill) */}
+              <div className="absolute inset-0 w-full h-full overflow-hidden bg-neutral-950">
                 {imgSrc ? (
                   <>
+                    {/* Blurred Background Layer (Fills entire card) */}
+                    <div className="absolute inset-0 w-full h-full overflow-hidden">
+                      <Image
+                        src={imgSrc}
+                        alt=""
+                        fill
+                        unoptimized={true}
+                        quality={isBack ? 40 : 50}
+                        priority={false}
+                        aria-hidden="true"
+                        onError={() => setImgSrc("")}
+                        className="object-cover scale-125 blur-2xl opacity-75 transition-transform duration-700 group-hover:scale-135 group-hover:saturate-[1.08]"
+                      />
+                      {/* Dark Gradient Overlay for Contrast */}
+                      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/95" />
+                    </div>
+
                     {/* Foreground Image Layer (Top 55% Area, Full Width Edge-to-Edge) */}
-                    <div className="absolute top-0 inset-x-0 w-full h-[55%] z-10 overflow-hidden bg-neutral-950">
+                    <div className="absolute top-0 inset-x-0 w-full h-[55%] z-10 overflow-hidden">
                       <Image
                         src={imgSrc}
                         alt={article.title}
                         fill
                         unoptimized={true}
                         sizes="(max-width: 768px) 290px, 340px"
-                        quality={isBack ? 75 : 85}
+                        quality={isBack ? 75 : 90}
                         priority={!isBack && (isActive || index === 0)}
+                        onError={() => setImgSrc("")}
                         className="object-cover object-center w-full h-full drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)] transition-all duration-700 group-hover:scale-[1.04]"
                       />
                       {/* Shaded Division Seam Gradient at Bottom of Thumbnail */}
@@ -173,7 +198,7 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
               {/* Layer 4: Fresnel Top-Edge Specular Catch */}
               <div className="absolute inset-0 pointer-events-none z-30 rounded-2xl border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.6)] group-hover:border-white/40 transition-colors duration-500" />
 
-              {/* Layer 5: Exact 45% Height Description Overlay Footer */}
+              {/* Layer 5: Exact 45% Height Description Overlay Footer (Trending Now Glass Material) */}
               <div className={`absolute bottom-0 inset-x-0 h-[45%] pt-5 pb-5 px-6 bg-neutral-950/80 backdrop-blur-xl border-t border-white/15 shadow-[0_-12px_32px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.2)] flex flex-col items-center justify-center text-center gap-1.5 z-35 transition-all duration-700 ease-out ${
                 arrivalFinished ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
               }`}>

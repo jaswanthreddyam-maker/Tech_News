@@ -77,7 +77,7 @@ export function HeroCarousel({
     return Array.from(map.values());
   }, [initialItems, clientFeatured, deskFeatured]);
 
-  // Ensure activePool prioritizes genuine thumbnails, and guarantees exactly 12 items
+  // Ensure activePool prioritizes genuine thumbnails, and backfills from allPool to ensure 12 items
   const activePool = React.useMemo(() => {
     const pool: FeaturedArticle[] = [];
     const seen = new Set<string>();
@@ -94,25 +94,11 @@ export function HeroCarousel({
     if (pool.length < 12) {
       for (const art of allPool) {
         const artId = String(art.id || art.slug || art.title);
-        if (!seen.has(artId) && MediaService.hasGenuineThumbnail(art)) {
+        if (!seen.has(artId)) {
           seen.add(artId);
           pool.push(art);
         }
         if (pool.length >= 12) break;
-      }
-    }
-
-    // If still under 12, cycle genuine thumbnail articles with distinct IDs so all 12 cards have vibrant thumbnails
-    if (pool.length < 12 && pool.length > 0) {
-      const basePool = [...pool];
-      let cycleIdx = 0;
-      while (pool.length < 12) {
-        const base = basePool[cycleIdx % basePool.length];
-        pool.push({
-          ...base,
-          id: `${base.id}-ring-${pool.length}`,
-        });
-        cycleIdx++;
       }
     }
 
