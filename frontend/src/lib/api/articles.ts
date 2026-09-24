@@ -7,7 +7,12 @@ export async function getArticles(params: {
   cursor?: string;
   sort_by?: string;
 }): Promise<PaginatedResponse<Article>> {
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: params as Record<string, string> });
+  const queryParams: Record<string, string> = {};
+  if (params.category) queryParams.category = params.category;
+  if (params.limit !== undefined) queryParams.limit = String(params.limit);
+  if (params.cursor) queryParams.cursor = params.cursor;
+  if (params.sort_by) queryParams.sort_by = params.sort_by;
+  return apiFetch<PaginatedResponse<Article>>("/news", { params: queryParams });
 }
 
 export async function getArticleById(id: number): Promise<StandardResponse<Article>> {

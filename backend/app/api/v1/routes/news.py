@@ -388,17 +388,48 @@ async def list_articles(
                     from app.editorial.homepage_builder import HomepageBuilder
                     resolved_articles = await HomepageBuilder.build_homepage(db)
 
-            # If category filter is active, filter from the global ranked articles
+            # If category filter is active, find articles matching this category
             if category:
                 category_lower = category.lower().strip()
-                filtered_articles = []
+                matching_arts = []
+                seen_ids = set()
+
+                # 1. First check in the resolved homepage ranked articles
                 for art in resolved_articles:
-                    topic_stmt = select(ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id == art.id)
-                    topic_res = await db.execute(topic_stmt)
-                    topics = topic_res.scalars().all()
-                    if any(category_lower in t.lower() for t in topics):
-                        filtered_articles.append(art)
-                resolved_articles = filtered_articles
+                    c_str = (art.category or "").lower()
+                    title_str = (art.title or "").lower()
+                    if category_lower in c_str or category_lower in title_str:
+                        matching_arts.append(art)
+                        seen_ids.add(str(art.id))
+
+                # 2. If fewer than limit, query ArticleReadModel directly for published category stories
+                if len(matching_arts) < limit:
+                    from sqlalchemy import or_, desc
+                    needed = limit - len(matching_arts)
+                    cat_query = (
+                        select(ArticleReadModel)
+                        .where(
+                            ArticleReadModel.is_test_data == False,
+                            ArticleReadModel.publication_status == "PUBLISHED",
+                            or_(
+                                func.lower(ArticleReadModel.category).contains(category_lower),
+                                func.lower(ArticleReadModel.title).contains(category_lower),
+                            )
+                        )
+                    )
+                    if seen_ids:
+                        cat_query = cat_query.where(ArticleReadModel.id.notin_(list(seen_ids)))
+                    cat_query = (
+                        cat_query
+                        .order_by(desc(ArticleReadModel.published_at))
+                        .limit(needed)
+                        .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+                    )
+                    cat_res = await db.execute(cat_query)
+                    for additional_art in cat_res.scalars().all():
+                        matching_arts.append(additional_art)
+
+                resolved_articles = matching_arts
 
             # Paginate by slicing
             resolved_articles = resolved_articles[:limit]
@@ -733,7 +764,7 @@ async def get_category_desks():
                 display_order = cfg.get("display_order", 99)
                 card_list = [
                     (ArticleCard.from_model(a, topics=[], entities=[]).model_dump(mode="json"))
-                    for a in art_list[:6]
+                    for a in art_list[:12]
                 ]
                 desks.append({
                     "slug": c_slug,
@@ -750,7 +781,7 @@ async def get_category_desks():
 
         try:
             redis = get_redis_client()
-            if redis and desks is not None:
+            if redis and desks and len(desks) > 0:
                 await asyncio.wait_for(redis.set(cache_key_desks, json.dumps(desks, default=str), ex=300), timeout=1.0)
         except Exception:
             pass

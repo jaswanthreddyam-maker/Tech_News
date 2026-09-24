@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { useCategoryDesks, useTrending } from "@/components/hooks/articles/useArticles";
+import { useCategoryDesks, useTrending, useCategoryArticles } from "@/components/hooks/articles/useArticles";
 import { 
   Sparkles, 
   Link as LinkIcon, 
@@ -18,6 +18,7 @@ import {
   Scale, 
   Layers, 
   ChevronDown, 
+  ArrowRight,
   Newspaper, 
   LucideIcon 
 } from "lucide-react";
@@ -371,9 +372,35 @@ export function LatestNews() {
     return availableCategories.find((c) => c.key === selectedKey) || availableCategories[0];
   }, [availableCategories, selectedKey]);
 
+  // Dynamic on-demand query for the active category (pulls up to 24 articles)
+  const { data: dynamicCatData, isLoading: isCategoryLoading } = useCategoryArticles(
+    selectedKey !== "all" ? selectedKey : "",
+    24
+  );
+
+  // Progressive visibility count state (default 8, expands on load more)
+  const [visibleCount, setVisibleCount] = useState(8);
+
+  useEffect(() => {
+    setVisibleCount(8);
+  }, [selectedKey]);
+
+  // Combine on-demand query results with desk fallback
   const displayArticles = useMemo(() => {
-    return activeCategory?.desk?.articles?.slice(0, 4) || [];
-  }, [activeCategory]);
+    const fromApi = dynamicCatData?.data;
+    if (Array.isArray(fromApi) && fromApi.length > 0) {
+      return fromApi;
+    }
+    const fromDesk = activeCategory?.desk?.articles;
+    if (Array.isArray(fromDesk) && fromDesk.length > 0) {
+      return fromDesk;
+    }
+    return [];
+  }, [dynamicCatData, activeCategory]);
+
+  const visibleArticles = useMemo(() => {
+    return displayArticles.slice(0, visibleCount);
+  }, [displayArticles, visibleCount]);
 
   const isLoading = (isDesksLoading && isTrendingLoading) && individualCategories.length === 0;
   const hasError = desksError && trendingError && individualCategories.length === 0;
@@ -581,6 +608,15 @@ export function LatestNews() {
                               {cat.tags}
                             </div>
                           </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKey(cat.key)}
+                            className="text-xs font-mono font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto group"
+                          >
+                            <span>Explore all {cat.title}</span>
+                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
                         </div>
 
                         {/* Asymmetric Magazine/Editorial Grid */}
@@ -633,6 +669,11 @@ export function LatestNews() {
                         <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">
                           {activeCategory.title}
                         </h3>
+                        {displayArticles.length > 0 && (
+                          <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-muted-foreground ml-2">
+                            {displayArticles.length} stories
+                          </span>
+                        )}
                       </div>
 
                       <div className="text-xs font-mono text-muted-foreground/60">
@@ -641,34 +682,88 @@ export function LatestNews() {
                     </div>
                   </div>
 
-                  {/* Asymmetric Magazine/Editorial Grid */}
-                  {displayArticles.length > 0 ? (
-                    <div 
-                      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 w-full items-stretch"
-                      style={{ 
-                        transformStyle: "preserve-3d",
-                        transform: "rotateX(calc(var(--camera-rotate-x, 0))) rotateY(calc(var(--camera-rotate-y, 0)))",
-                      }}
-                    >
-                      {displayArticles.map((article: any, i: number) => {
-                        const { isPrimary, spanClass } = getArticleGridClasses(displayArticles.length, i);
-                        
-                        return (
-                          <m.div
-                            key={article.id || i}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5, delay: i * 0.05, ease: EASE_CUBIC }}
-                            className={`w-full h-full ${spanClass}`}
+                  {/* Multi-Tier Responsive Article Grid */}
+                  {visibleArticles.length > 0 ? (
+                    <div className="space-y-8">
+                      {/* Tier 1: Lead Magazine Grid (First 4 stories) */}
+                      <div 
+                        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 w-full items-stretch"
+                        style={{ 
+                          transformStyle: "preserve-3d",
+                          transform: "rotateX(calc(var(--camera-rotate-x, 0))) rotateY(calc(var(--camera-rotate-y, 0)))",
+                        }}
+                      >
+                        {visibleArticles.slice(0, 4).map((article: any, i: number) => {
+                          const { isPrimary, spanClass } = getArticleGridClasses(
+                            Math.min(visibleArticles.length, 4),
+                            i
+                          );
+                          
+                          return (
+                            <m.div
+                              key={article.id || i}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.5, delay: i * 0.05, ease: EASE_CUBIC }}
+                              className={`w-full h-full ${spanClass}`}
+                            >
+                              <FloatingEditorialPanel
+                                article={article}
+                                index={i}
+                                isPrimary={isPrimary}
+                              />
+                            </m.div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Tier 2: Extended Grid (Stories 5 and beyond) */}
+                      {visibleArticles.length > 4 && (
+                        <div 
+                          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 w-full items-stretch pt-4 border-t border-white/5"
+                          style={{ 
+                            transformStyle: "preserve-3d",
+                            transform: "rotateX(calc(var(--camera-rotate-x, 0))) rotateY(calc(var(--camera-rotate-y, 0)))",
+                          }}
+                        >
+                          {visibleArticles.slice(4).map((article: any, i: number) => (
+                            <m.div
+                              key={article.id || (i + 4)}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.5, delay: (i % 4) * 0.05, ease: EASE_CUBIC }}
+                              className="w-full h-full col-span-1 sm:col-span-1 lg:col-span-1"
+                            >
+                              <FloatingEditorialPanel
+                                article={article}
+                                index={i + 4}
+                                isPrimary={false}
+                              />
+                            </m.div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Tier 3: Load More Action */}
+                      {displayArticles.length > visibleCount && (
+                        <div className="flex justify-center pt-8">
+                          <button
+                            type="button"
+                            onClick={() => setVisibleCount((prev) => prev + 8)}
+                            className="px-6 py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/20 text-xs font-mono font-semibold text-foreground transition-all duration-200 shadow-lg cursor-pointer flex items-center gap-2 group"
                           >
-                            <FloatingEditorialPanel
-                              article={article}
-                              index={i}
-                              isPrimary={isPrimary}
-                            />
-                          </m.div>
-                        );
-                      })}
+                            <span>Load More {activeCategory.title} Stories ({displayArticles.length - visibleCount} remaining)</span>
+                            <ChevronDown className="w-3.5 h-3.5 text-primary group-hover:translate-y-0.5 transition-transform" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : isCategoryLoading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full py-8">
+                      <EditorialCardSkeleton />
+                      <EditorialCardSkeleton />
+                      <EditorialCardSkeleton />
+                      <EditorialCardSkeleton />
                     </div>
                   ) : (
                     <div className="py-16 text-center text-muted-foreground text-sm font-mono bg-white/[0.02] rounded-2xl border border-white/5">

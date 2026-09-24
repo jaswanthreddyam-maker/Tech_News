@@ -81,3 +81,15 @@ export function useCategoryDesks() {
   });
 }
 
+export function useCategoryArticles(category: string, limit: number = 16) {
+  return useQuery({
+    queryKey: ["articles", "category", category, limit],
+    queryFn: () => getArticles({ category, limit }),
+    enabled: !!category && category !== "all",
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+
