@@ -19,7 +19,7 @@ export interface HeroSceneState {
 }
 
 export interface HeroSceneActions {
-  setActiveIndex: (index: number | ((prev: number) => number)) => void;
+  setActiveIndex: (index: number | ((prev: number) => number), syncRotation?: boolean) => void;
   nextSlide: () => void;
   prevSlide: () => void;
   setInteractionMode: (mode: InteractionMode) => void;

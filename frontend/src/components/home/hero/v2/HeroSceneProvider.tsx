@@ -82,13 +82,15 @@ export function HeroSceneProvider({
 
   // Sync rotation cleanly when index changes directly
   const setActiveIndex = useCallback(
-    (indexOrUpdater: number | ((prev: number) => number)) => {
+    (indexOrUpdater: number | ((prev: number) => number), syncRotation: boolean = true) => {
       setActiveIndexState((prev) => {
         const nextIdx = typeof indexOrUpdater === "function" ? indexOrUpdater(prev) : indexOrUpdater;
         const validIdx = itemCount > 0 ? ((nextIdx % itemCount) + itemCount) % itemCount : 0;
         if (validIdx !== prev) {
           onSlideChange?.(validIdx);
-          setRotation(-validIdx * anglePerItem);
+          if (syncRotation) {
+            setRotation(-validIdx * anglePerItem);
+          }
         }
         return validIdx;
       });
@@ -100,7 +102,7 @@ export function HeroSceneProvider({
     if (itemCount === 0) return;
     setPlaybackState("transitioning");
     setRotation((prev) => prev - anglePerItem);
-    setActiveIndex((prev) => (prev + 1) % itemCount);
+    setActiveIndex((prev) => (prev + 1) % itemCount, false);
     setTimeout(() => {
       setPlaybackState((current) => (current === "transitioning" ? "playing" : current));
     }, PLAYBACK_CONFIG.TRANSITION_DURATION_MS);
@@ -110,34 +112,12 @@ export function HeroSceneProvider({
     if (itemCount === 0) return;
     setPlaybackState("transitioning");
     setRotation((prev) => prev + anglePerItem);
-    setActiveIndex((prev) => ((prev - 1 + itemCount) % itemCount));
+    setActiveIndex((prev) => ((prev - 1 + itemCount) % itemCount), false);
     setTimeout(() => {
       setPlaybackState((current) => (current === "transitioning" ? "playing" : current));
     }, PLAYBACK_CONFIG.TRANSITION_DURATION_MS);
   }, [itemCount, anglePerItem, setActiveIndex]);
 
-  // Autoplay loop: total ring cycle ms -> advances smoothly ONLY when user has entered section and arrival animation is finished
-  useEffect(() => {
-    if (
-      itemCount <= 1 ||
-      interactionMode !== "idle" ||
-      playbackState !== "playing" ||
-      !arrivalFinished ||
-      !isInView
-    ) {
-      return;
-    }
-
-    const stepInterval = Math.max(
-      PLAYBACK_CONFIG.MIN_STEP_INTERVAL_MS,
-      Math.floor(PLAYBACK_CONFIG.TOTAL_RING_CYCLE_MS / itemCount)
-    );
-    const timer = setInterval(() => {
-      nextSlide();
-    }, stepInterval);
-
-    return () => clearInterval(timer);
-  }, [itemCount, interactionMode, playbackState, arrivalFinished, isInView, nextSlide]);
 
   // Pause playback automatically when interaction mode shifts away from idle
   useEffect(() => {

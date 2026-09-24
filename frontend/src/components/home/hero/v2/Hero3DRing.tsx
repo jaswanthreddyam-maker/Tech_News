@@ -74,6 +74,7 @@ export function Hero3DRing() {
     anglePerItem,
     itemCount,
     interactionMode,
+    playbackState,
     setInteractionMode,
     setActiveIndex,
     setRotation,
@@ -112,6 +113,18 @@ export function Hero3DRing() {
     dragOffsetRef.current = dragOffsetAngle;
   }, [dragOffsetAngle]);
 
+  const itemCountRef = useRef(itemCount);
+  useEffect(() => {
+    itemCountRef.current = itemCount;
+  }, [itemCount]);
+
+  const anglePerItemRef = useRef(anglePerItem);
+  useEffect(() => {
+    anglePerItemRef.current = anglePerItem;
+  }, [anglePerItem]);
+
+  const cardRefs = useRef<(HTMLElement | null)[]>([]);
+
   // Pure Ref Arrival Drag Lock Flag
   const isArrivingRef = useRef(true);
   const arrivalStatusRef = useRef<"idle" | "waiting_overlay" | "animating" | "settling" | "completed">("idle");
@@ -146,11 +159,11 @@ export function Hero3DRing() {
     if (arrivalRef.current) arrivalRef.current.style.transform = "translateZ(0px) scale(1)";
     if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
     if (ringRef.current) {
-      const netRotation = rotationRef.current + dragOffsetRef.current;
-      ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netRotation}deg)`;
+      ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(0deg)`;
     }
 
-    smoothedRotationRef.current = rotationRef.current + dragOffsetRef.current;
+    ambientRotationRef.current = 0;
+    smoothedRotationRef.current = 0;
     setLocalArrivalFinished(true);
     setContextArrivalFinished(true);
 
@@ -372,23 +385,25 @@ export function Hero3DRing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasItems, arrivalFinished, completeArrival, startArrival]);
 
-  // Continuous Museum Exhibit Turntable Rotation Engine
+  // Continuous Museum Exhibit Turntable Rotation Engine (Slow-Motion)
   const ambientRotationRef = useRef<number>(0);
   const smoothedRotationRef = useRef<number>(rotation);
+  const lastActiveIndexRef = useRef<number>(activeIndex);
 
   useEffect(() => {
     if (!localArrivalFinished) return;
 
     let ambientRafId: number;
     let lastTime = performance.now();
+    const SLOW_MOTION_DEG_PER_SEC = 3.0; // 3.0 deg/sec = slow, cinematic turntable rotation
 
     const animateAmbient = (now: number) => {
-      const dt = Math.min(0.033, (now - lastTime) / 1000);
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      // 1.2 degrees per second -> slow, cinematic, museum-exhibit spin
-      if (!isDragging && interactionMode === "idle") {
-        ambientRotationRef.current += 1.2 * dt;
+      // Rotate continuously in slow motion when idle and playing
+      if (!isDragging && interactionMode === "idle" && playbackState === "playing") {
+        ambientRotationRef.current += SLOW_MOTION_DEG_PER_SEC * dt;
       }
 
       if (ringRef.current && !isArrivingRef.current) {
@@ -396,11 +411,46 @@ export function Hero3DRing() {
         if (isDragging) {
           smoothedRotationRef.current = targetRotation;
         } else {
-          // Zero-velocity dampened exponential spring lerp (~600ms smooth easing)
-          const lerpFactor = 1 - Math.exp(-7.0 * dt);
+          // Zero-velocity dampened exponential spring lerp
+          const lerpFactor = 1 - Math.exp(-8.0 * dt);
           smoothedRotationRef.current += (targetRotation - smoothedRotationRef.current) * lerpFactor;
         }
-        ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${smoothedRotationRef.current}deg)`;
+
+        const netAngle = smoothedRotationRef.current;
+        ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netAngle}deg)`;
+
+        // Update card depth opacities, pointer events, and z-index directly on DOM
+        const count = itemCountRef.current;
+        const perItem = anglePerItemRef.current;
+        if (count > 0 && perItem > 0) {
+          for (let i = 0; i < count; i++) {
+            const cardEl = cardRefs.current[i];
+            if (!cardEl) continue;
+
+            const itemAngle = i * perItem;
+            const currentNetAngle = normalizeAngle(itemAngle + netAngle);
+            const shortestAngle = Math.min(currentNetAngle, 360 - currentNetAngle);
+
+            const depthOpacity =
+              shortestAngle > 110
+                ? 0
+                : shortestAngle > 75
+                ? Math.max(0, (110 - shortestAngle) / 35)
+                : 1;
+
+            cardEl.style.opacity = String(depthOpacity);
+            cardEl.style.visibility = depthOpacity <= 0 ? "hidden" : "visible";
+            cardEl.style.pointerEvents = shortestAngle > RING_CONFIG.POINTER_CUTOFF ? "none" : "auto";
+            cardEl.style.zIndex = String(Math.round((180 - shortestAngle) * 10));
+          }
+
+          // Advance active card index as the ring turns (pass syncRotation = false to not jerk rotation)
+          const frontIndex = ((Math.round(normalizeAngle(-netAngle) / perItem) % count) + count) % count;
+          if (frontIndex !== lastActiveIndexRef.current) {
+            lastActiveIndexRef.current = frontIndex;
+            setActiveIndex(frontIndex, false);
+          }
+        }
       }
 
       ambientRafId = requestAnimationFrame(animateAmbient);
@@ -408,7 +458,7 @@ export function Hero3DRing() {
 
     ambientRafId = requestAnimationFrame(animateAmbient);
     return () => cancelAnimationFrame(ambientRafId);
-  }, [localArrivalFinished, isDragging, interactionMode]);
+  }, [localArrivalFinished, isDragging, interactionMode, playbackState, setActiveIndex]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -441,23 +491,16 @@ export function Hero3DRing() {
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
 
-      const totalRotation = startRotationRef.current + dragOffsetAngle;
+      // Absorb the drag offset directly into ambientRotationRef so the ring NEVER snaps on release!
+      ambientRotationRef.current -= dragOffsetAngle;
       setDragOffsetAngle(0);
-
-      if (itemCount > 0) {
-        const normalizedAngle = -totalRotation / anglePerItem;
-        let roundedIndex = Math.round(normalizedAngle) % itemCount;
-        roundedIndex = (roundedIndex + itemCount) % itemCount;
-
-        setActiveIndex(roundedIndex);
-        setRotation(-roundedIndex * anglePerItem);
-      }
+      dragOffsetRef.current = 0;
 
       requestAnimationFrame(() => {
         setInteractionMode("idle");
       });
     },
-    [isDragging, dragOffsetAngle, itemCount, anglePerItem, setActiveIndex, setRotation, setInteractionMode]
+    [isDragging, dragOffsetAngle, setInteractionMode]
   );
 
   const sceneRotation = rotation + dragOffsetAngle;
@@ -508,7 +551,9 @@ export function Hero3DRing() {
             className="relative w-0 h-0 z-10"
             style={{
               transformStyle: "preserve-3d",
-              transform: `translateZ(-${radius}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${sceneRotation}deg)`,
+              transform: localArrivalFinished
+                ? undefined
+                : `translateZ(-${radius}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${sceneRotation}deg)`,
               transition: "none",
               willChange: "transform",
             }}
@@ -539,6 +584,9 @@ export function Hero3DRing() {
               return (
                 <HeroMediaCard
                   key={article.id || idx}
+                  ref={(el) => {
+                    cardRefs.current[idx] = el;
+                  }}
                   article={article}
                   index={idx}
                   isActive={isActive}

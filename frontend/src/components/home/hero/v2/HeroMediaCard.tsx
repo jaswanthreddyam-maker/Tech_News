@@ -18,7 +18,10 @@ interface HeroMediaCardProps {
 /**
  * HeroMediaCard — True 3D Extruded Slab Card
  */
-export function HeroMediaCard({ article, index, isActive, arrivalFinished: propArrivalFinished, style, className = "" }: HeroMediaCardProps) {
+export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(function HeroMediaCard(
+  { article, index, isActive, arrivalFinished: propArrivalFinished, style, className = "" }: HeroMediaCardProps,
+  ref
+) {
   const { arrivalFinished: contextArrivalFinished, setActiveIndex, setInteractionMode, setFocusedCardId, onPrimaryAction } = useHeroScene();
   const arrivalFinished = propArrivalFinished ?? contextArrivalFinished;
   const getHeroImg = (art: FeaturedArticle) => {
@@ -71,6 +74,7 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
 
   return (
     <ArticleLink
+      ref={ref}
       article={article}
       section="Hero3DRing"
       position={index}
@@ -220,4 +224,4 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
       </div>
     </ArticleLink>
   );
-}
+});
