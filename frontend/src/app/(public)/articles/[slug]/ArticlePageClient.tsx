@@ -22,7 +22,7 @@ import { AdaptiveStoryCard } from "@/components/common/card/AdaptiveStoryCard";
 import { StickyReadingHeader } from "@/components/article/header/StickyReadingHeader";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Calendar, Sparkles, Eye, Minimize2, Type, ExternalLink } from "lucide-react";
+import { Calendar, Sparkles, Eye, Minimize2, Type, ExternalLink, ArrowLeft } from "lucide-react";
 import { m, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { ArticleRevealSection } from "@/components/article/layout/ArticleRevealSection";
 import { ProgressiveImage } from "@/components/common/ProgressiveImage";
@@ -34,6 +34,13 @@ import { StaggerContainer, StaggerItem } from "@/components/animations";
 
 export default function ArticlePageClient({ article: rawData }: { article: any }) {
   const router = useRouter();
+  const handleBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/");
+    }
+  }, [router]);
   const shouldReduceMotion = useReducedMotion();
   const { isColdLoad } = useNavigationType();
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -408,6 +415,17 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
         }
         header={
           <div className="space-y-6">
+            <div>
+              <button
+                type="button"
+                onClick={handleBack}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 bg-card/40 hover:bg-card hover:border-border text-xs font-mono text-muted-foreground hover:text-foreground transition-all cursor-pointer group"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+                <span>Back</span>
+              </button>
+            </div>
             <ArticleHeader
               title={article.title}
               description={article.description || article.summary || ""}

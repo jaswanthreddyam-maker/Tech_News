@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Shield, User, Mail, Send, CheckCircle2,
   ChevronDown, ChevronUp, Sparkles, Clock, AlertCircle, MailCheck,
-  Bell, BellRing, LogOut,
+  Bell, BellRing, LogOut, ArrowLeft,
 } from "lucide-react";
 import {
   getBriefingPreferences,
@@ -38,6 +39,7 @@ function formatDeliveryTime(isoString?: string | null): string {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user } = useAppStore();
   const { notifications, unreadCount, markAllAsRead, isConnected } = useNotifications();
   const { requireAuthentication } = useAuthGate();
@@ -168,8 +170,28 @@ export default function SettingsPage() {
       ? "text-red-400"
       : "text-muted-foreground";
 
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/dashboard");
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div>
+        <button
+          type="button"
+          onClick={handleBack}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-card/40 hover:bg-card hover:border-white/20 text-xs font-mono text-muted-foreground hover:text-foreground transition-all cursor-pointer group"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+          <span>Back</span>
+        </button>
+      </div>
+
       <PageHeader
         title="Settings & Preferences"
         description="Customize your account identity, daily briefing, notifications, and data privacy."
