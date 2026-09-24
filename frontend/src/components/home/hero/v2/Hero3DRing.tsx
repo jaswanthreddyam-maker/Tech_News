@@ -469,17 +469,34 @@ export function Hero3DRing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasItems, arrivalFinished, completeArrival, startArrival]);
 
-  // Continuous Museum Exhibit Turntable Rotation Engine (Slow-Motion)
+  // Carousel-Style Step-by-Step Card Advance Engine
+  // Instead of continuous rotation, the ring dwells on each card then smoothly
+  // transitions to the next one, like a premium editorial carousel.
   const ambientRotationRef = useRef<number>(0);
   const smoothedRotationRef = useRef<number>(rotation);
   const lastActiveIndexRef = useRef<number>(activeIndex);
   const lastSyncedRotationRef = useRef<number>(rotation);
+
+  // Step carousel state (all refs to avoid stale closures in rAF)
+  const stepBaseAngleRef = useRef<number>(0);      // The angle we started this step from
+  const stepTargetAngleRef = useRef<number>(0);     // The angle we're stepping to
+  const stepStartTimeRef = useRef<number>(0);       // When the step transition began
+  const stepPhaseRef = useRef<"dwell" | "stepping">("dwell"); // Current phase
+  const dwellStartTimeRef = useRef<number>(0);      // When the current dwell began
+
+  /** Carousel Step Configuration */
+  const STEP_DWELL_MS = 4000;   // 4s pause on each card
+  const STEP_TRANSITION_MS = 800; // 800ms smooth transition to next card
+  const easeInOutCubicStep = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
   // Sync when rotation changes externally (e.g. user clicks a card or next arrow)
   useEffect(() => {
     if (rotation !== lastSyncedRotationRef.current) {
       lastSyncedRotationRef.current = rotation;
       ambientRotationRef.current = 0;
+      // Reset step phase so dwell restarts from the new position
+      stepPhaseRef.current = "dwell";
+      dwellStartTimeRef.current = performance.now();
     }
   }, [rotation]);
 
@@ -488,21 +505,58 @@ export function Hero3DRing() {
 
     let ambientRafId: number;
     let lastTime = performance.now();
-    let lastRenderTime = 0; // Tracks when we last performed a full render pass
-    const SLOW_MOTION_DEG_PER_SEC = 3.0; // 3.0 deg/sec = slow, cinematic turntable rotation
+    let lastRenderTime = 0;
+
+    // Initialize dwell timer on first run
+    dwellStartTimeRef.current = performance.now();
+    stepPhaseRef.current = "dwell";
 
     const animateAmbient = (now: number) => {
       const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      // Always accumulate rotation time so physics stays correct regardless of render skips
+      // Carousel step logic: advance one card at a time when idle and playing
       if (!isDragging && interactionMode === "idle" && playbackState === "playing") {
-        ambientRotationRef.current += SLOW_MOTION_DEG_PER_SEC * dt;
+        const perItem = anglePerItemRef.current;
+
+        if (stepPhaseRef.current === "dwell") {
+          // Waiting on current card — check if dwell time has elapsed
+          if (now - dwellStartTimeRef.current >= STEP_DWELL_MS && perItem > 0) {
+            // Begin stepping to the next card
+            stepPhaseRef.current = "stepping";
+            stepBaseAngleRef.current = ambientRotationRef.current;
+            stepTargetAngleRef.current = ambientRotationRef.current + perItem;
+            stepStartTimeRef.current = now;
+          }
+        }
+
+        if (stepPhaseRef.current === "stepping") {
+          // Animate the step with smooth easing
+          const stepElapsed = now - stepStartTimeRef.current;
+          const stepProgress = Math.min(1, stepElapsed / STEP_TRANSITION_MS);
+          const easedProgress = easeInOutCubicStep(stepProgress);
+
+          ambientRotationRef.current =
+            stepBaseAngleRef.current +
+            (stepTargetAngleRef.current - stepBaseAngleRef.current) * easedProgress;
+
+          if (stepProgress >= 1) {
+            // Step complete — snap to exact target and begin next dwell
+            ambientRotationRef.current = stepTargetAngleRef.current;
+            stepPhaseRef.current = "dwell";
+            dwellStartTimeRef.current = now;
+          }
+        }
+      } else if (isDragging) {
+        // While dragging, reset dwell so we get a full pause after release
+        dwellStartTimeRef.current = now;
+        stepPhaseRef.current = "dwell";
       }
 
       // Adaptive FPS: skip the DOM write if we're under the frame budget
-      // During drag, always render at native fps for instant responsiveness
-      const shouldRender = isDragging || frameIntervalMs === 0 || (now - lastRenderTime) >= frameIntervalMs;
+      // During drag or active stepping, always render at native fps for smoothness
+      const isSteppingNow = stepPhaseRef.current === "stepping";
+      const shouldRender = isDragging || isSteppingNow || frameIntervalMs === 0 || (now - lastRenderTime) >= frameIntervalMs;
 
       if (shouldRender && ringRef.current && !isArrivingRef.current) {
         lastRenderTime = now;
