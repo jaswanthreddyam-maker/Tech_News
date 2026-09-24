@@ -10,20 +10,15 @@ import { EditorialCardSkeleton } from "./EditorialCardSkeleton";
 export const CategoryNewsSkeleton = React.memo(function CategoryNewsSkeleton() {
   return (
     <section className="py-12 border-t border-border/20 mt-8 min-h-[400px] relative rounded-3xl overflow-hidden bg-gradient-to-b from-[#0e0f12]/40 via-background to-background p-4 sm:p-8 lg:p-10">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
-        <ShimmerBase className="w-10 h-10 rounded-xl" />
-        <div className="space-y-1.5">
-          <ShimmerBase className="h-7 w-56 rounded-md" />
-          <ShimmerBase className="h-3.5 w-72 rounded" />
+      {/* Header matching Browse by Category */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
+        <div>
+          <ShimmerBase className="h-7 w-52 rounded-md" />
         </div>
-      </div>
-
-      {/* Category Pills Row */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 no-scrollbar">
-        {["All", "AI & ML", "Cybersecurity", "Cloud & Infra", "Hardware", "Startups"].map((_, i) => (
-          <ShimmerBase key={i} className="h-8 w-24 rounded-full flex-shrink-0" />
-        ))}
+        <div className="flex flex-col sm:items-end gap-1.5">
+          <ShimmerBase className="h-3 w-28 rounded hidden sm:block" />
+          <ShimmerBase className="h-10 w-full sm:w-[220px] rounded-xl" />
+        </div>
       </div>
 
       {/* 4-Card Responsive Grid */}

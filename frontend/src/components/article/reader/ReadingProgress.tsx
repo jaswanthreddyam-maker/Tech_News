@@ -75,10 +75,13 @@ export function ReadingProgress({ wordCount }: ReadingProgressProps) {
         />
       </div>
 
-      {/* Floating time remaining indicator */}
+      {/* Floating time remaining indicator (offset from AI Assistant at right-6) */}
       <div
-        className="fixed bottom-8 right-8 hidden xl:flex items-center gap-2 px-3 py-2 rounded-full bg-background/90 backdrop-blur border border-border text-xs font-mono font-bold text-muted-foreground shadow-lg z-[90] transition-opacity duration-300"
-        style={{ opacity: progress > 1 && progress < 99 ? 1 : 0 }}
+        className="fixed bottom-6 right-20 hidden xl:flex items-center gap-2 px-3.5 py-2 rounded-full bg-background/90 backdrop-blur-md border border-border/80 text-xs font-mono font-bold text-muted-foreground shadow-lg z-40 transition-all duration-300"
+        style={{
+          opacity: progress > 1 && progress < 99 ? 1 : 0,
+          pointerEvents: progress > 1 && progress < 99 ? "auto" : "none",
+        }}
       >
         <span className="text-foreground">{Math.round(progress)}% read</span>
         <span className="text-border">|</span>

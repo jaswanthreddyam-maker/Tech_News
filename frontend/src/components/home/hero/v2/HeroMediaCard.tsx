@@ -85,6 +85,8 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
       style={{
         ...style,
         transformStyle: "preserve-3d",
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
       }}
       className={`group absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[247px] sm:w-[285px] md:w-[304px] aspect-[4/5] cursor-pointer transition-[transform,opacity,border-color,box-shadow] duration-500 select-none outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
     >
@@ -93,6 +95,8 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
         className="absolute inset-0 rounded-2xl bg-neutral-950 border border-white/20 shadow-[0_30px_60px_rgba(0,0,0,0.95)] pointer-events-none"
         style={{
           transform: "translateZ(-14px)",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       />
 
@@ -101,6 +105,8 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
         className="absolute inset-0 rounded-2xl border border-white/10 bg-white/[0.03] pointer-events-none"
         style={{
           transform: "translateZ(-7px)",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       />
 
@@ -113,6 +119,8 @@ export function HeroMediaCard({ article, index, isActive, arrivalFinished: propA
         }`}
         style={{
           transformStyle: "preserve-3d",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       >
         {article.id.startsWith("skeleton-") ? (

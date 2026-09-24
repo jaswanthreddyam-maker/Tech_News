@@ -5,12 +5,22 @@ import React, {
   useState,
   useContext,
   useCallback,
+  useEffect,
+  useRef,
   ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 
 // ---------------------------------------------------------------------------
 // Article transition context — card rect captured at click time
 // ---------------------------------------------------------------------------
+
+export type TransitionType =
+  | "article-open"
+  | "article-close"
+  | "page-turn-forward"
+  | "page-turn-backward"
+  | "default";
 
 interface ArticleTransitionData {
   cardRect: DOMRect | null;
@@ -19,6 +29,9 @@ interface ArticleTransitionData {
 }
 
 interface ArticleTransitionContextValue extends ArticleTransitionData {
+  prevPath: string | null;
+  currentPath: string;
+  transitionType: TransitionType;
   setTransitionData: (data: Partial<ArticleTransitionData>) => void;
   clearTransitionData: () => void;
 }
@@ -27,6 +40,9 @@ const ArticleTransitionContext = createContext<ArticleTransitionContextValue>({
   cardRect: null,
   cardImageSrc: null,
   cardTitle: null,
+  prevPath: null,
+  currentPath: "/",
+  transitionType: "default",
   setTransitionData: () => {},
   clearTransitionData: () => {},
 });
@@ -74,16 +90,6 @@ function getRouteIndex(pathname: string): number {
   return 50;
 }
 
-// ---------------------------------------------------------------------------
-// Transition types
-// ---------------------------------------------------------------------------
-export type TransitionType =
-  | "article-open"
-  | "article-close"
-  | "page-turn-forward"
-  | "page-turn-backward"
-  | "default";
-
 export function determineTransitionType(
   prevPath: string | null,
   currentPath: string
@@ -116,6 +122,26 @@ interface RouteTransitionProviderProps {
 }
 
 export function RouteTransitionProvider({ children }: RouteTransitionProviderProps) {
+  const pathname = usePathname();
+  const [routePaths, setRoutePaths] = useState<{ prevPath: string | null; currentPath: string }>({
+    prevPath: null,
+    currentPath: pathname,
+  });
+
+  const prevPathRef = useRef(pathname);
+
+  useEffect(() => {
+    if (prevPathRef.current !== pathname) {
+      setRoutePaths({
+        prevPath: prevPathRef.current,
+        currentPath: pathname,
+      });
+      prevPathRef.current = pathname;
+    }
+  }, [pathname]);
+
+  const transitionType = determineTransitionType(routePaths.prevPath, routePaths.currentPath);
+
   const [transitionData, setTransitionDataState] = useState<ArticleTransitionData>({
     cardRect: null,
     cardImageSrc: null,
@@ -137,7 +163,14 @@ export function RouteTransitionProvider({ children }: RouteTransitionProviderPro
 
   return (
     <ArticleTransitionContext.Provider
-      value={{ ...transitionData, setTransitionData, clearTransitionData }}
+      value={{
+        ...transitionData,
+        prevPath: routePaths.prevPath,
+        currentPath: routePaths.currentPath,
+        transitionType,
+        setTransitionData,
+        clearTransitionData,
+      }}
     >
       <CardElevationContext.Provider value={{ cardRect, setCardRect }}>
         {children}

@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -311,7 +312,7 @@ export function BreakingNews() {
         </div>
       ) : (
         /* Article Stream */
-        <div className="flex flex-col divide-y divide-white/[0.08]">
+        <div className="flex flex-col">
           <AnimatePresence mode="wait">
             <m.div
               key={activeTab}
@@ -319,41 +320,60 @@ export function BreakingNews() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25, ease: EASE_CUBIC }}
-              className="flex flex-col divide-y divide-white/[0.08]"
+              className="flex flex-col"
             >
               {(activeTab === "latest" ? liveArticles : feedArticles).map(
                 (article: any, index: number) => {
                   const sourceName = article.source || article.source_name || "TECH NEWS TODAY";
                   const readTime =
                     article.readTime || article.read_time || article.reading_time || 4;
+                  const articleImage =
+                    article.thumbnail_url ||
+                    article.thumbnail_local ||
+                    article.image_url ||
+                    article.image ||
+                    article.hero_image;
 
                   return (
-                    <div key={article.id || index} className="group py-6 first:pt-2">
+                    <div key={article.id || index} className="group mb-3.5">
                       <ArticleLink
                         article={article}
                         section={activeTab === "latest" ? "LatestStories" : "YourFeed"}
                         position={index}
-                        className="block w-full"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-[#0e0f12]/60 hover:bg-[#15171d]/80 border border-white/[0.06] hover:border-white/20 transition-all duration-200 shadow-sm hover:shadow-md"
                       >
-                        {/* Publisher Tag */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-muted-foreground/80 group-hover:text-primary transition-colors">
-                            {sourceName}
-                          </span>
+                        <div className="flex-1 min-w-0">
+                          {/* Publisher Tag */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-primary/90">
+                              {sourceName}
+                            </span>
+                          </div>
+
+                          {/* Article Headline */}
+                          <h4 className="font-sans text-lg sm:text-xl font-semibold leading-snug tracking-tight text-foreground/95 group-hover:text-primary transition-colors mb-2.5 line-clamp-2">
+                            {article.title}
+                          </h4>
+
+                          {/* Metadata Footer */}
+                          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground/60">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground/50" />
+                            <span suppressHydrationWarning>{formatTime(article.published_at)}</span>
+                            <span>•</span>
+                            <span>{readTime} min read</span>
+                          </div>
                         </div>
 
-                        {/* Article Headline */}
-                        <h4 className="font-sans text-xl sm:text-2xl font-medium leading-[1.3] tracking-tight text-foreground/95 group-hover:text-primary transition-colors mb-3 max-w-3xl">
-                          {article.title}
-                        </h4>
-
-                        {/* Metadata Footer */}
-                        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground/60">
-                          <Clock className="w-3.5 h-3.5 text-muted-foreground/50" />
-                          <span suppressHydrationWarning>{formatTime(article.published_at)}</span>
-                          <span>•</span>
-                          <span>{readTime} min read</span>
-                        </div>
+                        {articleImage && (
+                          <div className="hidden sm:block shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-white/10 bg-neutral-900">
+                            <img
+                              src={articleImage}
+                              alt=""
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
                       </ArticleLink>
                     </div>
                   );

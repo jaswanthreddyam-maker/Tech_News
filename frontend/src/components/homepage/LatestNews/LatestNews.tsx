@@ -59,6 +59,40 @@ function getCategoryIcon(slug: string): LucideIcon {
   return Layers;
 }
 
+/** Dynamic column span resolver based on article count to eliminate empty grid voids */
+function getArticleGridClasses(count: number, index: number) {
+  if (count === 1) {
+    return {
+      isPrimary: true,
+      spanClass: "col-span-1 sm:col-span-2 lg:col-span-4",
+    };
+  }
+  if (count === 2) {
+    return {
+      isPrimary: index === 0,
+      spanClass: "col-span-1 sm:col-span-1 lg:col-span-2",
+    };
+  }
+  if (count === 3) {
+    if (index === 0) {
+      return {
+        isPrimary: true,
+        spanClass: "col-span-1 sm:col-span-2 lg:col-span-2 lg:row-span-2",
+      };
+    }
+    return {
+      isPrimary: false,
+      spanClass: "col-span-1 sm:col-span-1 lg:col-span-2",
+    };
+  }
+  // count >= 4: Classic asymmetric magazine layout
+  const isPrimary = index === 0;
+  let spanClass = "col-span-1";
+  if (index === 0) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-2";
+  if (index === 3) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-1";
+  return { isPrimary, spanClass };
+}
+
 /** Curated metadata dictionary for known desks */
 const KNOWN_METADATA: Record<string, Omit<CategoryMeta, "key">> = {
   "artificial-intelligence": {
@@ -558,10 +592,7 @@ export function LatestNews() {
                           }}
                         >
                           {catArticles.map((article: any, i: number) => {
-                            const isPrimary = i === 0;
-                            let spanClass = "col-span-1";
-                            if (i === 0) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-2";
-                            if (i === 3) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-1";
+                            const { isPrimary, spanClass } = getArticleGridClasses(catArticles.length, i);
                             
                             return (
                               <m.div
@@ -620,10 +651,7 @@ export function LatestNews() {
                       }}
                     >
                       {displayArticles.map((article: any, i: number) => {
-                        const isPrimary = i === 0;
-                        let spanClass = "col-span-1";
-                        if (i === 0) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-2";
-                        if (i === 3) spanClass = "sm:col-span-2 lg:col-span-2 lg:row-span-1";
+                        const { isPrimary, spanClass } = getArticleGridClasses(displayArticles.length, i);
                         
                         return (
                           <m.div

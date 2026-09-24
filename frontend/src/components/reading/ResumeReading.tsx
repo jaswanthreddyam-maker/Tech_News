@@ -21,7 +21,7 @@ interface Session {
 
 function ReadingDeskSkeleton() {
   return (
-    <div className="w-full flex flex-col items-center justify-center relative py-16 xl:py-24 min-h-[50vh]">
+    <div className="w-full flex flex-col items-center justify-center relative py-8 sm:py-10">
       <div className="flex flex-col items-center text-center mb-8 space-y-2">
         <div className="w-24 h-3 bg-white/10 rounded animate-pulse" />
         <div className="w-32 h-2.5 bg-white/5 rounded animate-pulse" />
@@ -65,7 +65,7 @@ function EmptyReadingDesk() {
   return (
     <m.div
       ref={containerRef}
-      className="w-full flex flex-col items-center justify-center relative py-16 xl:py-24 min-h-[50vh] group/desk"
+      className="w-full flex flex-col items-center justify-center relative py-8 sm:py-10 group/desk"
     >
       {/* Environmental Ambient Vignette */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden rounded-[40px]">
@@ -146,9 +146,9 @@ function ReadingDeskContent({ sessions }: { sessions: Session[] }) {
     offset: ["start end", "end start"]
   });
 
-  // Graceful scroll exit: slide down 30px, opacity 0 when scrolling past
-  const exitOpacity = useTransform(scrollYProgress, [0.75, 1], [1, 0]);
-  const exitY = useTransform(scrollYProgress, [0.75, 1], [0, 30]);
+  // Graceful scroll exit: slight slide and opacity settle when scrolling past
+  const exitOpacity = useTransform(scrollYProgress, [0.85, 1], [1, 0.4]);
+  const exitY = useTransform(scrollYProgress, [0.85, 1], [0, 15]);
 
   const activeSession = sessions[0];
   const estMinutesLeft = Math.max(1, Math.round((100 - (activeSession.completion_percentage || 0)) * 0.08));
@@ -157,7 +157,7 @@ function ReadingDeskContent({ sessions }: { sessions: Session[] }) {
     <m.div 
       ref={containerRef}
       style={{ opacity: exitOpacity, y: exitY }}
-      className="w-full flex flex-col items-center justify-center relative py-16 xl:py-24 min-h-[60vh] group/desk"
+      className="w-full flex flex-col items-center justify-center relative py-8 sm:py-10 group/desk"
     >
       {/* Environmental Ambient Vignette */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden rounded-[40px]">

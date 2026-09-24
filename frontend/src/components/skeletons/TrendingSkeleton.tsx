@@ -21,7 +21,7 @@ export const TrendingSkeleton = React.memo(function TrendingSkeleton() {
       {/* Grid Layout (5 cols Featured + 7 cols Compact Tiles) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-stretch">
         {/* Featured Story Skeleton */}
-        <div className="lg:col-span-5 flex flex-col min-h-[460px] p-6 rounded-[18px] bg-neutral-950/75 border border-white/10">
+        <div className="lg:col-span-5 flex flex-col min-h-[460px] p-6 rounded-2xl bg-neutral-950/75 border border-white/10">
           <ShimmerBase className="w-full aspect-[4/3] rounded-[12px] mb-5" />
           <ShimmerBase className="h-4 w-20 rounded-md mb-3" />
           <ShimmerBase className="h-7 w-[90%] rounded-md mb-2" />

@@ -104,10 +104,7 @@ function SearchPageContent() {
         {/* Results Area */}
         <div className="flex-1 min-w-0">
           {activeQuery ? (
-            <>
-              <WhyTheseResults />
-              <SemanticSearchResults query={activeQuery} filters={filters} />
-            </>
+            <SemanticSearchResults query={activeQuery} filters={filters} />
           ) : (
             <div className="py-24 text-center text-muted-foreground">
               <Search className="w-12 h-12 mx-auto mb-4 opacity-20" />

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CanonicalArticle } from "./types";
 import { resolveArticleRoute, reportNavigationError, trackArticleClick } from "../navigation";
+import { useArticleTransition } from "@/components/layout/RouteTransitionProvider";
 
 export interface ArticleLinkProps {
   article: CanonicalArticle;
@@ -44,6 +45,7 @@ export const ArticleLink = forwardRef<HTMLElement, ArticleLinkProps>(function Ar
 ) {
   const router = useRouter();
   const route = resolveArticleRoute(article);
+  const { setTransitionData } = useArticleTransition();
 
   const [isPrefetched, setIsPrefetched] = useState(false);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -90,12 +92,36 @@ export const ArticleLink = forwardRef<HTMLElement, ArticleLinkProps>(function Ar
     }
   }, []);
 
+  // Capture card geometry for seamless peel / expand transitions
+  const captureCardGeometry = (el: HTMLElement | null) => {
+    if (el && typeof el.getBoundingClientRect === "function") {
+      setTransitionData({
+        cardRect: el.getBoundingClientRect(),
+        cardImageSrc: article.image || (article as any).imageUrl || null,
+        cardTitle: article.title || null,
+      });
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (route.kind === "internal") {
+      captureCardGeometry(e.currentTarget as HTMLElement);
+    }
+    if (onPointerDown) {
+      onPointerDown(e);
+    }
+  };
+
   // Click Handler with Analytics Emission
   const handleClick = (e: React.MouseEvent) => {
     if (route.kind === "invalid") {
       e.preventDefault();
       e.stopPropagation();
       return;
+    }
+
+    if (route.kind === "internal") {
+      captureCardGeometry(e.currentTarget as HTMLElement);
     }
 
     trackArticleClick({
@@ -177,7 +203,7 @@ export const ArticleLink = forwardRef<HTMLElement, ArticleLinkProps>(function Ar
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
-      onPointerDown={onPointerDown}
+      onPointerDown={handlePointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       data-testid="article-link-internal"

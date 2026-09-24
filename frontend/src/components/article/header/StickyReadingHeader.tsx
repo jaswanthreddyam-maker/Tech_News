@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { m, AnimatePresence } from "framer-motion";
 import { BookOpen, Sparkles, ArrowUp, Type } from "lucide-react";
 import { getPresentationConfig } from "@/domains/article/presentation";
@@ -58,7 +59,7 @@ export function StickyReadingHeader({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed top-0 left-0 right-0 z-50 bg-background/85 backdrop-blur-md border-b border-border/60 shadow-sm"
+          className="fixed top-0 left-0 right-0 z-[60] bg-background/95 backdrop-blur-xl border-b border-border/80 shadow-md"
         >
           {/* Scroll Reading Progress Bar */}
           <div
@@ -66,19 +67,27 @@ export function StickyReadingHeader({
             style={{ width: `${progress}%` }}
           />
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between gap-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
             {/* Title & Badge */}
             <div className="flex items-center gap-3 min-w-0">
+              <Link
+                href="/"
+                title="Back to Tech News Today"
+                className="text-xs font-mono font-semibold text-muted-foreground hover:text-foreground shrink-0 flex items-center gap-1 transition-colors pr-3 border-r border-border/60"
+              >
+                <span>← Newsroom</span>
+              </Link>
+
               <button
                 type="button"
                 onClick={scrollToTop}
                 title="Scroll to top"
-                className="p-1 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors shrink-0"
+                className="p-1.5 rounded-full text-muted-foreground/80 hover:text-foreground hover:bg-muted/40 transition-colors shrink-0"
               >
                 <ArrowUp className="w-4 h-4" />
               </button>
 
-              <h2 className="font-serif text-sm font-bold text-foreground line-clamp-1 truncate">
+              <h2 className="font-serif text-sm font-bold text-foreground line-clamp-1 truncate max-w-xl">
                 {title}
               </h2>
             </div>

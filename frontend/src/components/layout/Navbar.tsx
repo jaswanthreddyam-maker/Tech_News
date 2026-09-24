@@ -48,15 +48,24 @@ export function Navbar() {
       setNavVisible(true);
     };
 
-    window.addEventListener("hero-arrival-complete", handleArrivalComplete);
+    // If user scrolls before arrival finishes, reveal navbar immediately
+    const handleEarlyScroll = () => {
+      if (window.scrollY > 20) {
+        setNavVisible(true);
+      }
+    };
 
-    // Fallback timer (7.5s) to guarantee navbar appearance after welcome + arrival sequence
+    window.addEventListener("hero-arrival-complete", handleArrivalComplete);
+    window.addEventListener("scroll", handleEarlyScroll, { passive: true });
+
+    // Fallback timer (2.8s) to guarantee navbar appearance without long lockouts
     const fallbackTimer = setTimeout(() => {
       setNavVisible(true);
-    }, 7500);
+    }, 2800);
 
     return () => {
       window.removeEventListener("hero-arrival-complete", handleArrivalComplete);
+      window.removeEventListener("scroll", handleEarlyScroll);
       clearTimeout(fallbackTimer);
     };
   }, [pathname]);

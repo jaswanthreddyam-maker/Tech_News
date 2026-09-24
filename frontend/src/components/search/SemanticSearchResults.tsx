@@ -10,6 +10,7 @@ import { useLoadingState } from "@/design-system/hooks/useLoadingState";
 import { fetchKeywordSearch } from "@/lib/api/search/keyword";
 import { SemanticSearchResult } from "@/lib/api/search/types";
 import { ErrorState } from "@/components/common/ErrorState";
+import { WhyTheseResults } from "./WhyTheseResults";
 
 interface Props {
   query: string;
@@ -79,6 +80,8 @@ export function SemanticSearchResults({ query, filters }: Props) {
         </div>
       )}
       
+      <WhyTheseResults />
+
       {data.map((result) => (
         <SemanticResultCard key={`${result.type}-${result.id}`} result={result} />
       ))}

@@ -82,12 +82,31 @@ export default function FeedClient() {
 
   if (!user) {
     return (
-      <div className="text-center py-24 bg-card/40 rounded-2xl border border-border/50 p-8 space-y-4">
-        <Sparkles className="w-12 h-12 text-muted-foreground/60 mx-auto" />
-        <h2 className="text-2xl font-bold font-serif">Sign in to personalize your feed</h2>
-        <p className="text-muted-foreground text-sm max-w-md mx-auto">
-          Create an account to follow your favorite topics and companies, and get a tailored news experience.
-        </p>
+      <div className="text-center py-20 bg-card/40 rounded-2xl border border-border/50 p-8 space-y-6 max-w-xl mx-auto shadow-xl backdrop-blur-sm">
+        <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto text-primary">
+          <Sparkles className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold font-serif text-foreground">Sign in to personalize your feed</h2>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
+            Create an account or sign in to follow your favorite topics, curate executive briefings, and get a tailored technology news stream.
+          </p>
+        </div>
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm transition-all shadow-md hover:shadow-primary/20 cursor-pointer"
+          >
+            <span>Sign In</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link
+            href="/signup"
+            className="inline-flex items-center px-5 py-2.5 rounded-xl bg-card hover:bg-muted/40 border border-border text-foreground font-medium text-sm transition-all cursor-pointer"
+          >
+            <span>Create Account</span>
+          </Link>
+        </div>
       </div>
     );
   }

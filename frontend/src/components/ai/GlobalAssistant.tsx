@@ -378,9 +378,9 @@ export function GlobalAssistant() {
       <m.button
         suppressHydrationWarning
         onClick={() => setIsOpen(true)}
-        whileHover={{ scale: 1.15 }}
+        whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.92 }}
-        className="fixed bottom-6 right-6 p-2 flex items-center justify-center z-50 group focus:outline-none cursor-pointer"
+        className="fixed bottom-6 right-6 w-12 h-12 rounded-full bg-[#0d0e12]/90 hover:bg-[#15171f] border border-white/15 hover:border-white/30 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.2)] flex items-center justify-center z-50 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer transition-colors"
         title="Open Personal Assistant (Cmd+K)"
         aria-label="Open Personal Research Assistant"
       >
@@ -393,10 +393,10 @@ export function GlobalAssistant() {
               "#1e40af", // Loop back to Dark Blue
             ],
             filter: [
-              "drop-shadow(0 0 12px rgba(30, 64, 175, 0.75))",
-              "drop-shadow(0 0 16px rgba(139, 92, 246, 0.85))",
-              "drop-shadow(0 0 14px rgba(190, 18, 60, 0.75))",
-              "drop-shadow(0 0 12px rgba(30, 64, 175, 0.75))",
+              "drop-shadow(0 0 10px rgba(30, 64, 175, 0.75))",
+              "drop-shadow(0 0 14px rgba(139, 92, 246, 0.85))",
+              "drop-shadow(0 0 12px rgba(190, 18, 60, 0.75))",
+              "drop-shadow(0 0 10px rgba(30, 64, 175, 0.75))",
             ],
           }}
           transition={{
@@ -406,9 +406,9 @@ export function GlobalAssistant() {
           }}
           className="flex items-center justify-center"
         >
-          <AiStarsIcon className="w-10 h-10 transition-transform duration-300 group-hover:scale-110" strokeWidth={2.4} />
+          <AiStarsIcon className="w-6 h-6 transition-transform duration-300 group-hover:scale-110" strokeWidth={2.4} />
         </m.div>
-        <span className="absolute right-full mr-4 bg-gray-900/90 backdrop-blur-md text-white text-xs font-mono px-2.5 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none">
+        <span className="absolute right-full mr-3 bg-neutral-900/95 backdrop-blur-md text-white text-[11px] font-mono px-2.5 py-1 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none">
           Ctrl + K
         </span>
       </m.button>

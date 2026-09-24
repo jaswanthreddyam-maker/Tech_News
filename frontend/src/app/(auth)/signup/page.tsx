@@ -139,7 +139,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#080808] flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden">
+    <div className="min-h-screen bg-[#080808] flex flex-col items-center justify-start sm:justify-center px-4 pt-16 pb-12 relative overflow-y-auto">
       {/* Subtle background grid */}
       <div className="absolute inset-0 border-grid opacity-[0.03]" />
 
