@@ -3,9 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Container } from "@/components/layout/Container";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import {
-  Eye, Shield, User, Mail, Send, CheckCircle2,
+  Shield, User, Mail, Send, CheckCircle2,
   ChevronDown, ChevronUp, Sparkles, Clock, AlertCircle, MailCheck,
   Bell, BellRing, LogOut,
 } from "lucide-react";
@@ -174,7 +173,7 @@ export default function SettingsPage() {
     <Container className="py-12 max-w-4xl">
       <PageHeader
         title="Settings & Preferences"
-        description="Customize your AI newsroom appearance, notifications, and account details."
+        description="Customize your daily briefing, notifications, and account details."
       />
 
       {/* Toast Banner */}
@@ -411,19 +410,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Appearance & Theme Section */}
-        <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-4 shadow-sm">
-          <div className="flex items-center gap-2.5 text-primary">
-            <Eye className="w-5 h-5" />
-            <h3 className="font-semibold text-lg text-foreground font-sans">Appearance & Theme</h3>
-          </div>
-          <p className="text-xs text-muted-foreground font-mono">
-            Switch between Light, Dark, or System mode for a tailored editorial reading experience.
-          </p>
-          <div className="pt-2">
-            <ThemeToggle variant="settings" />
-          </div>
-        </div>
 
         {/* Profile & Account Section */}
         <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-5 shadow-sm">
