@@ -92,11 +92,71 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
       }}
       className={`group absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[247px] sm:w-[285px] md:w-[304px] aspect-[4/5] cursor-pointer transition-[transform,opacity,border-color,box-shadow] duration-500 select-none outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
     >
-      {/* 3D Slab Thickness Ring Frame */}
+      {/* Deep Space Shadow Backplate (Casts true 3D depth shadow behind thick slab) */}
       <div 
-        className="absolute inset-0 rounded-2xl border border-white/10 bg-white/[0.03] pointer-events-none"
+        className="absolute inset-0 rounded-2xl bg-black/60 shadow-[0_35px_70px_rgba(0,0,0,0.98)] pointer-events-none"
         style={{
-          transform: "translateZ(-7px)",
+          transform: "translateZ(-16px)",
+          transformStyle: "preserve-3d",
+        }}
+      />
+
+      {/* 3D Extruded Slab Core Layers (Provides dense, solid physical thickness) */}
+      {[-10, -5, 0, 5, 10].map((zOffset) => (
+        <div
+          key={`core-${zOffset}`}
+          className="absolute inset-0 rounded-2xl bg-neutral-950/95 border border-white/10 pointer-events-none"
+          style={{
+            transform: `translateZ(${zOffset}px)`,
+            transformStyle: "preserve-3d",
+          }}
+        />
+      ))}
+
+      {/* 3D Slab Thickness Top Edge Panel */}
+      <div 
+        className={`absolute left-3.5 right-3.5 -top-[14px] h-[28px] pointer-events-none rounded-t-sm transition-all duration-500 ${
+          isActive
+            ? "bg-gradient-to-r from-white/30 via-white/70 to-white/30 border-t border-white/80 shadow-[0_0_20px_rgba(255,255,255,0.4)]"
+            : "bg-gradient-to-r from-white/10 via-white/35 to-white/10 border-t border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.15)]"
+        }`}
+        style={{
+          transform: "rotateX(90deg)",
+          transformStyle: "preserve-3d",
+        }}
+      />
+
+      {/* 3D Slab Thickness Bottom Edge Panel */}
+      <div 
+        className="absolute left-3.5 right-3.5 -bottom-[14px] h-[28px] pointer-events-none rounded-b-sm bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border-b border-white/15"
+        style={{
+          transform: "rotateX(-90deg)",
+          transformStyle: "preserve-3d",
+        }}
+      />
+
+      {/* 3D Slab Thickness Left Edge Panel */}
+      <div 
+        className={`absolute top-3.5 bottom-3.5 -left-[14px] w-[28px] pointer-events-none rounded-l-sm transition-all duration-500 ${
+          isActive
+            ? "bg-gradient-to-b from-white/30 via-neutral-800 to-black border-l border-white/60 shadow-[inset_0_0_8px_rgba(255,255,255,0.2)]"
+            : "bg-gradient-to-b from-white/15 via-neutral-900 to-black border-l border-white/25 shadow-[inset_0_0_8px_rgba(0,0,0,0.8)]"
+        }`}
+        style={{
+          transform: "rotateY(-90deg)",
+          transformStyle: "preserve-3d",
+        }}
+      />
+
+      {/* 3D Slab Thickness Right Edge Panel */}
+      <div 
+        className={`absolute top-3.5 bottom-3.5 -right-[14px] w-[28px] pointer-events-none rounded-r-sm transition-all duration-500 ${
+          isActive
+            ? "bg-gradient-to-b from-white/30 via-neutral-800 to-black border-r border-white/60 shadow-[inset_0_0_8px_rgba(255,255,255,0.2)]"
+            : "bg-gradient-to-b from-white/15 via-neutral-900 to-black border-r border-white/25 shadow-[inset_0_0_8px_rgba(0,0,0,0.8)]"
+        }`}
+        style={{
+          transform: "rotateY(90deg)",
           transformStyle: "preserve-3d",
         }}
       />
@@ -111,7 +171,7 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
               : "border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_15px_30px_rgba(0,0,0,0.8)] opacity-100 hover:border-white/45 hover:shadow-[0_0_28px_rgba(255,255,255,0.2)]"
           }`}
           style={{
-            transform: isBack ? "rotateY(180deg) translateZ(14px)" : "translateZ(0px)",
+            transform: isBack ? "rotateY(180deg) translateZ(14px)" : "translateZ(14px)",
             transformStyle: "preserve-3d",
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
