@@ -42,9 +42,7 @@ const ACTIVE_CARD_CONFIG = {
 const RING_CONFIG = {
   DRAG_SENSITIVITY: 0.35,
   TRANSITION_MS: 450,
-  POINTER_CUTOFF: 70,
-  OPACITY_START: 110,
-  MOBILE_HIDE: 125,
+  POINTER_CUTOFF: 165,
   BASE_TILT: -3,
   TILT_REBOUND: 0.2,
   SETTLE_DURATION_MS: 500,
@@ -389,6 +387,15 @@ export function Hero3DRing() {
   const ambientRotationRef = useRef<number>(0);
   const smoothedRotationRef = useRef<number>(rotation);
   const lastActiveIndexRef = useRef<number>(activeIndex);
+  const lastSyncedRotationRef = useRef<number>(rotation);
+
+  // Sync when rotation changes externally (e.g. user clicks a card or next arrow)
+  useEffect(() => {
+    if (rotation !== lastSyncedRotationRef.current) {
+      lastSyncedRotationRef.current = rotation;
+      ambientRotationRef.current = 0;
+    }
+  }, [rotation]);
 
   useEffect(() => {
     if (!localArrivalFinished) return;
@@ -431,16 +438,13 @@ export function Hero3DRing() {
             const currentNetAngle = normalizeAngle(itemAngle + netAngle);
             const shortestAngle = Math.min(currentNetAngle, 360 - currentNetAngle);
 
-            const depthOpacity =
-              shortestAngle > 110
-                ? 0
-                : shortestAngle > 75
-                ? Math.max(0, (110 - shortestAngle) / 35)
-                : 1;
+            // Smooth atmospheric depth falloff so cards remain exposed all around the 3D ring
+            // 0° (front): 1.0 -> 90° (sides): ~0.80 -> 180° (opposite side): ~0.60
+            const depthOpacity = Math.max(0.60, 1 - (shortestAngle / 180) * 0.40);
 
             cardEl.style.opacity = String(depthOpacity);
-            cardEl.style.visibility = depthOpacity <= 0 ? "hidden" : "visible";
-            cardEl.style.pointerEvents = shortestAngle > RING_CONFIG.POINTER_CUTOFF ? "none" : "auto";
+            cardEl.style.visibility = "visible";
+            cardEl.style.pointerEvents = shortestAngle > 165 ? "none" : "auto";
             cardEl.style.zIndex = String(Math.round((180 - shortestAngle) * 10));
           }
 
@@ -565,16 +569,9 @@ export function Hero3DRing() {
               const currentNetAngle = normalizeAngle(itemAngle + sceneRotation);
               const shortestAngleFromFront = Math.min(currentNetAngle, 360 - currentNetAngle);
 
-              const depthOpacity =
-                shortestAngleFromFront > 110
-                  ? 0
-                  : shortestAngleFromFront > 75
-                  ? Math.max(0, (110 - shortestAngleFromFront) / 35)
-                  : 1;
-
+              const depthOpacity = Math.max(0.60, 1 - (shortestAngleFromFront / 180) * 0.40);
               const cardPointerEvents: React.CSSProperties["pointerEvents"] =
-                shortestAngleFromFront > RING_CONFIG.POINTER_CUTOFF ? "none" : "auto";
-              const isHiddenOnMobile = shortestAngleFromFront > RING_CONFIG.MOBILE_HIDE;
+                shortestAngleFromFront > 165 ? "none" : "auto";
               const zIndex = Math.round((180 - shortestAngleFromFront) * 10);
 
               // Combined single Z/Y matrix offset using ACTIVE_CARD_CONFIG constants
@@ -591,12 +588,12 @@ export function Hero3DRing() {
                   index={idx}
                   isActive={isActive}
                   arrivalFinished={arrivalFinished || localArrivalFinished}
-                  className={isHiddenOnMobile ? "hidden sm:block" : ""}
+                  className=""
                   style={{
                     transform: `rotateY(${itemAngle}deg) translateZ(${cardZ}px) translateY(${cardY}px)`,
                     transformStyle: "preserve-3d",
                     opacity: depthOpacity,
-                    visibility: depthOpacity <= 0 ? "hidden" : "visible",
+                    visibility: "visible",
                     pointerEvents: cardPointerEvents,
                     zIndex,
                   }}
