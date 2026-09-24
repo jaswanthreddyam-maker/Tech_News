@@ -23,7 +23,7 @@ export function FeaturedStory({ article, onClick }: StoryCardProps) {
     <PhysicalCard3D
       thickness={14}
       roundedClass="rounded-[18px]"
-      frontFaceClassName="p-6 bg-neutral-950/85 hover:bg-neutral-900/95 border border-white/15 border-t-white/60 border-r-white/30 group-hover:border-t-white/90 group-hover:border-r-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25)] hover:shadow-[0_36px_72px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.45)] drop-shadow-[0_16px_32px_rgba(0,0,0,0.5)] transition-all duration-300 ease-out group-hover:-translate-y-1.5"
+      frontFaceClassName="p-6 bg-neutral-950/85 hover:bg-neutral-900/95 border border-white/15 border-t-white/60 border-r-white/30 group-hover:border-t-white/90 group-hover:border-r-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25)] hover:shadow-[0_36px_72px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.45)] drop-shadow-[0_16px_32px_rgba(0,0,0,0.5)] transition-[background-color,border-color,box-shadow,transform] duration-300 ease-out group-hover:-translate-y-1.5"
       lighting={
         <PhysicalLighting
           roundedClass="rounded-[18px]"
@@ -53,7 +53,7 @@ export function FeaturedStory({ article, onClick }: StoryCardProps) {
               category={category}
               seed={article.id || article.slug || article.title}
               aspectRatio="aspect-[4/3]"
-              className="w-full rounded-[12px] ring-1 ring-white/20 origin-center transition-all duration-300 group-hover:contrast-[1.04] group-hover:saturate-[1.05]"
+              className="w-full rounded-[12px] ring-1 ring-white/20 origin-center transition-[filter] duration-300 group-hover:contrast-[1.04] group-hover:saturate-[1.05]"
             />
           </div>
 

@@ -20,7 +20,7 @@ export function PhysicalLighting({
     <>
       {/* Specular Edge Highlight Bar */}
       <div
-        className={`absolute -top-[1px] ${specularClassName} h-[1.5px] bg-gradient-to-r from-transparent via-white/90 to-transparent group-hover:via-white transition-all duration-500 z-20 pointer-events-none`}
+        className={`absolute -top-[1px] ${specularClassName} h-[1.5px] bg-gradient-to-r from-transparent via-white/90 to-transparent group-hover:via-white transition-[width] duration-500 z-20 pointer-events-none`}
         style={{ transform: "translateZ(2px)" }}
       />
 

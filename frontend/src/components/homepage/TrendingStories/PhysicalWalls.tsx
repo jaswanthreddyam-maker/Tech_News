@@ -19,7 +19,6 @@ export function PhysicalWalls({ thickness = 14 }: PhysicalWallsProps) {
         className="absolute left-3 right-3 top-0 origin-top pointer-events-none"
         style={{
           height: thickness,
-          transformStyle: "preserve-3d",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
           transform: "rotateX(-90deg)",
@@ -32,7 +31,6 @@ export function PhysicalWalls({ thickness = 14 }: PhysicalWallsProps) {
         className="absolute left-3 right-3 bottom-0 origin-bottom pointer-events-none"
         style={{
           height: thickness,
-          transformStyle: "preserve-3d",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
           transform: "rotateX(90deg)",
@@ -45,7 +43,6 @@ export function PhysicalWalls({ thickness = 14 }: PhysicalWallsProps) {
         className="absolute top-3 bottom-3 left-0 origin-left pointer-events-none"
         style={{
           width: thickness,
-          transformStyle: "preserve-3d",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
           transform: "rotateY(90deg)",
@@ -58,7 +55,6 @@ export function PhysicalWalls({ thickness = 14 }: PhysicalWallsProps) {
         className="absolute top-3 bottom-3 right-0 origin-right pointer-events-none"
         style={{
           width: thickness,
-          transformStyle: "preserve-3d",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
           transform: "rotateY(-90deg)",

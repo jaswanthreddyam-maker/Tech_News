@@ -22,7 +22,7 @@ export function StoryTile({ article, onClick }: StoryCardProps) {
     <PhysicalCard3D
       thickness={12}
       roundedClass="rounded-[16px]"
-      frontFaceClassName="p-5 bg-neutral-950/80 hover:bg-neutral-900/90 border border-white/15 border-t-white/50 border-r-white/25 group-hover:border-t-white/80 group-hover:border-r-white/40 shadow-[0_12px_30px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] hover:shadow-[0_28px_56px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.35)] drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)] transition-all duration-300 ease-out group-hover:scale-[1.02]"
+      frontFaceClassName="p-5 bg-neutral-950/80 hover:bg-neutral-900/90 border border-white/15 border-t-white/50 border-r-white/25 group-hover:border-t-white/80 group-hover:border-r-white/40 shadow-[0_12px_30px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] hover:shadow-[0_28px_56px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.35)] drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)] transition-[background-color,border-color,box-shadow,transform] duration-300 ease-out group-hover:scale-[1.02]"
       lighting={
         <PhysicalLighting
           roundedClass="rounded-[16px]"
