@@ -157,7 +157,7 @@ export function Hero3DRing() {
     if (arrivalRef.current) arrivalRef.current.style.transform = "translateZ(0px) scale(1)";
     if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
     if (ringRef.current) {
-      ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(0deg)`;
+      ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg)`;
     }
 
     ambientRotationRef.current = 0;
@@ -272,7 +272,7 @@ export function Hero3DRing() {
           const netRotation = rotationRef.current + dragOffsetRef.current;
 
           if (ringRef.current) {
-            ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netRotation}deg)`;
+            ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg)`;
           }
 
           if (p < 1) {
@@ -424,11 +424,16 @@ export function Hero3DRing() {
         }
 
         const netAngle = smoothedRotationRef.current;
-        ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netAngle}deg)`;
+        if (ringRef.current) {
+          ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg)`;
+        }
 
-        // Update card depth opacities, pointer events, and z-index directly on DOM
+        // Update card positions, yaw tilt, and opacities directly on DOM (100% GPU compositor)
         const count = itemCountRef.current;
         const perItem = anglePerItemRef.current;
+        const radConst = Math.PI / 180;
+        const currentRadius = radiusRef.current;
+
         if (count > 0 && perItem > 0) {
           for (let i = 0; i < count; i++) {
             const cardEl = cardRefs.current[i];
@@ -437,15 +442,21 @@ export function Hero3DRing() {
             const itemAngle = i * perItem;
             const currentNetAngle = normalizeAngle(itemAngle + netAngle);
             const shortestAngle = Math.min(currentNetAngle, 360 - currentNetAngle);
+            const isActive = i === activeIndex;
+
+            const rad = currentNetAngle * radConst;
+            const x = currentRadius * Math.sin(rad);
+            const z = currentRadius * Math.cos(rad) + (isActive ? ACTIVE_CARD_CONFIG.EXTRACTION_Z : 0);
+            const y = isActive ? ACTIVE_CARD_CONFIG.LIFT_Y : 0;
+            const yaw = -Math.sin(rad) * 28;
 
             // Smooth atmospheric depth falloff so cards remain exposed all around the 3D ring
-            // 0° (front): 1.0 -> 90° (sides): ~0.80 -> 180° (opposite side): ~0.60
-            const depthOpacity = Math.max(0.60, 1 - (shortestAngle / 180) * 0.40);
+            const depthOpacity = Math.max(0.65, 1 - (shortestAngle / 180) * 0.35);
 
+            cardEl.style.transform = `translate3d(${x.toFixed(1)}px, ${y}px, ${z.toFixed(1)}px) rotateY(${yaw.toFixed(1)}deg)`;
             cardEl.style.opacity = String(depthOpacity);
             cardEl.style.visibility = "visible";
             cardEl.style.pointerEvents = shortestAngle > 165 ? "none" : "auto";
-            cardEl.style.zIndex = String(Math.round((180 - shortestAngle) * 10));
           }
 
           // Advance active card index as the ring turns (pass syncRotation = false to not jerk rotation)
@@ -555,9 +566,7 @@ export function Hero3DRing() {
             className="relative w-0 h-0 z-10"
             style={{
               transformStyle: "preserve-3d",
-              transform: localArrivalFinished
-                ? undefined
-                : `translateZ(-${radius}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${sceneRotation}deg)`,
+              transform: `translateZ(-${radius}px) rotateX(${RING_CONFIG.BASE_TILT}deg)`,
               transition: "none",
               willChange: "transform",
             }}
@@ -569,14 +578,15 @@ export function Hero3DRing() {
               const currentNetAngle = normalizeAngle(itemAngle + sceneRotation);
               const shortestAngleFromFront = Math.min(currentNetAngle, 360 - currentNetAngle);
 
-              const depthOpacity = Math.max(0.60, 1 - (shortestAngleFromFront / 180) * 0.40);
+              const rad = (currentNetAngle * Math.PI) / 180;
+              const x = radius * Math.sin(rad);
+              const z = radius * Math.cos(rad) + (isActive ? ACTIVE_CARD_CONFIG.EXTRACTION_Z : 0);
+              const y = isActive ? ACTIVE_CARD_CONFIG.LIFT_Y : 0;
+              const yaw = -Math.sin(rad) * 28;
+
+              const depthOpacity = Math.max(0.65, 1 - (shortestAngleFromFront / 180) * 0.35);
               const cardPointerEvents: React.CSSProperties["pointerEvents"] =
                 shortestAngleFromFront > 165 ? "none" : "auto";
-              const zIndex = Math.round((180 - shortestAngleFromFront) * 10);
-
-              // Combined single Z/Y matrix offset using ACTIVE_CARD_CONFIG constants
-              const cardZ = radius + (isActive ? ACTIVE_CARD_CONFIG.EXTRACTION_Z : 0);
-              const cardY = isActive ? ACTIVE_CARD_CONFIG.LIFT_Y : 0;
 
               return (
                 <HeroMediaCard
@@ -590,12 +600,11 @@ export function Hero3DRing() {
                   arrivalFinished={arrivalFinished || localArrivalFinished}
                   className=""
                   style={{
-                    transform: `rotateY(${itemAngle}deg) translateZ(${cardZ}px) translateY(${cardY}px)`,
+                    transform: `translate3d(${x.toFixed(1)}px, ${y}px, ${z.toFixed(1)}px) rotateY(${yaw.toFixed(1)}deg)`,
                     transformStyle: "preserve-3d",
                     opacity: depthOpacity,
                     visibility: "visible",
                     pointerEvents: cardPointerEvents,
-                    zIndex,
                   }}
                 />
               );
