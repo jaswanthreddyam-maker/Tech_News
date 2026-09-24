@@ -12,6 +12,90 @@ const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4); // Zero-velocity dec
 const easeInOutSin = (t: number) => Math.sin(t * Math.PI * 0.5);
 const normalizeAngle = (angle: number) => ((angle % 360) + 360) % 360;
 
+/**
+ * Adaptive Performance Tier System
+ * 
+ * Probes actual GPU/CPU frame times on mount using a short rAF burst,
+ * then classifies the device into a performance tier to set the optimal
+ * target frame interval for the 3D ring animation loops.
+ * 
+ * Tiers:
+ *   HIGH  (≤18ms median) → native refresh rate (60/120/144Hz), no throttling
+ *   MID   (≤28ms median) → ~30fps target (33.3ms interval)
+ *   LOW   (>28ms median)  → ~20fps target (50ms interval)
+ */
+type PerformanceTier = "high" | "mid" | "low";
+
+const PERF_TIER_CONFIG: Record<PerformanceTier, { frameIntervalMs: number; label: string }> = {
+  high: { frameIntervalMs: 0, label: "Native refresh rate" },    // 0 = no throttling
+  mid:  { frameIntervalMs: 33.3, label: "~30fps" },
+  low:  { frameIntervalMs: 50, label: "~20fps" },
+};
+
+function useDevicePerformanceTier(): { tier: PerformanceTier; frameIntervalMs: number } {
+  const resultRef = useRef<{ tier: PerformanceTier; frameIntervalMs: number }>({
+    tier: "high",
+    frameIntervalMs: 0,
+  });
+  const probeCompleteRef = useRef(false);
+
+  useEffect(() => {
+    if (probeCompleteRef.current) return;
+    if (typeof window === "undefined") return;
+
+    const PROBE_FRAMES = 12;
+    const frameTimes: number[] = [];
+    let prevTimestamp: number | null = null;
+    let frameCount = 0;
+    let rafId: number;
+
+    const probeFrame = (timestamp: number) => {
+      if (prevTimestamp !== null) {
+        frameTimes.push(timestamp - prevTimestamp);
+      }
+      prevTimestamp = timestamp;
+      frameCount++;
+
+      if (frameCount < PROBE_FRAMES + 1) {
+        rafId = requestAnimationFrame(probeFrame);
+      } else {
+        // Calculate median frame time (robust against outlier spikes)
+        const sorted = [...frameTimes].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const medianMs = sorted.length % 2 === 0
+          ? (sorted[mid - 1] + sorted[mid]) / 2
+          : sorted[mid];
+
+        let tier: PerformanceTier;
+        if (medianMs <= 18) {
+          tier = "high";
+        } else if (medianMs <= 28) {
+          tier = "mid";
+        } else {
+          tier = "low";
+        }
+
+        resultRef.current = {
+          tier,
+          frameIntervalMs: PERF_TIER_CONFIG[tier].frameIntervalMs,
+        };
+        probeCompleteRef.current = true;
+
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `[Hero3DRing] Performance tier: ${tier.toUpperCase()} (median: ${medianMs.toFixed(1)}ms, target: ${PERF_TIER_CONFIG[tier].label})`
+          );
+        }
+      }
+    };
+
+    rafId = requestAnimationFrame(probeFrame);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  return resultRef.current;
+}
+
 /** Physical Trajectory Milestones (Cinematic Acceleration Curve) */
 const TRAJECTORY_STAGES = [
   { p: 0.35, z: -1600, ease: easeInCubic }, // 0% - 35%: Slow cinematic start out of deep space
@@ -64,6 +148,8 @@ const RING_CONFIG = {
  * 4. STALE-CLOSURE ISOLATION: `rotationRef`, `dragOffsetRef`, `radiusRef` eliminate stale React state captures in rAF loops.
  */
 export function Hero3DRing() {
+  // Adaptive FPS — probe device performance on mount and throttle accordingly
+  const { frameIntervalMs } = useDevicePerformanceTier();
   const {
     items,
     activeIndex,
@@ -402,18 +488,25 @@ export function Hero3DRing() {
 
     let ambientRafId: number;
     let lastTime = performance.now();
+    let lastRenderTime = 0; // Tracks when we last performed a full render pass
     const SLOW_MOTION_DEG_PER_SEC = 3.0; // 3.0 deg/sec = slow, cinematic turntable rotation
 
     const animateAmbient = (now: number) => {
       const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      // Rotate continuously in slow motion when idle and playing
+      // Always accumulate rotation time so physics stays correct regardless of render skips
       if (!isDragging && interactionMode === "idle" && playbackState === "playing") {
         ambientRotationRef.current += SLOW_MOTION_DEG_PER_SEC * dt;
       }
 
-      if (ringRef.current && !isArrivingRef.current) {
+      // Adaptive FPS: skip the DOM write if we're under the frame budget
+      // During drag, always render at native fps for instant responsiveness
+      const shouldRender = isDragging || frameIntervalMs === 0 || (now - lastRenderTime) >= frameIntervalMs;
+
+      if (shouldRender && ringRef.current && !isArrivingRef.current) {
+        lastRenderTime = now;
+
         const targetRotation = rotationRef.current + dragOffsetRef.current - ambientRotationRef.current;
         if (isDragging) {
           smoothedRotationRef.current = targetRotation;
@@ -462,7 +555,7 @@ export function Hero3DRing() {
 
     ambientRafId = requestAnimationFrame(animateAmbient);
     return () => cancelAnimationFrame(ambientRafId);
-  }, [localArrivalFinished, isDragging, interactionMode, playbackState, setActiveIndex]);
+  }, [localArrivalFinished, isDragging, interactionMode, playbackState, setActiveIndex, frameIntervalMs]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
