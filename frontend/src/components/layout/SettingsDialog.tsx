@@ -171,7 +171,7 @@ export function SettingsDialog({ open, onOpenChange, trigger }: SettingsDialogPr
           {/* Full Settings Page Link */}
           <div className="pt-1">
             <Link
-              href="/settings"
+              href="/dashboard/settings"
               onClick={() => onOpenChange?.(false)}
               className="w-full py-2.5 px-4 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-mono font-semibold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
             >

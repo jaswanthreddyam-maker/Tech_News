@@ -93,7 +93,7 @@ export function UserMenu() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
-            <Link href="/settings">
+            <Link href="/dashboard/settings">
               <Mail className="h-4 w-4 text-primary" />
               <span>Email Sync & Briefing</span>
             </Link>

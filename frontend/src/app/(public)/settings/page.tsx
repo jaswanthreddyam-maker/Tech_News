@@ -1,8 +1,5 @@
-"use client";
-
-import React from "react";
-import SettingsPage from "../dashboard/settings/page";
+import { redirect } from "next/navigation";
 
 export default function DirectSettingsPage() {
-  return <SettingsPage />;
+  redirect("/dashboard/settings");
 }

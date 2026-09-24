@@ -78,7 +78,7 @@ export function registerBaseCommands(dependencies: {
       title: "My Bookmarks",
       icon: <Bookmark className="w-4 h-4" />,
       group: "Library",
-      action: () => dependencies.router.push("/dashboard"),
+      action: () => dependencies.router.push("/dashboard?tab=bookmarks"),
       hidden: () => !dependencies.isAuthenticated,
     },
 

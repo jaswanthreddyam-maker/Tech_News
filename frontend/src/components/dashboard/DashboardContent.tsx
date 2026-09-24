@@ -1,8 +1,9 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useDashboard } from "@/components/providers/DashboardProvider";
-import { Clock, Compass, User, History, Sparkles } from "lucide-react";
+import { Clock, Compass, User, History, Sparkles, Settings } from "lucide-react";
 import { dashboardWidgets } from "./registry";
 import { EmptyState, EmptyIllustration } from "@/components/common/EmptyState";
 
@@ -76,22 +77,20 @@ export function DashboardContent() {
           <div className="space-y-4">
             <div className="flex items-center gap-3 border-b border-border/50 pb-3">
               <User className="w-5 h-5 text-primary" />
-              <h2 className="text-xl font-bold text-foreground">Account Center</h2>
+              <h2 className="text-xl font-bold text-foreground">Account & Settings</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              Management configurations for your identity and data. In Phase 8, this module will enable:
+              Manage your personal credentials, active sessions, daily briefing subscription, and notifications in the canonical settings center.
             </p>
-            <ul className="space-y-2 text-xs text-muted-foreground pl-4 list-disc">
-              <li>Developer API key issuance for raw articles extraction streams.</li>
-              <li>Webhook registrations for real-time alerts on emergency/breaking events.</li>
-              <li>Exporting reading metrics data in clean CSV and JSON envelopes.</li>
-            </ul>
           </div>
           <div className="pt-2">
-            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary font-mono text-[10px] tracking-wider uppercase px-3 py-1 rounded">
-              <span className="h-1.5 w-1.5 bg-primary rounded-full animate-pulse" />
-              Coming in Phase 8
-            </div>
+            <Link
+              href="/dashboard/settings"
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground font-mono text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-primary/90 transition-all cursor-pointer shadow-sm"
+            >
+              <span>Open Settings & Preferences</span>
+              <Settings className="w-4 h-4" />
+            </Link>
           </div>
         </div>
       )}

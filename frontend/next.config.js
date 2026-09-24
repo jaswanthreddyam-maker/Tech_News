@@ -25,6 +25,15 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/settings',
+        destination: '/dashboard/settings',
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

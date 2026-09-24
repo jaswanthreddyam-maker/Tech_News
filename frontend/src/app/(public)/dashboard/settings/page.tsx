@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Container } from "@/components/layout/Container";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Shield, User, Mail, Send, CheckCircle2,
@@ -170,10 +169,10 @@ export default function SettingsPage() {
       : "text-muted-foreground";
 
   return (
-    <Container className="py-12 max-w-4xl">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader
         title="Settings & Preferences"
-        description="Customize your daily briefing, notifications, and account details."
+        description="Customize your account identity, daily briefing, notifications, and data privacy."
       />
 
       {/* Toast Banner */}
@@ -184,7 +183,86 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="mt-8 space-y-6">
+      <div className="space-y-6">
+        {/* Profile & Account Section */}
+        <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-full border border-primary/30 bg-primary/10 text-primary">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg text-foreground font-sans">Profile & Account</h3>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Your identity, authentication credentials, and synchronized session state.
+                </p>
+              </div>
+            </div>
+            {user && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Authenticated
+              </span>
+            )}
+          </div>
+
+          {user ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-background/50 border border-white/5">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="h-14 w-14 rounded-full border-2 border-primary/40 bg-primary/15 text-primary flex items-center justify-center font-bold text-lg font-mono shadow-md">
+                    {user.name
+                      ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+                      : "JR"}
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-base text-foreground font-sans">{user.name || "Authenticated Operator"}</h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-white/10 text-neutral-300">
+                      {typeof user.role === "string" ? user.role : "Member"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5" />
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2 sm:pt-0">
+                <button
+                  onClick={() => {
+                    useAppStore.getState().logoutUser();
+                    window.location.href = "/login";
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono font-semibold text-destructive bg-destructive/10 hover:bg-destructive/20 border border-destructive/30 transition-all cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-background/50 border border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-muted-foreground font-mono font-bold">
+                  ?
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Guest Reader Mode</p>
+                  <p className="text-xs text-muted-foreground font-mono">Sign in to save bookmarks, unlock AI copilot, and customize feeds.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => requireAuthentication(FeatureCapability.SAVED_ARTICLES, { returnUrl: "/dashboard/settings" })}
+                className="px-5 py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all shrink-0 cursor-pointer"
+              >
+                Sign In / Register
+              </button>
+            </div>
+          )}
+        </div>
         {/* Daily Briefing Section */}
         <div className="rounded-2xl border border-primary/30 bg-card/80 backdrop-blur-xl p-6 sm:p-8 space-y-6 shadow-md relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none" />
@@ -411,86 +489,6 @@ export default function SettingsPage() {
         </div>
 
 
-        {/* Profile & Account Section */}
-        <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-5 shadow-sm">
-          <div className="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-full border border-primary/30 bg-primary/10 text-primary">
-                <User className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg text-foreground font-sans">Profile & Account</h3>
-                <p className="text-xs text-muted-foreground font-mono">
-                  Your identity, authentication credentials, and synchronized session state.
-                </p>
-              </div>
-            </div>
-            {user && (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Authenticated
-              </span>
-            )}
-          </div>
-
-          {user ? (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-background/50 border border-white/5">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="h-14 w-14 rounded-full border-2 border-primary/40 bg-primary/15 text-primary flex items-center justify-center font-bold text-lg font-mono shadow-md">
-                    {user.name
-                      ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-                      : "JR"}
-                  </div>
-                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-base text-foreground font-sans">{user.name || "Authenticated Operator"}</h4>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-white/10 text-neutral-300">
-                      {typeof user.role === "string" ? user.role : "Member"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5" />
-                    {user.email}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2 sm:pt-0">
-                <button
-                  onClick={() => {
-                    useAppStore.getState().logoutUser();
-                    window.location.href = "/login";
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono font-semibold text-destructive bg-destructive/10 hover:bg-destructive/20 border border-destructive/30 transition-all cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Sign Out</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-background/50 border border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-muted-foreground font-mono font-bold">
-                  ?
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Guest Reader Mode</p>
-                  <p className="text-xs text-muted-foreground font-mono">Sign in to save bookmarks, unlock AI copilot, and customize feeds.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => requireAuthentication(FeatureCapability.SAVED_ARTICLES, { returnUrl: "/settings" })}
-                className="px-5 py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all shrink-0 cursor-pointer"
-              >
-                Sign In / Register
-              </button>
-            </div>
-          )}
-        </div>
-
         {/* In-App Notifications & Alerts Section */}
         <div className="rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl p-6 sm:p-8 space-y-5 shadow-sm">
           <div className="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
@@ -569,6 +567,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-    </Container>
+    </div>
   );
 }

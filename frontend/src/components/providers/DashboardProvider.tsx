@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState } from "react";
 
-export type DashboardTab = "overview" | "history" | "bookmarks" | "recommendations" | "stats" | "preferences" | "account";
+export type DashboardTab = "overview" | "history" | "bookmarks" | "recommendations" | "stats" | "preferences" | "account" | "settings";
 
 interface DashboardState {
   activeTab: DashboardTab;

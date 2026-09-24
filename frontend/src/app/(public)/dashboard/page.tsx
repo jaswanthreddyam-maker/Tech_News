@@ -1,5 +1,4 @@
 import React from "react";
-import { DashboardProvider } from "@/components/providers/DashboardProvider";
 import { DashboardContent } from "@/components/dashboard/DashboardContent";
 
 export const metadata = {
@@ -8,9 +7,5 @@ export const metadata = {
 };
 
 export default function DashboardPage() {
-  return (
-    <DashboardProvider>
-      <DashboardContent />
-    </DashboardProvider>
-  );
+  return <DashboardContent />;
 }
