@@ -44,7 +44,7 @@ export function FeaturedStory({ article, onClick }: StoryCardProps) {
         >
           {/* Extruded Hero Image */}
           <div
-            className="relative z-10 w-full mb-5 rounded-[12px] overflow-hidden shadow-[0_12px_28px_rgba(0,0,0,0.6)] group-hover:shadow-[0_20px_40px_rgba(0,0,0,0.85)] transition-all duration-300"
+            className="relative z-10 w-full mb-5 rounded-[12px] overflow-hidden shadow-[0_12px_28px_rgba(0,0,0,0.6)] group-hover:shadow-[0_20px_40px_rgba(0,0,0,0.85)] transition-shadow duration-300"
             style={{ transform: `translateZ(${PHYSICAL_DEPTH.hero.image}px)` }}
           >
             <ArticleImage

@@ -73,23 +73,21 @@ export function TrendingStories() {
   const getAnimationProps = (idx: number, isFeatured: boolean): any => {
     if (shouldReduceMotion) return {};
 
-    const delay = isFeatured ? 0 : 0.15 + idx * 0.08;
-    const duration = isFeatured ? 0.8 : 0.6;
+    const delay = isFeatured ? 0 : 0.12 + idx * 0.06;
+    const duration = isFeatured ? 0.7 : 0.5;
 
     return {
       initial: {
-        rotateY: isFeatured ? -12 : -8,
-        rotateX: isFeatured ? 4 : 2,
-        z: -20,
         opacity: 0,
+        y: isFeatured ? 24 : 16,
+        scale: 0.97,
       },
       whileInView: {
-        rotateY: 0,
-        rotateX: 0,
-        z: 0,
         opacity: 1,
+        y: 0,
+        scale: 1,
       },
-      viewport: { once: true, amount: 0.02, margin: "150px" },
+      viewport: { once: true, amount: 0.1, margin: "80px" },
       transition: {
         duration,
         delay,
@@ -217,15 +215,11 @@ export function TrendingStories() {
         {/* Exhibition Grid */}
         <div
           className="ExhibitionGrid grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mx-auto items-stretch"
-          style={{
-            transformStyle: "preserve-3d",
-          }}
         >
           {/* Featured Story (5 cols desktop) */}
           {featured && (
             <m.div
               className="ExhibitionItem lg:col-span-5 flex"
-              style={{ transformStyle: "preserve-3d" }}
               {...getAnimationProps(0, true)}
             >
               <FeaturedStory
@@ -238,13 +232,11 @@ export function TrendingStories() {
           {/* Story Tiles Grid (7 cols desktop if featured exists, 12 cols otherwise) */}
           <div
             className={`ExhibitionItem ${featured ? "lg:col-span-7" : "lg:col-span-12"} grid grid-cols-1 sm:grid-cols-2 gap-6 auto-rows-fr`}
-            style={{ transformStyle: "preserve-3d" }}
           >
             {compact.map((article: FeedArticle, idx: number) => (
               <m.div
                 key={article.slug || (article.id ? `id-${article.id}` : `tile-${idx}`)}
                 className="w-full h-full flex"
-                style={{ transformStyle: "preserve-3d" }}
                 {...getAnimationProps(idx, false)}
               >
                 <StoryTile

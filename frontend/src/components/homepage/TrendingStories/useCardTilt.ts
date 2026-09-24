@@ -48,11 +48,7 @@ export function useCardTilt<T extends HTMLElement>({
     let lightXPercent = 50;
     let lightYPercent = 50;
 
-    // Cache state to avoid unnecessary style writes (compare formatted strings)
-    let lastTiltX = "";
-    let lastTiltY = "";
-    let lastScale = "";
-    let lastZ = "";
+    // Cache state to avoid unnecessary style writes
     let lastLightX = -999;
     let lastLightY = -999;
 
@@ -106,34 +102,20 @@ export function useCardTilt<T extends HTMLElement>({
       currentScale += (targetScale - currentScale) * lerpFactor;
       currentZ += (targetZ - currentZ) * lerpFactor;
 
-      const tiltXFixed = currentTiltX.toFixed(2);
-      const tiltYFixed = currentTiltY.toFixed(2);
-      const zFixed = currentZ.toFixed(1);
-      const scaleFixed = currentScale.toFixed(3);
+      // Single direct transform write per frame (pure compositor path)
+      // Avoids 6 individual CSS variable mutations that force CSSOM recalculation
+      el.style.transform = `perspective(800px) rotateX(${currentTiltX.toFixed(2)}deg) rotateY(${currentTiltY.toFixed(2)}deg) translateZ(${currentZ.toFixed(1)}px) scale(${currentScale.toFixed(3)})`;
 
-      if (lastTiltX !== tiltXFixed) {
-        el.style.setProperty("--tilt-x", `${tiltXFixed}deg`);
-        lastTiltX = tiltXFixed;
+      // Update lighting position CSS vars only when they actually change
+      const lightXRounded = Math.round(lightXPercent);
+      const lightYRounded = Math.round(lightYPercent);
+      if (lastLightX !== lightXRounded) {
+        el.style.setProperty("--card-light-x", `${lightXRounded}%`);
+        lastLightX = lightXRounded;
       }
-      if (lastTiltY !== tiltYFixed) {
-        el.style.setProperty("--tilt-y", `${tiltYFixed}deg`);
-        lastTiltY = tiltYFixed;
-      }
-      if (lastZ !== zFixed) {
-        el.style.setProperty("--tilt-z", `${zFixed}px`);
-        lastZ = zFixed;
-      }
-      if (lastScale !== scaleFixed) {
-        el.style.setProperty("--tilt-scale", scaleFixed);
-        lastScale = scaleFixed;
-      }
-      if (lastLightX !== lightXPercent) {
-        el.style.setProperty("--card-light-x", `${lightXPercent}%`);
-        lastLightX = lightXPercent;
-      }
-      if (lastLightY !== lightYPercent) {
-        el.style.setProperty("--card-light-y", `${lightYPercent}%`);
-        lastLightY = lightYPercent;
+      if (lastLightY !== lightYRounded) {
+        el.style.setProperty("--card-light-y", `${lightYRounded}%`);
+        lastLightY = lightYRounded;
       }
 
       // Check if settled to stop rAF loop and free GPU
@@ -145,6 +127,8 @@ export function useCardTilt<T extends HTMLElement>({
         Math.abs(targetZ - currentZ) < 0.05;
 
       if (isSettled) {
+        // Clear transform and willChange to release GPU layer
+        el.style.transform = "";
         el.style.willChange = "auto";
         rafId = null;
       } else {

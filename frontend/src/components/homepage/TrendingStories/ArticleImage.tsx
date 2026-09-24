@@ -41,7 +41,7 @@ export function ArticleImage({
   };
 
   return (
-    <div className={`relative overflow-hidden bg-neutral-950 flex-none ${aspectRatio} ${className}`}>
+    <div className={`relative overflow-hidden bg-neutral-950 flex-none ${aspectRatio} ${className}`} style={{ contain: "content" }}>
       {resolvedSrc ? (
         <Image
           src={resolvedSrc}

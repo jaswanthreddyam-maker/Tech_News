@@ -75,7 +75,7 @@ export function StoryTile({ article, onClick }: StoryCardProps) {
 
           {/* Extruded Inset Thumbnail using TRENDING_LAYOUT.THUMBNAIL_SIZE */}
           <div
-            className="relative z-10 rounded-[10px] overflow-hidden flex-none bg-black/50 ring-1 ring-white/20 p-0.5 self-center origin-center shadow-[0_8px_20px_rgba(0,0,0,0.6)] group-hover:shadow-[0_14px_28px_rgba(0,0,0,0.8)] transition-all duration-300"
+            className="relative z-10 rounded-[10px] overflow-hidden flex-none bg-black/50 ring-1 ring-white/20 p-0.5 self-center origin-center shadow-[0_8px_20px_rgba(0,0,0,0.6)] group-hover:shadow-[0_14px_28px_rgba(0,0,0,0.8)] transition-shadow duration-300"
             style={{
               width: TRENDING_LAYOUT.THUMBNAIL_SIZE,
               height: TRENDING_LAYOUT.THUMBNAIL_SIZE,
