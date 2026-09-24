@@ -217,6 +217,26 @@ export function Hero3DRing() {
   const overlayFallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const safetyWatchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Carousel-Style Step-by-Step Card Advance Engine State
+  const ambientRotationRef = useRef<number>(0);
+  const smoothedRotationRef = useRef<number>(rotation);
+  const lastActiveIndexRef = useRef<number>(activeIndex);
+  const lastSyncedRotationRef = useRef<number>(rotation);
+
+  // Step carousel state (all refs to avoid stale closures in rAF)
+  const stepBaseAngleRef = useRef<number>(0);      // The angle we started this step from
+  const stepTargetAngleRef = useRef<number>(0);     // The angle we're stepping to
+  const stepStartTimeRef = useRef<number>(0);       // When the step transition began
+  const stepPhaseRef = useRef<"dwell" | "stepping">("dwell"); // Current phase
+  const dwellStartTimeRef = useRef<number>(0);      // When the current dwell began
+  const isPostArrivalInitialRef = useRef<boolean>(true); // Tracks the initial 3s rest after arrival comes to rest
+
+  /** Carousel Step Configuration */
+  const POST_ARRIVAL_DWELL_MS = 3000; // Exactly 3 seconds pause after the 3D ring comes to rest from arrival animation
+  const STEP_DWELL_MS = 3000;         // 3s pause on each card before advancing
+  const STEP_TRANSITION_MS = 800;    // 800ms smooth transition to next card
+  const easeInOutCubicStep = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
   // Synchronous and complete arrival finalization
   const completeArrival = useCallback(() => {
     if (arrivalStatusRef.current === "completed") return;
@@ -248,6 +268,12 @@ export function Hero3DRing() {
 
     ambientRotationRef.current = 0;
     smoothedRotationRef.current = 0;
+
+    // Start 3.0s dwell countdown from the exact millisecond the 3D ring comes to rest
+    dwellStartTimeRef.current = performance.now();
+    stepPhaseRef.current = "dwell";
+    isPostArrivalInitialRef.current = true;
+
     setLocalArrivalFinished(true);
     setContextArrivalFinished(true);
 
@@ -469,26 +495,6 @@ export function Hero3DRing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasItems, arrivalFinished, completeArrival, startArrival]);
 
-  // Carousel-Style Step-by-Step Card Advance Engine
-  // Instead of continuous rotation, the ring dwells on each card then smoothly
-  // transitions to the next one, like a premium editorial carousel.
-  const ambientRotationRef = useRef<number>(0);
-  const smoothedRotationRef = useRef<number>(rotation);
-  const lastActiveIndexRef = useRef<number>(activeIndex);
-  const lastSyncedRotationRef = useRef<number>(rotation);
-
-  // Step carousel state (all refs to avoid stale closures in rAF)
-  const stepBaseAngleRef = useRef<number>(0);      // The angle we started this step from
-  const stepTargetAngleRef = useRef<number>(0);     // The angle we're stepping to
-  const stepStartTimeRef = useRef<number>(0);       // When the step transition began
-  const stepPhaseRef = useRef<"dwell" | "stepping">("dwell"); // Current phase
-  const dwellStartTimeRef = useRef<number>(0);      // When the current dwell began
-
-  /** Carousel Step Configuration */
-  const STEP_DWELL_MS = 4000;   // 4s pause on each card
-  const STEP_TRANSITION_MS = 800; // 800ms smooth transition to next card
-  const easeInOutCubicStep = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
   // Sync when rotation changes externally (e.g. user clicks a card or next arrow)
   useEffect(() => {
     if (rotation !== lastSyncedRotationRef.current) {
@@ -497,6 +503,7 @@ export function Hero3DRing() {
       // Reset step phase so dwell restarts from the new position
       stepPhaseRef.current = "dwell";
       dwellStartTimeRef.current = performance.now();
+      isPostArrivalInitialRef.current = false;
     }
   }, [rotation]);
 
@@ -507,8 +514,10 @@ export function Hero3DRing() {
     let lastTime = performance.now();
     let lastRenderTime = 0;
 
-    // Initialize dwell timer on first run
-    dwellStartTimeRef.current = performance.now();
+    // Initialize dwell timer on first run if not already set by completeArrival
+    if (!dwellStartTimeRef.current) {
+      dwellStartTimeRef.current = performance.now();
+    }
     stepPhaseRef.current = "dwell";
 
     const animateAmbient = (now: number) => {
@@ -520,13 +529,18 @@ export function Hero3DRing() {
         const perItem = anglePerItemRef.current;
 
         if (stepPhaseRef.current === "dwell") {
-          // Waiting on current card — check if dwell time has elapsed
-          if (now - dwellStartTimeRef.current >= STEP_DWELL_MS && perItem > 0) {
+          // Exactly 3.0s after coming to rest from arrival animation, then STEP_DWELL_MS for each card
+          const currentDwellBudget = isPostArrivalInitialRef.current
+            ? POST_ARRIVAL_DWELL_MS
+            : STEP_DWELL_MS;
+
+          if (now - dwellStartTimeRef.current >= currentDwellBudget && perItem > 0) {
             // Begin stepping to the next card
             stepPhaseRef.current = "stepping";
             stepBaseAngleRef.current = ambientRotationRef.current;
             stepTargetAngleRef.current = ambientRotationRef.current + perItem;
             stepStartTimeRef.current = now;
+            isPostArrivalInitialRef.current = false;
           }
         }
 
@@ -551,6 +565,7 @@ export function Hero3DRing() {
         // While dragging, reset dwell so we get a full pause after release
         dwellStartTimeRef.current = now;
         stepPhaseRef.current = "dwell";
+        isPostArrivalInitialRef.current = false;
       }
 
       // Adaptive FPS: skip the DOM write if we're under the frame budget
