@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SettingsDialog } from "@/components/layout/SettingsDialog";
-import { LogOut, Shield, User as UserIcon, Mail } from "lucide-react";
+import { LogOut, Shield, User as UserIcon, Mail, Settings } from "lucide-react";
 import { Sliders2Icon } from "@/components/common/icons/Sliders2Icon";
 
 export function UserMenu() {
@@ -92,15 +92,15 @@ export function UserMenu() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
+            <Mail className="h-4 w-4 text-primary" />
+            <span>Email Sync & Briefing</span>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
             <Link href="/dashboard/settings">
-              <Mail className="h-4 w-4 text-primary" />
-              <span>Email Sync & Briefing</span>
+              <Settings className="h-4 w-4 text-primary" />
+              <span>Settings</span>
             </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="gap-2 cursor-pointer rounded-lg hover:bg-white/10">
-            <Sliders2Icon className="h-4 w-4" strokeWidth={2.2} />
-            Preferences
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer rounded-lg hover:bg-destructive/10">
