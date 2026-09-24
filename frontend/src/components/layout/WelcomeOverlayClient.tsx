@@ -98,6 +98,9 @@ export default function WelcomeOverlayClient({
   const doComplete = useCallback(() => {
     if (completedRef.current) return;
     completedRef.current = true;
+    try {
+      sessionStorage.setItem("welcome-played", "1");
+    } catch {}
     if (typeof window !== "undefined" && !(window as any).__welcomeOverlayDispatched) {
       (window as any).__welcomeOverlayDispatched = true;
       window.dispatchEvent(new Event("welcome-overlay-complete"));

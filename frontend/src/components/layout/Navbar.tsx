@@ -37,6 +37,11 @@ export function Navbar() {
       return;
     }
 
+    if (typeof window !== "undefined" && (window as any).__heroArrivalCompleted) {
+      setNavVisible(true);
+      return;
+    }
+
     setNavVisible(false);
 
     const handleArrivalComplete = () => {

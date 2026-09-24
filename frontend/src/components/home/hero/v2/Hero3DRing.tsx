@@ -114,32 +114,76 @@ export function Hero3DRing() {
 
   // Pure Ref Arrival Drag Lock Flag
   const isArrivingRef = useRef(true);
-  const hasStartedArrivalRef = useRef(false);
+  const arrivalStatusRef = useRef<"idle" | "waiting_overlay" | "animating" | "settling" | "completed">("idle");
   const arrivalRafRef = useRef<number | null>(null);
   const settleRafRef = useRef<number | null>(null);
+  const overlayFallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const safetyWatchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Dedicated unmount teardown for rAF loops
-  useEffect(() => {
-    return () => {
-      if (arrivalRafRef.current) cancelAnimationFrame(arrivalRafRef.current);
-      if (settleRafRef.current) cancelAnimationFrame(settleRafRef.current);
-    };
-  }, []);
+  // Synchronous and complete arrival finalization
+  const completeArrival = useCallback(() => {
+    if (arrivalStatusRef.current === "completed") return;
+    arrivalStatusRef.current = "completed";
+    isArrivingRef.current = false;
 
-  // Master Physical Machine Arrival Engine
-  useEffect(() => {
-    if (!items || items.length === 0) return;
-    if (!isArrivingRef.current || arrivalFinished) {
-      isArrivingRef.current = false;
-      hasStartedArrivalRef.current = true;
-      if (arrivalRef.current) arrivalRef.current.style.transform = "translateZ(0px) scale(1)";
-      if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
+    if (arrivalRafRef.current) {
+      cancelAnimationFrame(arrivalRafRef.current);
+      arrivalRafRef.current = null;
+    }
+    if (settleRafRef.current) {
+      cancelAnimationFrame(settleRafRef.current);
+      settleRafRef.current = null;
+    }
+    if (overlayFallbackTimerRef.current) {
+      clearTimeout(overlayFallbackTimerRef.current);
+      overlayFallbackTimerRef.current = null;
+    }
+    if (safetyWatchdogTimerRef.current) {
+      clearTimeout(safetyWatchdogTimerRef.current);
+      safetyWatchdogTimerRef.current = null;
+    }
+
+    if (arrivalRef.current) arrivalRef.current.style.transform = "translateZ(0px) scale(1)";
+    if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
+    if (ringRef.current) {
+      const netRotation = rotationRef.current + dragOffsetRef.current;
+      ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netRotation}deg)`;
+    }
+
+    smoothedRotationRef.current = rotationRef.current + dragOffsetRef.current;
+    setLocalArrivalFinished(true);
+    setContextArrivalFinished(true);
+
+    if (typeof window !== "undefined") {
+      (window as any).__heroArrivalCompleted = true;
+      window.dispatchEvent(new CustomEvent("hero-arrival-complete"));
+    }
+
+    // Double-rAF transition enablement eliminates browser CSS transition snaps
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setIsTransitionEnabled(true);
+      });
+    });
+  }, [setContextArrivalFinished]);
+
+  // Master Trajectory Flight Launcher
+  const startArrival = useCallback(() => {
+    if (
+      arrivalStatusRef.current === "animating" ||
+      arrivalStatusRef.current === "settling" ||
+      arrivalStatusRef.current === "completed"
+    ) {
       return;
     }
 
-    // Strictly prevent double execution on re-renders, item updates, or event repeats
-    if (hasStartedArrivalRef.current) return;
-    hasStartedArrivalRef.current = true;
+    arrivalStatusRef.current = "animating";
+    isArrivingRef.current = true;
+
+    if (overlayFallbackTimerRef.current) {
+      clearTimeout(overlayFallbackTimerRef.current);
+      overlayFallbackTimerRef.current = null;
+    }
 
     let startTime: number | null = null;
     let lastFrameTimestamp: number | null = null;
@@ -155,9 +199,10 @@ export function Hero3DRing() {
     } = ARRIVAL_CONFIG;
 
     const animateArrival = (timestamp: number) => {
+      if (arrivalStatusRef.current === "completed") return;
+
       if (!startTime) startTime = timestamp;
       if (!lastFrameTimestamp) lastFrameTimestamp = timestamp;
-      const dt = Math.min(0.033, (timestamp - lastFrameTimestamp) / 1000);
       lastFrameTimestamp = timestamp;
 
       const elapsed = timestamp - startTime;
@@ -207,8 +252,10 @@ export function Hero3DRing() {
         if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
 
         // rAF ANIMATION-DRIVEN SETTLE HANDOFF (Stable & smooth standstill)
+        arrivalStatusRef.current = "settling";
         const settleStartTime = performance.now();
         const animateSettle = (now: number) => {
+          if (arrivalStatusRef.current === "completed") return;
           const settleElapsed = now - settleStartTime;
           const p = Math.min(1, settleElapsed / RING_CONFIG.SETTLE_DURATION_MS);
           const netRotation = rotationRef.current + dragOffsetRef.current;
@@ -220,21 +267,7 @@ export function Hero3DRing() {
           if (p < 1) {
             settleRafRef.current = requestAnimationFrame(animateSettle);
           } else {
-            // Handoff executes directly from animation completion
-            isArrivingRef.current = false;
-            smoothedRotationRef.current = rotationRef.current + dragOffsetRef.current;
-            setLocalArrivalFinished(true);
-            setContextArrivalFinished(true);
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("hero-arrival-complete"));
-            }
-
-            // Double-rAF transition enablement eliminates browser CSS transition snaps
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                setIsTransitionEnabled(true);
-              });
-            });
+            completeArrival();
           }
         };
 
@@ -242,43 +275,102 @@ export function Hero3DRing() {
       }
     };
 
-    // Synchronize arrival start with WelcomeOverlay on desktop viewports (>= 768px)
-    const isWelcomeOverlayActive =
-      typeof window !== "undefined" &&
-      !window.matchMedia("(max-width: 767px)").matches &&
-      sessionStorage.getItem("welcome-played") !== "1";
+    arrivalRafRef.current = requestAnimationFrame(animateArrival);
+  }, [completeArrival]);
+
+  // Dedicated unmount teardown for rAF loops
+  useEffect(() => {
+    return () => {
+      if (arrivalRafRef.current) {
+        cancelAnimationFrame(arrivalRafRef.current);
+        arrivalRafRef.current = null;
+      }
+      if (settleRafRef.current) {
+        cancelAnimationFrame(settleRafRef.current);
+        settleRafRef.current = null;
+      }
+      if (overlayFallbackTimerRef.current) {
+        clearTimeout(overlayFallbackTimerRef.current);
+        overlayFallbackTimerRef.current = null;
+      }
+      if (safetyWatchdogTimerRef.current) {
+        clearTimeout(safetyWatchdogTimerRef.current);
+        safetyWatchdogTimerRef.current = null;
+      }
+      // If unmounted mid-animation (e.g. React StrictMode development cycle), reset status so remount restarts
+      if (arrivalStatusRef.current === "animating" || arrivalStatusRef.current === "settling") {
+        arrivalStatusRef.current = "idle";
+      }
+    };
+  }, []);
+
+  const hasItems = Boolean(items && items.length > 0);
+
+  // Master Physical Machine Arrival Engine
+  useEffect(() => {
+    if (!hasItems) return;
+
+    if (arrivalFinished || arrivalStatusRef.current === "completed") {
+      completeArrival();
+      return;
+    }
+
+    // If already animating or settling, do NOT interrupt or repeat
+    if (arrivalStatusRef.current === "animating" || arrivalStatusRef.current === "settling") {
+      return;
+    }
+
+    // Safety watchdog: guarantees the arrival finishes within 6.5s no matter what happens
+    if (!safetyWatchdogTimerRef.current) {
+      safetyWatchdogTimerRef.current = setTimeout(() => {
+        if (arrivalStatusRef.current !== "completed") {
+          completeArrival();
+        }
+      }, 6500);
+    }
+
+    // Check if WelcomeOverlay is actively playing right now
+    const isOverlayDispatched =
+      typeof window !== "undefined" && Boolean((window as any).__welcomeOverlayDispatched);
+    const isWelcomePlayed =
+      typeof window !== "undefined" && sessionStorage.getItem("welcome-played") === "1";
+    const isMobile =
+      typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+
+    const isWelcomeOverlayActive = !isOverlayDispatched && !isWelcomePlayed && !isMobile;
 
     if (isWelcomeOverlayActive) {
-      // Set initial state paused in deep space while Welcome Overlay plays
-      if (arrivalRef.current) arrivalRef.current.style.transform = `translateZ(${START_Z}px) scale(${INITIAL_SCALE})`;
-      if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
-
-      let isStarted = false;
-      let fallbackTimeout: NodeJS.Timeout | null = null;
-
-      const startArrival = () => {
-        if (isStarted) return;
-        isStarted = true;
-        window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
-        if (fallbackTimeout) clearTimeout(fallbackTimeout);
-        arrivalRafRef.current = requestAnimationFrame(animateArrival);
-      };
+      arrivalStatusRef.current = "waiting_overlay";
+      if (arrivalRef.current) {
+        arrivalRef.current.style.transform = `translateZ(${ARRIVAL_CONFIG.START_Z}px) scale(${ARRIVAL_CONFIG.INITIAL_SCALE})`;
+      }
+      if (spinRef.current) {
+        spinRef.current.style.transform = "rotateY(0deg)";
+      }
 
       const handleOverlayComplete = () => {
+        window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
         startArrival();
       };
 
       window.addEventListener("welcome-overlay-complete", handleOverlayComplete, { once: true });
-      fallbackTimeout = setTimeout(startArrival, 4500);
+
+      if (!overlayFallbackTimerRef.current) {
+        overlayFallbackTimerRef.current = setTimeout(() => {
+          handleOverlayComplete();
+        }, 4500);
+      }
 
       return () => {
         window.removeEventListener("welcome-overlay-complete", handleOverlayComplete);
-        if (fallbackTimeout) clearTimeout(fallbackTimeout);
       };
     } else {
-      arrivalRafRef.current = requestAnimationFrame(animateArrival);
+      startArrival();
     }
-  }, [items, arrivalFinished, setContextArrivalFinished]);
+    // Only re-run if item presence shifts (empty -> populated), arrivalFinished updates, or engine handlers change.
+    // Explicitly avoids re-running on item array instance changes during query refetches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasItems, arrivalFinished, completeArrival, startArrival]);
 
   // Continuous Museum Exhibit Turntable Rotation Engine
   const ambientRotationRef = useRef<number>(0);
@@ -386,13 +478,17 @@ export function Hero3DRing() {
       onPointerCancel={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
-      {/* System 1: Camera Arrival Stage (Initial frame 0 set in deep space at -2200px) */}
+      {/* System 1: Camera Arrival Stage (Driven directly by GPU compositor during flight) */}
       <div
         ref={arrivalRef}
         className="relative w-full h-full flex items-center justify-center"
         style={{
           transformStyle: "preserve-3d",
-          transform: arrivalFinished ? "translateZ(0px) scale(1)" : "translateZ(-2200px) scale(0.6)",
+          transform: (arrivalFinished || localArrivalFinished)
+            ? "translateZ(0px) scale(1)"
+            : (arrivalStatusRef.current === "animating" || arrivalStatusRef.current === "settling")
+            ? undefined
+            : `translateZ(${ARRIVAL_CONFIG.START_Z}px) scale(${ARRIVAL_CONFIG.INITIAL_SCALE})`,
           willChange: "transform",
         }}
       >
@@ -441,7 +537,7 @@ export function Hero3DRing() {
                   article={article}
                   index={idx}
                   isActive={isActive}
-                  arrivalFinished={arrivalFinished}
+                  arrivalFinished={arrivalFinished || localArrivalFinished}
                   className={isHiddenOnMobile ? "hidden sm:block" : ""}
                   style={{
                     transform: `rotateY(${itemAngle}deg) translateZ(${cardZ}px) translateY(${cardY}px)`,
