@@ -96,6 +96,17 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
+    REDIS_PRIVATE_URL: str | None = None
+    REDISURL: str | None = None
+
+    @field_validator("REDIS_URL", mode="before")
+    @classmethod
+    def validate_redis_url(cls, v: str) -> str:
+        # If REDIS_URL is default local fallback but Railway injected REDIS_PRIVATE_URL or REDISURL, prefer the cloud private URL
+        redis_private = os.environ.get("REDIS_PRIVATE_URL") or os.environ.get("REDISURL")
+        if (not v or v in ("redis://redis:6379/0", "redis://127.0.0.1:6379/0", "redis://localhost:6379/0")) and redis_private:
+            return redis_private
+        return v
 
     # Recommendation Engine Config
     REC_WEIGHT_SIMILARITY: float = 0.45

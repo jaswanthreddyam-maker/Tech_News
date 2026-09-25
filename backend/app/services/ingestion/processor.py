@@ -439,12 +439,15 @@ def map_category_id(title: str, content: str, category_map: dict[str, int] | Non
     if slug in category_map:
         return category_map[slug]
     
-    # Safe default: General Technology (ID 22 if present, or lookup 'technology'/'general-technology')
-    for default_key in ("technology", "general-technology", "General Technology"):
+    # Safe default: General Technology, or fallback to first available category
+    for default_key in ("technology", "general-technology", "General Technology", "software", "ai"):
         if default_key in category_map:
             return category_map[default_key]
 
-    return category_map.get(22, 22)
+    if category_map:
+        return next(iter(category_map.values()))
+
+    return 1
 
 
 

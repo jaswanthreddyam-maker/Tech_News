@@ -5,8 +5,9 @@ current_dir = os.path.abspath(os.path.dirname(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# Set DATABASE_URL to Supabase Transaction Pooler (port 6543)
-os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres.grqjnmzteryrxfossice:Jaswanthreddy123456@aws-0-ap-south-1.pooler.supabase.com:6543/postgres"
+from dotenv import load_dotenv
+load_dotenv(os.path.join(current_dir, ".env"))
+load_dotenv(os.path.join(os.path.dirname(current_dir), ".env"))
 
 import asyncio
 import logging

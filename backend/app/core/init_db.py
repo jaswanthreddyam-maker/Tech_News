@@ -11,7 +11,7 @@ Usage:
 import asyncio
 import logging
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -21,45 +21,10 @@ from app.core.security import hash_password
 from app.models.article import Category, ProcessedArticle, RawArticle
 from app.editorial.models import EditorialDecisionLog
 
-# Import Base and ALL models so metadata is registered
 from app.models.base import Base
-from app.models.growth import FeatureFlag, RuntimeConfiguration, Experiment, ExperimentVariant, FeatureFlagAuditLog  # noqa: F401
-from app.models.source import Source, ScraperCheckpoint, ScraperRunHistory  # noqa: F401
-from app.models.analytics import (  # noqa: F401
-    AnalyticsSession, ArticleMetrics, DistributionMetrics, EngagementMetrics,
-    SearchMetrics, AIInteractionMetrics, StoryTelemetrySnapshot, CoverageGapAnalytics
-)
-from app.models.behavioral import BehavioralEvent, ReadingSession, UserInterest  # noqa: F401
-from app.models.certification import CertificationRun, CertificationScenarioEvidence  # noqa: F401
-from app.models.ai_artifacts import AIArtifact, TimelineEvent  # noqa: F401
-from app.models.conversation import ConversationSession  # noqa: F401
-from app.models.distribution import DistributionManifest, DistributionJob, DeliveryReport  # noqa: F401
-from app.models.editorial import (  # noqa: F401
-    EditorialDraft, DistributionConfiguration, EditorialDecision, EditorialDiscussionThread,
-    EditorialDraftComment, EditorialDraftVersion, EditorialReviewArtifact, EditorialPatch,
-    PublicationRecord, EditorialSession
-)
-from app.models.event import EventEnvelope  # noqa: F401
-from app.core.events.models import EventOutbox, OutboxDispatchCheckpoint, DeadLetterEvent  # noqa: F401
-from app.newsletter.models import (  # noqa: F401
-    NewsletterSubscriber, NewsletterStatsProjection, NewsletterBriefing,
-    NewsletterBriefingVersion, NewsletterCampaign, NewsletterEmailDelivery,
-    NewsletterLinkClick, NewsletterSuppressedEmail, NewsletterCampaignAnalytics
-)
-from app.services.memory.infrastructure.models import MemoryIndex  # noqa: F401
-from app.models.user import (  # noqa: F401
-    AIJobHistory,
-    ArticleRevision,
-    AuditLog,
-    Notification,
-    OAuthAccount,
-    Permission,
-    Role,
-    RolePermission,
-    SavedArticle,
-    User,
-    UserSession,
-)
+from app.models.growth import FeatureFlag
+from app.models.source import Source
+from app.models.user import Permission, Role, RolePermission, User
 
 logger = logging.getLogger("tech_news.init_db")
 
@@ -398,6 +363,8 @@ async def main():
     # Ensure required columns exist across tables
     async with engine.begin() as conn:
         await conn.execute(text("ALTER TABLE sources ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE processed_articles ADD COLUMN IF NOT EXISTS article_metadata JSONB"))
+        await conn.execute(text("ALTER TABLE processed_articles ADD COLUMN IF NOT EXISTS content_revision INTEGER DEFAULT 1"))
         await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_id VARCHAR(100)"))
         await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ"))
         await conn.execute(text("ALTER TABLE event_outbox ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0"))
