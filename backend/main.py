@@ -69,6 +69,11 @@ async def lifespan(app: FastAPI):
         import os
 
         ini_path = os.path.join(os.getcwd(), "alembic.ini")
+        if not os.path.exists(ini_path):
+            alt_path = os.path.join(os.getcwd(), "backend", "alembic.ini")
+            if os.path.exists(alt_path):
+                ini_path = alt_path
+
         if os.path.exists(ini_path):
             mig_res = subprocess.run(
                 ["alembic", "-c", ini_path, "upgrade", "head"],
