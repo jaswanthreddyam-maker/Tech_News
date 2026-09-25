@@ -93,12 +93,12 @@ const TRAJECTORY_STAGES = [
 
 /** Physical Motion Parameters (Optimized for smooth viewport containment) */
 const ARRIVAL_CONFIG = {
-  TOTAL_DURATION: 2500, // 2500ms trajectory
-  TOTAL_SPIN: -360, // 1 single full 360° rotation (slow, heavy, cinema-grade)
-  START_Z: -2200, // Deep space start
+  TOTAL_DURATION: 1200, // 1200ms crisp, responsive trajectory
+  TOTAL_SPIN: -360, // 1 single full 360° rotation (smooth, cinema-grade)
+  START_Z: -1200, // Clear viewport start without excessive deep space void
   FINAL_Z: 0, // Rest position
-  INITIAL_SCALE: 0.6, // Starts small in deep space
-  MAX_SCALE: 1.25, // Controlled majestic expansion without GPU fill-rate exhaustion
+  INITIAL_SCALE: 0.75, // Starts gracefully scaled
+  MAX_SCALE: 1.15, // Controlled majestic expansion without GPU fill-rate exhaustion
   FINAL_SCALE: 1.0, // Contracts back to original size
   PEAK_SCALE_P: 0.60,
 };
@@ -417,7 +417,9 @@ export function Hero3DRing() {
     const isMobile =
       typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
 
-    const isWelcomeOverlayActive = !isOverlayDispatched && !isWelcomePlayed && !isMobile;
+    const isOverlayInDom =
+      typeof document !== "undefined" && Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
+    const isWelcomeOverlayActive = isOverlayInDom && !isOverlayDispatched && !isWelcomePlayed && !isMobile;
 
     if (isWelcomeOverlayActive) {
       arrivalStatusRef.current = "waiting_overlay";
@@ -438,7 +440,7 @@ export function Hero3DRing() {
       if (!overlayFallbackTimerRef.current) {
         overlayFallbackTimerRef.current = setTimeout(() => {
           handleOverlayComplete();
-        }, 4500);
+        }, 800);
       }
 
       return () => {

@@ -12,7 +12,11 @@ export async function getArticles(params: {
   if (params.limit !== undefined) queryParams.limit = String(params.limit);
   if (params.cursor) queryParams.cursor = params.cursor;
   if (params.sort_by) queryParams.sort_by = params.sort_by;
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: queryParams });
+  return apiFetch<PaginatedResponse<Article>>("/news", { 
+    params: queryParams,
+    revalidate: 60,
+    tags: ["news"] 
+  });
 }
 
 export async function getArticleById(id: number): Promise<StandardResponse<Article>> {
@@ -20,7 +24,11 @@ export async function getArticleById(id: number): Promise<StandardResponse<Artic
 }
 
 export async function getTrendingArticles(): Promise<PaginatedResponse<Article>> {
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "25", sort_by: "trending" } });
+  return apiFetch<PaginatedResponse<Article>>("/news", { 
+    params: { limit: "25", sort_by: "trending" },
+    revalidate: 60,
+    tags: ["trending"] 
+  });
 }
 
 export async function getBreakingNews(): Promise<PaginatedResponse<Article>> {

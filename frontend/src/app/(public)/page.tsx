@@ -25,7 +25,7 @@ import {
   NewsletterSkeleton,
 } from "@/components/skeletons";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata = {
   title: "Tech News Today | Autonomous AI Newsroom",
@@ -98,7 +98,7 @@ export default async function HomePage() {
 
       {/* Invisible Server Preloader for LCP Image */}
       <Suspense fallback={null}>
-        <HeroLcpPreloader />
+        <HeroLcpPreloader article={initialItems[0]} />
       </Suspense>
 
       {/* Hero Spatial Stage Object */}

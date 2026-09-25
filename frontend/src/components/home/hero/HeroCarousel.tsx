@@ -6,7 +6,6 @@ import { HeroCarouselSkeleton } from "./HeroCarouselSkeleton";
 import { HeroScene } from "./v2/HeroScene";
 import { useTrending, useCategoryDesks } from "@/components/hooks/articles/useArticles";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
-
 import { MediaService } from "@/domains/article/media";
 
 const SKELETON_ITEMS: FeaturedArticle[] = Array.from({ length: 12 }).map((_, i) => ({
@@ -105,36 +104,42 @@ export function HeroCarousel({
     return pool;
   }, [genuinePool, allPool]);
 
-  const isLoading = activePool.length === 0 && (trendingQuery.isLoading || desksQuery.isLoading);
-  const isError = activePool.length === 0 && trendingQuery.isError && desksQuery.isError;
-  const isEmpty = activePool.length === 0 && !trendingQuery.isLoading && !desksQuery.isLoading;
+  // If server provided initialItems or activePool has articles, we are NOT loading!
+  const hasLoadedArticles = activePool.length > 0 || initialItems.length > 0;
+  const isLoading = !hasLoadedArticles && trendingQuery.isLoading;
+  const isError = !hasLoadedArticles && trendingQuery.isError && desksQuery.isError;
+  const isEmpty = !hasLoadedArticles && !trendingQuery.isLoading;
 
   const items = React.useMemo(() => {
-    if (isLoading) return SKELETON_ITEMS;
-    return activePool.length > 0 ? activePool.slice(0, 12) : SKELETON_ITEMS;
-  }, [isLoading, activePool]);
+    if (activePool.length > 0) return activePool.slice(0, 12);
+    if (initialItems.length > 0) return initialItems.slice(0, 12);
+    return SKELETON_ITEMS;
+  }, [activePool, initialItems]);
 
   const editorPicks = React.useMemo(() => {
-    if (isLoading) return SKELETON_ITEMS.slice(0, 4);
-    return initialEditorPicks.length > 0 ? initialEditorPicks : items.slice(1, 5);
-  }, [isLoading, initialEditorPicks, items]);
+    if (initialEditorPicks.length > 0) return initialEditorPicks;
+    if (items.length > 1) return items.slice(1, 5);
+    return SKELETON_ITEMS.slice(0, 4);
+  }, [initialEditorPicks, items]);
 
   const latest = React.useMemo(() => {
-    if (isLoading) return SKELETON_ITEMS.slice(0, 4);
-    return initialLatest.length > 0 ? initialLatest : items.slice(1, 5);
-  }, [isLoading, initialLatest, items]);
+    if (initialLatest.length > 0) return initialLatest;
+    if (items.length > 1) return items.slice(1, 5);
+    return SKELETON_ITEMS.slice(0, 4);
+  }, [initialLatest, items]);
 
   const aiInsights = React.useMemo(() => {
-    if (isLoading) return SKELETON_ITEMS.slice(0, 4);
-    return initialAiInsights.length > 0 ? initialAiInsights : items.slice(1, 5);
-  }, [isLoading, initialAiInsights, items]);
+    if (initialAiInsights.length > 0) return initialAiInsights;
+    if (items.length > 1) return items.slice(1, 5);
+    return SKELETON_ITEMS.slice(0, 4);
+  }, [initialAiInsights, items]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
-    // Avoid hydration mismatch on initial render, but don't block layout
+  // Only show skeleton if we truly have zero articles from server
+  if (!mounted && initialItems.length === 0) {
     return <HeroCarouselSkeleton />;
   }
 

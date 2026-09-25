@@ -2,12 +2,15 @@ import { getTrendingArticles } from "@/lib/api/articles";
 import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 import { getImageProps } from "next/image";
 
-export async function HeroLcpPreloader() {
+export async function HeroLcpPreloader({ article }: { article?: any }) {
   try {
-    const res = await getTrendingArticles();
-    const rawArticles = Array.isArray(res) ? res : (res as any)?.data || [];
-    const featured = mapArticlesToFeatured(rawArticles);
-    const first = featured[0];
+    let first = article;
+    if (!first) {
+      const res = await getTrendingArticles();
+      const rawArticles = Array.isArray(res) ? res : (res as any)?.data || [];
+      const featured = mapArticlesToFeatured(rawArticles);
+      first = featured[0];
+    }
     if (!first) return null;
 
     const imgUrl =
@@ -20,12 +23,11 @@ export async function HeroLcpPreloader() {
 
     if (!imgUrl) return null;
 
-    // Must match HeroMediaCard.tsx <Image> props 1:1 to guarantee exact URL match
     const { props } = getImageProps({
       src: imgUrl,
       alt: first.title || "",
       fill: true,
-      sizes: "(max-width: 768px) 290px, 340px",
+      sizes: "(max-width: 768px) 275px, 304px",
       quality: 90,
       priority: true,
     });
@@ -41,7 +43,6 @@ export async function HeroLcpPreloader() {
       />
     );
   } catch (err) {
-    console.error("HeroLcpPreloader error:", err);
     return null;
   }
 }

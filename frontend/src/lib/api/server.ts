@@ -6,7 +6,7 @@ const API_BASE_URL = getApiBaseUrl();
 
 export class ServerTransport implements ApiTransport {
   async fetch(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-    const { params, headers, timeoutMs = 20000, tags, revalidate, ...restOptions } = options;
+    const { params, headers, timeoutMs = 6000, tags, revalidate, ...restOptions } = options;
     
     let url = `${API_BASE_URL}${endpoint}`;
     if (params) {
@@ -42,10 +42,14 @@ export class ServerTransport implements ApiTransport {
       nextOpts.revalidate = revalidate;
     }
 
+    // Do NOT hardcode cache: 'no-store' if revalidate or tags are specified (prevents DYNAMIC_SERVER_USAGE errors)
+    const hasNextCache = Boolean(revalidate !== undefined || tags);
+    const fetchCache = hasNextCache ? undefined : (restOptions.cache || 'no-store');
+
     try {
       const response = await fetch(url, {
         ...restOptions,
-        cache: 'no-store',
+        cache: fetchCache,
         headers: requestHeaders,
         signal: controller.signal,
         next: Object.keys(nextOpts).length > 0 ? nextOpts : undefined,

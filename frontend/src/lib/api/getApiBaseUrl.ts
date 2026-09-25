@@ -6,11 +6,17 @@ export function getApiBaseUrl(): string {
       ? "https://technews-production-d51a.up.railway.app" 
       : "http://localhost:8000";
 
-    const serverUrl =
+    let serverUrl =
       process.env.INTERNAL_API_URL ||
       process.env.API_PROXY_TARGET ||
       process.env.NEXT_PUBLIC_API_BASE_URL ||
       defaultBackend;
+
+    // If running in production or on Vercel and serverUrl accidentally points to localhost, use default production backend
+    if (isProd && (serverUrl.includes("localhost") || serverUrl.includes("127.0.0.1"))) {
+      serverUrl = defaultBackend;
+    }
+
     const trimmed = serverUrl.trim().replace(/\/+$/, "");
     return trimmed.endsWith("/api/v1") ? trimmed : `${trimmed}/api/v1`;
   }
