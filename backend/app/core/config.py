@@ -123,10 +123,30 @@ class Settings(BaseSettings):
     @field_validator("REDIS_URL", mode="before")
     @classmethod
     def validate_redis_url(cls, v: str) -> str:
-        # If REDIS_URL is default local fallback but Railway injected REDIS_PRIVATE_URL or REDISURL, prefer the cloud private URL
+        if not v:
+            v = ""
+        v = v.strip().strip("'\"")
+        while v.startswith("REDIS_URL=") or v.startswith("REDIS_PRIVATE_URL=") or v.startswith("REDISURL="):
+            if v.startswith("REDIS_URL="):
+                v = v.split("REDIS_URL=", 1)[1].strip().strip("'\"")
+            elif v.startswith("REDIS_PRIVATE_URL="):
+                v = v.split("REDIS_PRIVATE_URL=", 1)[1].strip().strip("'\"")
+            elif v.startswith("REDISURL="):
+                v = v.split("REDISURL=", 1)[1].strip().strip("'\"")
+
+        # If REDIS_URL is default local fallback or invalid, but Railway injected REDIS_PRIVATE_URL or REDISURL, prefer the cloud private URL
         redis_private = os.environ.get("REDIS_PRIVATE_URL") or os.environ.get("REDISURL")
-        if (not v or v in ("redis://redis:6379/0", "redis://127.0.0.1:6379/0", "redis://localhost:6379/0")) and redis_private:
-            return redis_private
+        if (not v or v in ("redis://redis:6379/0", "redis://127.0.0.1:6379/0", "redis://localhost:6379/0") or not (v.startswith("redis://") or v.startswith("rediss://"))) and redis_private:
+            v = redis_private.strip().strip("'\"")
+            while v.startswith("REDIS_PRIVATE_URL=") or v.startswith("REDISURL="):
+                if v.startswith("REDIS_PRIVATE_URL="):
+                    v = v.split("REDIS_PRIVATE_URL=", 1)[1].strip().strip("'\"")
+                elif v.startswith("REDISURL="):
+                    v = v.split("REDISURL=", 1)[1].strip().strip("'\"")
+
+        if not v or not (v.startswith("redis://") or v.startswith("rediss://")):
+            v = "redis://redis:6379/0"
+
         return v
 
     # Recommendation Engine Config
