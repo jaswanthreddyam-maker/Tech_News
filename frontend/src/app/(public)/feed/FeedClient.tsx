@@ -101,7 +101,7 @@ export default function FeedClient() {
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
-            href="/signup"
+            href="/login?mode=signup"
             className="inline-flex items-center px-5 py-2.5 rounded-xl bg-card hover:bg-muted/40 border border-border text-foreground font-medium text-sm transition-all cursor-pointer"
           >
             <span>Create Account</span>
