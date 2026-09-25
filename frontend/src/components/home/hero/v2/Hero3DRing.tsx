@@ -9,7 +9,6 @@ const easeInCubic = (t: number) => t * t * t;
 const easeInQuad = (t: number) => t * t;
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4); // Zero-velocity deceleration curve
-const easeInOutSin = (t: number) => Math.sin(t * Math.PI * 0.5);
 const normalizeAngle = (angle: number) => ((angle % 360) + 360) % 360;
 
 /**
@@ -18,11 +17,6 @@ const normalizeAngle = (angle: number) => ((angle % 360) + 360) % 360;
  * Probes actual GPU/CPU frame times on mount using a short rAF burst,
  * then classifies the device into a performance tier to set the optimal
  * target frame interval for the 3D ring animation loops.
- * 
- * Tiers:
- *   HIGH  (≤18ms median) → native refresh rate (60/120/144Hz), no throttling
- *   MID   (≤28ms median) → ~30fps target (33.3ms interval)
- *   LOW   (>28ms median)  → ~20fps target (50ms interval)
  */
 type PerformanceTier = "high" | "mid" | "low";
 
@@ -59,7 +53,6 @@ function useDevicePerformanceTier(): { tier: PerformanceTier; frameIntervalMs: n
       if (frameCount < PROBE_FRAMES + 1) {
         rafId = requestAnimationFrame(probeFrame);
       } else {
-        // Calculate median frame time (robust against outlier spikes)
         const sorted = [...frameTimes].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         const medianMs = sorted.length % 2 === 0
@@ -80,12 +73,6 @@ function useDevicePerformanceTier(): { tier: PerformanceTier; frameIntervalMs: n
           frameIntervalMs: PERF_TIER_CONFIG[tier].frameIntervalMs,
         };
         probeCompleteRef.current = true;
-
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            `[Hero3DRing] Performance tier: ${tier.toUpperCase()} (median: ${medianMs.toFixed(1)}ms, target: ${PERF_TIER_CONFIG[tier].label})`
-          );
-        }
       }
     };
 
@@ -104,16 +91,16 @@ const TRAJECTORY_STAGES = [
   { p: 1.00, z: 0, ease: easeOutCubic },    // 90% - 100%: Crisp final touchdown
 ];
 
-/** Physical Motion Parameters */
+/** Physical Motion Parameters (Optimized for smooth viewport containment) */
 const ARRIVAL_CONFIG = {
-  TOTAL_DURATION: 2500, // 2500ms trajectory (3.0s total animation time with 500ms settle)
+  TOTAL_DURATION: 2500, // 2500ms trajectory
   TOTAL_SPIN: -360, // 1 single full 360° rotation (slow, heavy, cinema-grade)
   START_Z: -2200, // Deep space start
   FINAL_Z: 0, // Rest position
   INITIAL_SCALE: 0.6, // Starts small in deep space
-  MAX_SCALE: 2.3, // Expands outward to a massive size during flight
-  FINAL_SCALE: 1.0, // Slowly contracts back to original size as animation finishes
-  PEAK_SCALE_P: 0.60, // Reaches peak massive size at 60% of trajectory
+  MAX_SCALE: 1.25, // Controlled majestic expansion without GPU fill-rate exhaustion
+  FINAL_SCALE: 1.0, // Contracts back to original size
+  PEAK_SCALE_P: 0.60,
 };
 
 /** Active Card Extraction Configuration */
@@ -132,23 +119,7 @@ const RING_CONFIG = {
   SETTLE_DURATION_MS: 500,
 };
 
-/**
- * Hero3DRing — Production Mechanical Engine (Butter-Smooth 60fps/120fps)
- * 
- * CRITICAL ARCHITECTURAL INVARIANTS:
- * 1. 100% GPU COMPOSITOR DRIVEN: Never mutate non-transform properties (opacity, filter, width, height) inside rAF loops.
- *    Perform ONLY 2 transform writes per frame: `arrivalRef` (translateZ + scale) and `spinRef` (rotateY).
- * 2. SINGLE-RESPONSIBILITY 3D TRANSFORM STACK:
- *    - `containerRef` (PerspectiveRoot)  → Static perspective (1450px)
- *    - `arrivalRef` (ArrivalStage)       → translateZ + scale ONLY
- *    - `spinRef` (SpinStage)             → rotateY ONLY
- *    - `ringRef` (RingStage)             → Carousel ring rotation ONLY
- *    - `HeroMediaCard`                   → Local card extraction transforms ONLY
- * 3. DOUBLE-rAF TRANSITION ENABLING: `setIsTransitionEnabled` after 2 idle frames prevents CSS transition snaps.
- * 4. STALE-CLOSURE ISOLATION: `rotationRef`, `dragOffsetRef`, `radiusRef` eliminate stale React state captures in rAF loops.
- */
 export function Hero3DRing() {
-  // Adaptive FPS — probe device performance on mount and throttle accordingly
   const { frameIntervalMs } = useDevicePerformanceTier();
   const {
     items,
@@ -159,6 +130,7 @@ export function Hero3DRing() {
     itemCount,
     interactionMode,
     playbackState,
+    isInView = true,
     setInteractionMode,
     setActiveIndex,
     setRotation,
@@ -171,7 +143,6 @@ export function Hero3DRing() {
   const dragStartXRef = useRef<number | null>(null);
   const startRotationRef = useRef<number>(0);
 
-  // Single React state updates for arrival completion and double-rAF transition enabling
   const [localArrivalFinished, setLocalArrivalFinished] = useState(false);
   const [isTransitionEnabled, setIsTransitionEnabled] = useState(false);
 
@@ -223,18 +194,18 @@ export function Hero3DRing() {
   const lastActiveIndexRef = useRef<number>(activeIndex);
   const lastSyncedRotationRef = useRef<number>(rotation);
 
-  // Step carousel state (all refs to avoid stale closures in rAF)
-  const stepBaseAngleRef = useRef<number>(0);      // The angle we started this step from
-  const stepTargetAngleRef = useRef<number>(0);     // The angle we're stepping to
-  const stepStartTimeRef = useRef<number>(0);       // When the step transition began
-  const stepPhaseRef = useRef<"dwell" | "stepping">("dwell"); // Current phase
-  const dwellStartTimeRef = useRef<number>(0);      // When the current dwell began
-  const isPostArrivalInitialRef = useRef<boolean>(true); // Tracks the initial 3s rest after arrival comes to rest
+  // Step carousel state
+  const stepBaseAngleRef = useRef<number>(0);
+  const stepTargetAngleRef = useRef<number>(0);
+  const stepStartTimeRef = useRef<number>(0);
+  const stepPhaseRef = useRef<"dwell" | "stepping">("dwell");
+  const dwellStartTimeRef = useRef<number>(0);
+  const isPostArrivalInitialRef = useRef<boolean>(true);
 
   /** Carousel Step Configuration */
-  const POST_ARRIVAL_DWELL_MS = 3000; // Exactly 3 seconds pause after the 3D ring comes to rest from arrival animation
-  const STEP_DWELL_MS = 3000;         // 3s pause on each card before advancing
-  const STEP_TRANSITION_MS = 800;    // 800ms smooth transition to next card
+  const POST_ARRIVAL_DWELL_MS = 3000;
+  const STEP_DWELL_MS = 3000;
+  const STEP_TRANSITION_MS = 800;
   const easeInOutCubicStep = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
   // Synchronous and complete arrival finalization
@@ -269,7 +240,6 @@ export function Hero3DRing() {
     ambientRotationRef.current = 0;
     smoothedRotationRef.current = 0;
 
-    // Start 3.0s dwell countdown from the exact millisecond the 3D ring comes to rest
     dwellStartTimeRef.current = performance.now();
     stepPhaseRef.current = "dwell";
     isPostArrivalInitialRef.current = true;
@@ -282,7 +252,6 @@ export function Hero3DRing() {
       window.dispatchEvent(new CustomEvent("hero-arrival-complete"));
     }
 
-    // Double-rAF transition enablement eliminates browser CSS transition snaps
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setIsTransitionEnabled(true);
@@ -309,7 +278,6 @@ export function Hero3DRing() {
     }
 
     let startTime: number | null = null;
-    let lastFrameTimestamp: number | null = null;
 
     const {
       TOTAL_DURATION,
@@ -325,17 +293,14 @@ export function Hero3DRing() {
       if (arrivalStatusRef.current === "completed") return;
 
       if (!startTime) startTime = timestamp;
-      if (!lastFrameTimestamp) lastFrameTimestamp = timestamp;
-      lastFrameTimestamp = timestamp;
-
       const elapsed = timestamp - startTime;
       const moveProgress = Math.min(1, Math.max(0, elapsed / TOTAL_DURATION));
 
-      // 1. Single 360° Rotation (Slow, heavy, zero-velocity standstill at rest)
+      // 1. Single 360° Rotation
       const spinProgress = easeOutQuart(moveProgress);
       const spinAngle = TOTAL_SPIN * spinProgress;
 
-      // 2. Growth to Massive Size & Slow Reduction to Original Size
+      // 2. Growth & Smooth settle
       let currentScale: number;
       if (moveProgress <= PEAK_SCALE_P) {
         const growProgress = moveProgress / PEAK_SCALE_P;
@@ -347,7 +312,7 @@ export function Hero3DRing() {
         currentScale = MAX_SCALE - (MAX_SCALE - FINAL_SCALE) * ease;
       }
 
-      // 3. Trajectory Interpolation via TRAJECTORY_STAGES
+      // 3. Trajectory Interpolation
       let currentZ = START_Z;
       let prevP = 0;
       let prevZ = START_Z;
@@ -364,7 +329,6 @@ export function Hero3DRing() {
         prevZ = stage.z;
       }
 
-      // ONLY 2 GPU COMPOSITOR WRITES PER FRAME (translateZ + scale + rotateY)
       if (arrivalRef.current) arrivalRef.current.style.transform = `translateZ(${currentZ}px) scale(${currentScale})`;
       if (spinRef.current) spinRef.current.style.transform = `rotateY(${spinAngle}deg)`;
 
@@ -374,7 +338,6 @@ export function Hero3DRing() {
         if (arrivalRef.current) arrivalRef.current.style.transform = "translateZ(0px) scale(1)";
         if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
 
-        // rAF ANIMATION-DRIVEN SETTLE HANDOFF (Stable & smooth standstill)
         arrivalStatusRef.current = "settling";
         const settleStartTime = performance.now();
         const animateSettle = (now: number) => {
@@ -401,7 +364,6 @@ export function Hero3DRing() {
     arrivalRafRef.current = requestAnimationFrame(animateArrival);
   }, [completeArrival]);
 
-  // Dedicated unmount teardown for rAF loops
   useEffect(() => {
     return () => {
       if (arrivalRafRef.current) {
@@ -420,7 +382,6 @@ export function Hero3DRing() {
         clearTimeout(safetyWatchdogTimerRef.current);
         safetyWatchdogTimerRef.current = null;
       }
-      // If unmounted mid-animation (e.g. React StrictMode development cycle), reset status so remount restarts
       if (arrivalStatusRef.current === "animating" || arrivalStatusRef.current === "settling") {
         arrivalStatusRef.current = "idle";
       }
@@ -429,7 +390,6 @@ export function Hero3DRing() {
 
   const hasItems = Boolean(items && items.length > 0);
 
-  // Master Physical Machine Arrival Engine
   useEffect(() => {
     if (!hasItems) return;
 
@@ -438,12 +398,10 @@ export function Hero3DRing() {
       return;
     }
 
-    // If already animating or settling, do NOT interrupt or repeat
     if (arrivalStatusRef.current === "animating" || arrivalStatusRef.current === "settling") {
       return;
     }
 
-    // Safety watchdog: guarantees the arrival finishes within 6.5s no matter what happens
     if (!safetyWatchdogTimerRef.current) {
       safetyWatchdogTimerRef.current = setTimeout(() => {
         if (arrivalStatusRef.current !== "completed") {
@@ -452,7 +410,6 @@ export function Hero3DRing() {
       }, 6500);
     }
 
-    // Check if WelcomeOverlay is actively playing right now
     const isOverlayDispatched =
       typeof window !== "undefined" && Boolean((window as any).__welcomeOverlayDispatched);
     const isWelcomePlayed =
@@ -490,17 +447,13 @@ export function Hero3DRing() {
     } else {
       startArrival();
     }
-    // Only re-run if item presence shifts (empty -> populated), arrivalFinished updates, or engine handlers change.
-    // Explicitly avoids re-running on item array instance changes during query refetches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasItems, arrivalFinished, completeArrival, startArrival]);
 
-  // Sync when rotation changes externally (e.g. user clicks a card or next arrow)
   useEffect(() => {
     if (rotation !== lastSyncedRotationRef.current) {
       lastSyncedRotationRef.current = rotation;
       ambientRotationRef.current = 0;
-      // Reset step phase so dwell restarts from the new position
       stepPhaseRef.current = "dwell";
       dwellStartTimeRef.current = performance.now();
       isPostArrivalInitialRef.current = false;
@@ -514,28 +467,30 @@ export function Hero3DRing() {
     let lastTime = performance.now();
     let lastRenderTime = 0;
 
-    // Initialize dwell timer on first run if not already set by completeArrival
     if (!dwellStartTimeRef.current) {
       dwellStartTimeRef.current = performance.now();
     }
     stepPhaseRef.current = "dwell";
 
     const animateAmbient = (now: number) => {
+      // Suspend rendering computations when section is out of view, saving 100% GPU/CPU for rest of page
+      if (!isInView && !isDragging) {
+        ambientRafId = requestAnimationFrame(animateAmbient);
+        return;
+      }
+
       const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      // Carousel step logic: advance one card at a time when idle and playing
       if (!isDragging && interactionMode === "idle" && playbackState === "playing") {
         const perItem = anglePerItemRef.current;
 
         if (stepPhaseRef.current === "dwell") {
-          // Exactly 3.0s after coming to rest from arrival animation, then STEP_DWELL_MS for each card
           const currentDwellBudget = isPostArrivalInitialRef.current
             ? POST_ARRIVAL_DWELL_MS
             : STEP_DWELL_MS;
 
           if (now - dwellStartTimeRef.current >= currentDwellBudget && perItem > 0) {
-            // Begin stepping to the next card
             stepPhaseRef.current = "stepping";
             stepBaseAngleRef.current = ambientRotationRef.current;
             stepTargetAngleRef.current = ambientRotationRef.current + perItem;
@@ -545,7 +500,6 @@ export function Hero3DRing() {
         }
 
         if (stepPhaseRef.current === "stepping") {
-          // Animate the step with smooth easing
           const stepElapsed = now - stepStartTimeRef.current;
           const stepProgress = Math.min(1, stepElapsed / STEP_TRANSITION_MS);
           const easedProgress = easeInOutCubicStep(stepProgress);
@@ -555,21 +509,17 @@ export function Hero3DRing() {
             (stepTargetAngleRef.current - stepBaseAngleRef.current) * easedProgress;
 
           if (stepProgress >= 1) {
-            // Step complete — snap to exact target and begin next dwell
             ambientRotationRef.current = stepTargetAngleRef.current;
             stepPhaseRef.current = "dwell";
             dwellStartTimeRef.current = now;
           }
         }
       } else if (isDragging) {
-        // While dragging, reset dwell so we get a full pause after release
         dwellStartTimeRef.current = now;
         stepPhaseRef.current = "dwell";
         isPostArrivalInitialRef.current = false;
       }
 
-      // Adaptive FPS: skip the DOM write if we're under the frame budget
-      // During drag or active stepping, always render at native fps for smoothness
       const isSteppingNow = stepPhaseRef.current === "stepping";
       const shouldRender = isDragging || isSteppingNow || frameIntervalMs === 0 || (now - lastRenderTime) >= frameIntervalMs;
 
@@ -580,7 +530,6 @@ export function Hero3DRing() {
         if (isDragging) {
           smoothedRotationRef.current = targetRotation;
         } else {
-          // Zero-velocity dampened exponential spring lerp
           const lerpFactor = 1 - Math.exp(-8.0 * dt);
           smoothedRotationRef.current += (targetRotation - smoothedRotationRef.current) * lerpFactor;
         }
@@ -588,7 +537,6 @@ export function Hero3DRing() {
         const netAngle = smoothedRotationRef.current;
         ringRef.current.style.transform = `translateZ(-${radiusRef.current}px) rotateX(${RING_CONFIG.BASE_TILT}deg) rotateY(${netAngle}deg)`;
 
-        // Update card depth opacities, pointer events, and z-index directly on DOM
         const count = itemCountRef.current;
         const perItem = anglePerItemRef.current;
         if (count > 0 && perItem > 0) {
@@ -600,17 +548,13 @@ export function Hero3DRing() {
             const currentNetAngle = normalizeAngle(itemAngle + netAngle);
             const shortestAngle = Math.min(currentNetAngle, 360 - currentNetAngle);
 
-            // Smooth atmospheric depth falloff so cards remain exposed all around the 3D ring
-            // 0° (front): 1.0 -> 90° (sides): ~0.80 -> 180° (opposite side): ~0.60
             const depthOpacity = Math.max(0.60, 1 - (shortestAngle / 180) * 0.40);
 
             cardEl.style.opacity = String(depthOpacity);
             cardEl.style.visibility = "visible";
             cardEl.style.pointerEvents = shortestAngle > 165 ? "none" : "auto";
-            cardEl.style.zIndex = String(Math.round((180 - shortestAngle) * 10));
           }
 
-          // Advance active card index as the ring turns (pass syncRotation = false to not jerk rotation)
           const frontIndex = ((Math.round(normalizeAngle(-netAngle) / perItem) % count) + count) % count;
           if (frontIndex !== lastActiveIndexRef.current) {
             lastActiveIndexRef.current = frontIndex;
@@ -624,7 +568,7 @@ export function Hero3DRing() {
 
     ambientRafId = requestAnimationFrame(animateAmbient);
     return () => cancelAnimationFrame(ambientRafId);
-  }, [localArrivalFinished, isDragging, interactionMode, playbackState, setActiveIndex, frameIntervalMs]);
+  }, [localArrivalFinished, isDragging, interactionMode, playbackState, setActiveIndex, frameIntervalMs, isInView]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -634,7 +578,9 @@ export function Hero3DRing() {
       startRotationRef.current = rotation;
       setIsDragging(true);
       setInteractionMode("drag");
-      e.currentTarget.setPointerCapture(e.pointerId);
+      if (e.pointerType === "mouse") {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
     },
     [rotation, setInteractionMode]
   );
@@ -643,6 +589,9 @@ export function Hero3DRing() {
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!isDragging || dragStartXRef.current === null) return;
       const dx = e.clientX - dragStartXRef.current;
+      if (Math.abs(dx) > 10 && e.pointerType === "touch" && !e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
       const degDelta = dx * RING_CONFIG.DRAG_SENSITIVITY;
       setDragOffsetAngle(degDelta);
     },
@@ -657,7 +606,6 @@ export function Hero3DRing() {
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
 
-      // Absorb the drag offset directly into ambientRotationRef so the ring NEVER snaps on release!
       ambientRotationRef.current -= dragOffsetAngle;
       setDragOffsetAngle(0);
       dragOffsetRef.current = 0;
@@ -675,11 +623,12 @@ export function Hero3DRing() {
     <div
       ref={containerRef}
       data-testid="hero-3d-ring-container"
-      className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-visible py-8"
+      className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-visible py-8 touch-pan-y"
       style={{
         perspective: "1450px",
         perspectiveOrigin: "50% 50%",
         transformStyle: "preserve-3d",
+        touchAction: "pan-y",
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -734,9 +683,7 @@ export function Hero3DRing() {
               const depthOpacity = Math.max(0.60, 1 - (shortestAngleFromFront / 180) * 0.40);
               const cardPointerEvents: React.CSSProperties["pointerEvents"] =
                 shortestAngleFromFront > 165 ? "none" : "auto";
-              const zIndex = Math.round((180 - shortestAngleFromFront) * 10);
 
-              // Combined single Z/Y matrix offset using ACTIVE_CARD_CONFIG constants
               const cardZ = radius + (isActive ? ACTIVE_CARD_CONFIG.EXTRACTION_Z : 0);
               const cardY = isActive ? ACTIVE_CARD_CONFIG.LIFT_Y : 0;
 
@@ -757,7 +704,6 @@ export function Hero3DRing() {
                     opacity: depthOpacity,
                     visibility: "visible",
                     pointerEvents: cardPointerEvents,
-                    zIndex,
                   }}
                 />
               );

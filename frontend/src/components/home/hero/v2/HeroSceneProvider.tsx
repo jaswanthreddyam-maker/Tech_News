@@ -44,21 +44,22 @@ export function HeroSceneProvider({
   const itemCount = items.length;
   const anglePerItem = useMemo(() => (itemCount > 0 ? 360 / itemCount : 0), [itemCount]);
 
-  // Calculate dynamic radius from N cards so cards never overlap or intersect
-  const [radius, setRadius] = useState<number>(850);
+  // Calculate dynamic radius from N cards with optimal mathematical spacing (prevents card & panel collisions)
+  const [radius, setRadius] = useState<number>(680);
 
   useEffect(() => {
     const calculateRadius = () => {
       if (typeof window === "undefined" || itemCount === 0) return;
       const windowWidth = window.innerWidth;
-      const cardWidth = windowWidth < 768 ? 247 : 304;
-      const minRadius = windowWidth < 768 ? 500 : 760;
+      const cardWidth = windowWidth < 768 ? 240 : (windowWidth < 1280 ? 275 : 304);
+      const coefficient = windowWidth < 768 ? 0.52 : (windowWidth < 1280 ? 0.55 : 0.60);
       if (itemCount <= 2) {
-        setRadius(minRadius);
+        setRadius(windowWidth < 768 ? 440 : 640);
         return;
       }
       const angleInRadians = Math.PI / itemCount;
-      const derivedRadius = Math.round((cardWidth * 0.85) / Math.tan(angleInRadians));
+      const derivedRadius = Math.round((cardWidth * coefficient) / Math.tan(angleInRadians));
+      const minRadius = windowWidth < 768 ? 440 : (windowWidth < 1280 ? 560 : 640);
       setRadius(Math.max(minRadius, derivedRadius));
     };
 
@@ -118,7 +119,6 @@ export function HeroSceneProvider({
     }, PLAYBACK_CONFIG.TRANSITION_DURATION_MS);
   }, [itemCount, anglePerItem, setActiveIndex]);
 
-
   // Pause playback automatically when interaction mode shifts away from idle
   useEffect(() => {
     if (interactionMode !== "idle") {
@@ -141,6 +141,7 @@ export function HeroSceneProvider({
       playbackState,
       focusedCardId,
       arrivalFinished,
+      isInView,
       itemCount,
       radius,
       anglePerItem,
@@ -167,6 +168,7 @@ export function HeroSceneProvider({
       playbackState,
       focusedCardId,
       arrivalFinished,
+      isInView,
       itemCount,
       radius,
       anglePerItem,
