@@ -107,8 +107,8 @@ export function HeroCarousel({
   // If server provided initialItems or activePool has articles, we are NOT loading!
   const hasLoadedArticles = activePool.length > 0 || initialItems.length > 0;
   const isLoading = !hasLoadedArticles && trendingQuery.isLoading;
-  const isError = !hasLoadedArticles && trendingQuery.isError && desksQuery.isError;
-  const isEmpty = !hasLoadedArticles && !trendingQuery.isLoading;
+  const isError = !hasLoadedArticles && trendingQuery.isError;
+  const isEmpty = !hasLoadedArticles && trendingQuery.isSuccess && activePool.length === 0;
 
   const items = React.useMemo(() => {
     if (activePool.length > 0) return activePool.slice(0, 12);

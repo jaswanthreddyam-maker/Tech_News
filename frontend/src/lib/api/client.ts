@@ -21,7 +21,7 @@ export class ApiClient {
     while (attempt <= maxRetries) {
       const startTime = performance.now();
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs || 4000);
+      const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
       
       const fetchOptions = {
         ...options,
