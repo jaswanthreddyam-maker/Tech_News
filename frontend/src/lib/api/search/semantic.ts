@@ -6,7 +6,7 @@ export async function fetchSemanticSearch(
   limit: number = 20,
   filters?: SearchFilters
 ): Promise<SemanticSearchResult[]> {
-  const response = await apiFetch<{ data: SemanticSearchResult[] }>("/search/semantic", {
+  const response = await apiFetch<any>("/search/semantic", {
     method: "POST",
     body: JSON.stringify({
       query,
@@ -18,5 +18,11 @@ export async function fetchSemanticSearch(
       sort_by: filters?.sort || "relevance",
     }),
   });
-  return response.data || [];
+  if (Array.isArray(response)) {
+    return response;
+  }
+  if (Array.isArray(response?.data)) {
+    return response.data;
+  }
+  return [];
 }

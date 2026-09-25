@@ -17,6 +17,12 @@ export async function fetchKeywordSearch(
     if (filters.sort && filters.sort !== "relevance") params.sort_by = filters.sort;
   }
 
-  const response = await apiFetch<{ data: KeywordSearchResult[] }>("/search", { params });
-  return response.data || [];
+  const response = await apiFetch<any>("/search", { params });
+  if (Array.isArray(response)) {
+    return response;
+  }
+  if (Array.isArray(response?.data)) {
+    return response.data;
+  }
+  return [];
 }

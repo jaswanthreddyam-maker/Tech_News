@@ -11,6 +11,7 @@ export interface SemanticSearchResult {
   title: string;
   description: string;
   url?: string;
+  slug?: string;
   date?: string;
 }
 
