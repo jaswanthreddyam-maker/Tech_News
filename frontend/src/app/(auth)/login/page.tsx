@@ -399,7 +399,7 @@ export default function LoginPage() {
 
         {/* RIGHT COLUMN: DYNAMIC AUTH CARD (SIGN IN / SIGN UP) */}
         <section className="w-full max-w-[440px] xl:max-w-[460px] mx-auto lg:mx-0 shrink-0 self-center">
-          <div className="bg-[#08090B] border border-white/[0.14] rounded-[24px] p-6 sm:p-8 md:p-9 shadow-2xl shadow-black/80 relative max-h-[calc(100vh-60px)] overflow-y-auto">
+          <div className="bg-[#08090B] border border-white/[0.14] rounded-[24px] p-5 sm:p-7 md:p-8 shadow-2xl shadow-black/80 relative max-h-[calc(100vh-48px)] overflow-y-auto">
             
             {/* Error Message Announcement Box */}
             {errorMessage && (
@@ -407,9 +407,9 @@ export default function LoginPage() {
                 id="auth-error-msg"
                 role="alert"
                 aria-live="polite"
-                className="mb-5 border border-red-500/30 bg-red-500/10 rounded-[12px] p-3.5 flex items-start justify-between gap-2.5 text-xs text-red-300"
+                className="mb-4 border border-red-500/30 bg-red-500/10 rounded-[12px] p-3 flex items-start justify-between gap-2 text-xs text-red-300"
               >
-                <div className="flex items-start gap-2.5">
+                <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
                   <p className="leading-snug">{errorMessage}</p>
                 </div>
@@ -432,9 +432,9 @@ export default function LoginPage() {
               <div
                 role="alert"
                 aria-live="polite"
-                className="mb-5 border border-amber-500/30 bg-amber-500/10 rounded-[12px] p-3.5 flex items-start justify-between gap-2.5 text-xs text-amber-300"
+                className="mb-4 border border-amber-500/30 bg-amber-500/10 rounded-[12px] p-3 flex items-start justify-between gap-2 text-xs text-amber-300"
               >
-                <div className="flex items-start gap-2.5">
+                <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
                   <p className="leading-snug">{oauthState.message}</p>
                 </div>
@@ -460,7 +460,7 @@ export default function LoginPage() {
                   transition={{ duration: 0.2, ease: "easeOut" }}
                 >
                   {/* Header */}
-                  <div className="mb-7">
+                  <div className="mb-6 sm:mb-7">
                     <h2 className="text-3xl sm:text-[34px] font-bold tracking-tight text-white font-sans leading-tight">
                       Welcome back.
                     </h2>
@@ -497,7 +497,7 @@ export default function LoginPage() {
                           aria-required="true"
                           aria-describedby={errorMessage ? "auth-error-msg" : undefined}
                           placeholder="operator@technews.today"
-                          className="w-full h-[56px] bg-[#0E1013] border border-neutral-700/80 rounded-[12px] pl-12 pr-4 text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] transition-all font-sans"
+                          className="w-full h-[54px] sm:h-[56px] bg-[#0E1013] border border-neutral-700/80 rounded-[12px] pl-12 pr-4 text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] transition-all font-sans"
                         />
                       </div>
                     </div>
@@ -529,7 +529,7 @@ export default function LoginPage() {
                           aria-required="true"
                           aria-describedby={errorMessage ? "auth-error-msg" : undefined}
                           placeholder="••••••••••••"
-                          className="w-full h-[56px] bg-[#0E1013] border border-neutral-700/80 rounded-[12px] pl-12 pr-20 text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] transition-all font-sans"
+                          className="w-full h-[54px] sm:h-[56px] bg-[#0E1013] border border-neutral-700/80 rounded-[12px] pl-12 pr-20 text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] transition-all font-sans"
                         />
                         <button
                           type="button"
@@ -587,7 +587,7 @@ export default function LoginPage() {
                     <button
                       type="submit"
                       disabled={authStatus === "SUBMITTING"}
-                      className="group w-full h-[60px] bg-white hover:bg-neutral-100 active:scale-[0.99] text-black font-semibold text-sm rounded-[12px] flex items-center justify-center gap-2 shadow-lg shadow-white/5 transition-all mt-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B]"
+                      className="group w-full h-[56px] sm:h-[60px] bg-white hover:bg-neutral-100 active:scale-[0.99] text-black font-semibold text-sm rounded-[12px] flex items-center justify-center gap-2 shadow-lg shadow-white/5 transition-all mt-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B]"
                     >
                       {authStatus === "SUBMITTING" ? (
                         <div className="flex items-center gap-2.5">
@@ -604,7 +604,7 @@ export default function LoginPage() {
                   </form>
 
                   {/* Social Divider */}
-                  <div className="flex items-center gap-3 my-6">
+                  <div className="flex items-center gap-3 my-5 sm:my-6">
                     <div className="flex-1 h-[1px] bg-neutral-800" />
                     <span className="font-mono text-[10px] tracking-[0.25em] text-neutral-400 uppercase font-semibold">
                       OR
@@ -644,7 +644,7 @@ export default function LoginPage() {
                   </div>
 
                   {/* Toggle to Sign Up */}
-                  <div className="mt-6 text-center text-xs text-neutral-200">
+                  <div className="mt-5 sm:mt-6 text-center text-xs text-neutral-200">
                     <span>New to Tech News Today? </span>
                     <button
                       type="button"
@@ -667,26 +667,26 @@ export default function LoginPage() {
                   transition={{ duration: 0.2, ease: "easeOut" }}
                 >
                   {/* Header */}
-                  <div className="mb-6">
-                    <h2 className="text-3xl sm:text-[34px] font-bold tracking-tight text-white font-sans leading-tight">
+                  <div className="mb-4 sm:mb-5">
+                    <h2 className="text-2xl sm:text-[30px] font-bold tracking-tight text-white font-sans leading-tight">
                       Create an account.
                     </h2>
-                    <p className="text-xs sm:text-sm text-neutral-200 mt-2 font-normal">
+                    <p className="text-xs text-neutral-300 mt-1 font-normal">
                       Sign up for your Intelligence Desk.
                     </p>
                   </div>
 
-                  <form onSubmit={handleRegister} className="space-y-4" noValidate>
+                  <form onSubmit={handleRegister} className="space-y-3 sm:space-y-3.5" noValidate>
                     {/* Full Name Field */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <label
                         htmlFor="signup-name"
-                        className="block font-mono text-[11px] tracking-[0.2em] uppercase text-neutral-200 font-semibold"
+                        className="block font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-300 font-semibold"
                       >
                         Full Name
                       </label>
                       <div className="relative flex items-center">
-                        <UserIcon className="w-5 h-5 text-neutral-400 absolute left-4 pointer-events-none" aria-hidden="true" />
+                        <UserIcon className="w-4 h-4 text-neutral-400 absolute left-3.5 pointer-events-none" aria-hidden="true" />
                         <input
                           id="signup-name"
                           name="name"
@@ -703,21 +703,21 @@ export default function LoginPage() {
                           required
                           aria-required="true"
                           placeholder="Operator Name"
-                          className="w-full h-[52px] bg-[#0E1013] border border-neutral-700/80 rounded-[12px] pl-12 pr-4 text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] transition-all font-sans"
+                          className="w-full h-[46px] sm:h-[48px] bg-[#0E1013] border border-neutral-700/80 rounded-[10px] pl-10 pr-4 text-xs sm:text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white transition-all font-sans"
                         />
                       </div>
                     </div>
 
                     {/* Email Field */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <label
                         htmlFor="signup-email"
-                        className="block font-mono text-[11px] tracking-[0.2em] uppercase text-neutral-200 font-semibold"
+                        className="block font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-300 font-semibold"
                       >
                         Email Address
                       </label>
                       <div className="relative flex items-center">
-                        <Mail className="w-5 h-5 text-neutral-400 absolute left-4 pointer-events-none" aria-hidden="true" />
+                        <Mail className="w-4 h-4 text-neutral-400 absolute left-3.5 pointer-events-none" aria-hidden="true" />
                         <input
                           id="signup-email"
                           name="email"
@@ -734,21 +734,21 @@ export default function LoginPage() {
                           required
                           aria-required="true"
                           placeholder="operator@technews.today"
-                          className="w-full h-[52px] bg-[#0E1013] border border-neutral-700/80 rounded-[12px] pl-12 pr-4 text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] transition-all font-sans"
+                          className="w-full h-[46px] sm:h-[48px] bg-[#0E1013] border border-neutral-700/80 rounded-[10px] pl-10 pr-4 text-xs sm:text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white transition-all font-sans"
                         />
                       </div>
                     </div>
 
                     {/* Password Field */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <label
                         htmlFor="signup-password"
-                        className="block font-mono text-[11px] tracking-[0.2em] uppercase text-neutral-200 font-semibold"
+                        className="block font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-300 font-semibold"
                       >
                         Password
                       </label>
                       <div className="relative flex items-center">
-                        <Lock className="w-5 h-5 text-neutral-400 absolute left-4 pointer-events-none" aria-hidden="true" />
+                        <Lock className="w-4 h-4 text-neutral-400 absolute left-3.5 pointer-events-none" aria-hidden="true" />
                         <input
                           id="signup-password"
                           name="password"
@@ -765,33 +765,33 @@ export default function LoginPage() {
                           required
                           aria-required="true"
                           placeholder="••••••••••••"
-                          className="w-full h-[52px] bg-[#0E1013] border border-neutral-700/80 rounded-[12px] pl-12 pr-20 text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] transition-all font-sans"
+                          className="w-full h-[46px] sm:h-[48px] bg-[#0E1013] border border-neutral-700/80 rounded-[10px] pl-10 pr-16 text-xs sm:text-sm text-white placeholder-neutral-400 focus:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white transition-all font-sans"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
                           aria-label={showPassword ? "Hide password" : "Show password"}
-                          className="absolute right-3 h-8 px-2.5 rounded-lg text-xs font-mono font-medium text-neutral-300 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer select-none"
+                          className="absolute right-2.5 h-7 px-2 rounded text-[11px] font-mono font-medium text-neutral-300 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer select-none"
                         >
                           {showPassword ? "Hide" : "Show"}
                         </button>
                       </div>
 
                       {/* Real-time Password Requirements */}
-                      <div className="pt-1 flex flex-wrap gap-1.5">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${passHasMinLength ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
+                      <div className="pt-0.5 flex flex-wrap gap-1">
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded-full border transition-colors ${passHasMinLength ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
                           <span className={`w-1 h-1 rounded-full ${passHasMinLength ? "bg-emerald-400" : "bg-neutral-600"}`} />
                           8+ chars
                         </span>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${passHasUppercase ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded-full border transition-colors ${passHasUppercase ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
                           <span className={`w-1 h-1 rounded-full ${passHasUppercase ? "bg-emerald-400" : "bg-neutral-600"}`} />
                           Uppercase
                         </span>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${passHasLowercase ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded-full border transition-colors ${passHasLowercase ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
                           <span className={`w-1 h-1 rounded-full ${passHasLowercase ? "bg-emerald-400" : "bg-neutral-600"}`} />
                           Lowercase
                         </span>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${passHasNumber ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded-full border transition-colors ${passHasNumber ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-neutral-800 bg-[#0E1013] text-neutral-500"}`}>
                           <span className={`w-1 h-1 rounded-full ${passHasNumber ? "bg-emerald-400" : "bg-neutral-600"}`} />
                           Number
                         </span>
@@ -799,22 +799,22 @@ export default function LoginPage() {
                     </div>
 
                     {/* Confirm Password Field */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label
                           htmlFor="signup-confirm-password"
-                          className="block font-mono text-[11px] tracking-[0.2em] uppercase text-neutral-200 font-semibold"
+                          className="block font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-300 font-semibold"
                         >
                           Confirm Password
                         </label>
                         {confirmPassword.length > 0 && (
-                          <span className={`text-[10px] font-mono font-semibold tracking-wider ${passMatchesConfirm ? "text-emerald-400" : "text-red-400"}`}>
+                          <span className={`text-[9px] font-mono font-semibold tracking-wider ${passMatchesConfirm ? "text-emerald-400" : "text-red-400"}`}>
                             {passMatchesConfirm ? "✓ MATCH" : "✗ MISMATCH"}
                           </span>
                         )}
                       </div>
                       <div className="relative flex items-center">
-                        <Lock className="w-5 h-5 text-neutral-400 absolute left-4 pointer-events-none" aria-hidden="true" />
+                        <Lock className="w-4 h-4 text-neutral-400 absolute left-3.5 pointer-events-none" aria-hidden="true" />
                         <input
                           id="signup-confirm-password"
                           name="confirm_password"
@@ -831,7 +831,7 @@ export default function LoginPage() {
                           required
                           aria-required="true"
                           placeholder="••••••••••••"
-                          className={`w-full h-[52px] bg-[#0E1013] border rounded-[12px] pl-12 pr-20 text-sm text-white placeholder-neutral-400 focus:outline-none transition-all font-sans ${
+                          className={`w-full h-[46px] sm:h-[48px] bg-[#0E1013] border rounded-[10px] pl-10 pr-16 text-xs sm:text-sm text-white placeholder-neutral-400 focus:outline-none transition-all font-sans ${
                             confirmPassword.length > 0
                               ? passMatchesConfirm
                                 ? "border-emerald-500/60 focus:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400/50"
@@ -843,7 +843,7 @@ export default function LoginPage() {
                           type="button"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                          className="absolute right-3 h-8 px-2.5 rounded-lg text-xs font-mono font-medium text-neutral-300 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer select-none"
+                          className="absolute right-2.5 h-7 px-2 rounded text-[11px] font-mono font-medium text-neutral-300 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer select-none"
                         >
                           {showConfirmPassword ? "Hide" : "Show"}
                         </button>
@@ -851,10 +851,10 @@ export default function LoginPage() {
                     </div>
 
                     {/* Terms Checkbox */}
-                    <div className="flex items-start gap-2.5 text-xs pt-1">
+                    <div className="flex items-start gap-2 text-xs pt-0.5">
                       <label
                         htmlFor="signup-agree-terms"
-                        className="flex items-start gap-2.5 cursor-pointer text-neutral-200 select-none group"
+                        className="flex items-start gap-2 cursor-pointer text-neutral-300 select-none group"
                       >
                         <input
                           id="signup-agree-terms"
@@ -864,13 +864,13 @@ export default function LoginPage() {
                           onChange={(e) => setAgreeTerms(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-4 h-4 mt-0.5 rounded border border-neutral-600 bg-[#0E1013] flex items-center justify-center peer-checked:bg-white peer-checked:border-white peer-focus-visible:ring-2 peer-focus-visible:ring-white peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#08090B] transition-all shrink-0">
+                        <div className="w-3.5 h-3.5 mt-0.5 rounded border border-neutral-600 bg-[#0E1013] flex items-center justify-center peer-checked:bg-white peer-checked:border-white peer-focus-visible:ring-2 peer-focus-visible:ring-white transition-all shrink-0">
                           {agreeTerms && (
                             <Check className="w-3 h-3 text-black stroke-[3.5]" aria-hidden="true" />
                           )}
                         </div>
-                        <span className="text-[11px] text-neutral-300 leading-snug group-hover:text-white transition-colors">
-                          I agree to the Terms of Service and Privacy Policy
+                        <span className="text-[10px] text-neutral-300 leading-snug group-hover:text-white transition-colors">
+                          I agree to the Terms of Service & Privacy Policy
                         </span>
                       </label>
                     </div>
@@ -879,39 +879,39 @@ export default function LoginPage() {
                     <button
                       type="submit"
                       disabled={authStatus === "SUBMITTING"}
-                      className="group w-full h-[56px] bg-white hover:bg-neutral-100 active:scale-[0.99] text-black font-semibold text-sm rounded-[12px] flex items-center justify-center gap-2 shadow-lg shadow-white/5 transition-all mt-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B]"
+                      className="group w-full h-[48px] sm:h-[50px] bg-white hover:bg-neutral-100 active:scale-[0.99] text-black font-semibold text-xs sm:text-sm rounded-[10px] flex items-center justify-center gap-2 shadow-lg shadow-white/5 transition-all mt-1 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >
                       {authStatus === "SUBMITTING" ? (
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" aria-hidden="true" />
+                        <div className="flex items-center gap-2">
+                          <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" aria-hidden="true" />
                           <span>Creating account...</span>
                         </div>
                       ) : (
                         <>
                           <span>Create account</span>
-                          <ArrowRight className="w-4 h-4 stroke-[2.5] group-hover:translate-x-1 transition-transform duration-200" aria-hidden="true" />
+                          <ArrowRight className="w-3.5 h-3.5 stroke-[2.5] group-hover:translate-x-1 transition-transform duration-200" aria-hidden="true" />
                         </>
                       )}
                     </button>
                   </form>
 
                   {/* Social Divider */}
-                  <div className="flex items-center gap-3 my-5">
+                  <div className="flex items-center gap-3 my-3.5 sm:my-4">
                     <div className="flex-1 h-[1px] bg-neutral-800" />
-                    <span className="font-mono text-[10px] tracking-[0.25em] text-neutral-400 uppercase font-semibold">
+                    <span className="font-mono text-[9px] tracking-[0.25em] text-neutral-400 uppercase font-semibold">
                       OR
                     </span>
                     <div className="flex-1 h-[1px] bg-neutral-800" />
                   </div>
 
                   {/* Google OAuth Button */}
-                  <div className="flex flex-col items-center justify-center gap-3">
+                  <div className="flex flex-col items-center justify-center gap-2">
                     {Boolean(
                       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID &&
                       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID !== "disabled" &&
                       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID !== "undefined"
                     ) ? (
-                      <div className="w-full flex justify-center py-0.5">
+                      <div className="w-full flex justify-center py-0.5 scale-[0.95] origin-center">
                         <GoogleLogin
                           onSuccess={(credentialResponse) => {
                             if (credentialResponse.credential) {
@@ -925,7 +925,7 @@ export default function LoginPage() {
                           shape="pill"
                           size="large"
                           text="continue_with"
-                          width="380"
+                          width="360"
                         />
                       </div>
                     ) : (
@@ -936,13 +936,13 @@ export default function LoginPage() {
                   </div>
 
                   {/* Toggle back to Sign In */}
-                  <div className="mt-5 text-center text-xs text-neutral-200">
+                  <div className="mt-3.5 sm:mt-4 text-center text-xs text-neutral-200">
                     <span>Already have an account? </span>
                     <button
                       type="button"
                       id="toggle-to-signin"
                       onClick={() => switchMode("signin")}
-                      className="text-white hover:underline font-semibold inline-flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#08090B] rounded cursor-pointer"
+                      className="text-white hover:underline font-semibold inline-flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded cursor-pointer"
                     >
                       <span>Sign in</span>
                       <ArrowRight className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
