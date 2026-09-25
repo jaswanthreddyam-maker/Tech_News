@@ -47,7 +47,9 @@ export function HeroEditorialPanel() {
 
   return (
     <div
-      className="w-full max-w-[540px] flex flex-col justify-center text-foreground select-text transition-all duration-700 cubic-bezier(0.16, 1, 0.3, 1) opacity-100 translate-y-0"
+      className={`w-full max-w-[540px] flex flex-col justify-center text-foreground select-text transition-all duration-700 cubic-bezier(0.16, 1, 0.3, 1) ${
+        arrivalFinished ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+      }`}
       onMouseEnter={() => setInteractionMode("reading")}
       onFocus={() => setInteractionMode("reading")}
       onMouseLeave={() => setInteractionMode("idle")}

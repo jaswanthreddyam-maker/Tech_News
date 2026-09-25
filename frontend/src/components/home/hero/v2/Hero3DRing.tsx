@@ -93,12 +93,12 @@ const TRAJECTORY_STAGES = [
 
 /** Physical Motion Parameters (Optimized for smooth viewport containment) */
 const ARRIVAL_CONFIG = {
-  TOTAL_DURATION: 1200, // 1200ms crisp, responsive trajectory
-  TOTAL_SPIN: -360, // 1 single full 360° rotation (smooth, cinema-grade)
-  START_Z: -1200, // Clear viewport start without excessive deep space void
+  TOTAL_DURATION: 2500, // 2500ms trajectory
+  TOTAL_SPIN: -360, // 1 single full 360° rotation (slow, heavy, cinema-grade)
+  START_Z: -2200, // Deep space start
   FINAL_Z: 0, // Rest position
-  INITIAL_SCALE: 0.75, // Starts gracefully scaled
-  MAX_SCALE: 1.15, // Controlled majestic expansion without GPU fill-rate exhaustion
+  INITIAL_SCALE: 0.6, // Starts small in deep space
+  MAX_SCALE: 1.25, // Controlled majestic expansion without GPU fill-rate exhaustion
   FINAL_SCALE: 1.0, // Contracts back to original size
   PEAK_SCALE_P: 0.60,
 };
@@ -277,6 +277,9 @@ export function Hero3DRing() {
       overlayFallbackTimerRef.current = null;
     }
 
+    if (arrivalRef.current) arrivalRef.current.style.transform = `translateZ(${ARRIVAL_CONFIG.START_Z}px) scale(${ARRIVAL_CONFIG.INITIAL_SCALE})`;
+    if (spinRef.current) spinRef.current.style.transform = "rotateY(0deg)";
+
     let startTime: number | null = null;
 
     const {
@@ -417,9 +420,7 @@ export function Hero3DRing() {
     const isMobile =
       typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
 
-    const isOverlayInDom =
-      typeof document !== "undefined" && Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
-    const isWelcomeOverlayActive = isOverlayInDom && !isOverlayDispatched && !isWelcomePlayed && !isMobile;
+    const isWelcomeOverlayActive = !isOverlayDispatched && !isWelcomePlayed && !isMobile;
 
     if (isWelcomeOverlayActive) {
       arrivalStatusRef.current = "waiting_overlay";
@@ -440,7 +441,7 @@ export function Hero3DRing() {
       if (!overlayFallbackTimerRef.current) {
         overlayFallbackTimerRef.current = setTimeout(() => {
           handleOverlayComplete();
-        }, 800);
+        }, 4500);
       }
 
       return () => {
@@ -646,9 +647,7 @@ export function Hero3DRing() {
           transformStyle: "preserve-3d",
           transform: (arrivalFinished || localArrivalFinished)
             ? "translateZ(0px) scale(1)"
-            : (arrivalStatusRef.current === "animating" || arrivalStatusRef.current === "settling")
-            ? undefined
-            : `translateZ(${ARRIVAL_CONFIG.START_Z}px) scale(${ARRIVAL_CONFIG.INITIAL_SCALE})`,
+            : undefined,
           willChange: "transform",
         }}
       >
@@ -658,7 +657,9 @@ export function Hero3DRing() {
           className="relative w-full h-full flex items-center justify-center"
           style={{
             transformStyle: "preserve-3d",
-            transform: "rotateY(0deg)",
+            transform: (arrivalFinished || localArrivalFinished)
+              ? "rotateY(0deg)"
+              : undefined,
             willChange: "transform",
           }}
         >

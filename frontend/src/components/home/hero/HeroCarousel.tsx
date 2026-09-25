@@ -138,8 +138,9 @@ export function HeroCarousel({
     setMounted(true);
   }, []);
 
-  // Only show skeleton if we truly have zero articles from server
-  if (!mounted && initialItems.length === 0) {
+  // Render skeleton during SSR / initial hydration so HeroScene mounts fresh on the client,
+  // guaranteeing the grand 3D ring arrival animation swoops in from deep space on every visit.
+  if (!mounted || isLoading) {
     return <HeroCarouselSkeleton />;
   }
 
