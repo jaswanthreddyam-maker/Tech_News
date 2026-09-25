@@ -61,15 +61,17 @@ export function ArticleLayout({
     );
   }
 
-  // Normal, rich editorial mode — article occupies the full width of leftover space
+  // Normal, rich editorial mode — article centered with balanced wings for floating actions
   return (
     <Container size="wide" className="mt-8 mb-20">
-      <div className="flex flex-col xl:flex-row gap-8 lg:gap-12 relative xl:ml-12">
-        {/* Actions (Floating on Desktop, Sticky Bottom on Mobile) */}
-        {actions}
+      <div className="flex justify-center gap-6 2xl:gap-8 relative w-full">
+        {/* Left Wing: Desktop Floating Actions (Mobile sticky toolbar) */}
+        <div className="w-0 xl:w-16 shrink-0">
+          {actions}
+        </div>
 
-        {/* Main Content Column (expands to occupy full leftover space) */}
-        <div className="flex-1 min-w-0 max-w-5xl mx-auto xl:mx-0 w-full">
+        {/* Center: Main Article Column — Centered */}
+        <div className="w-full max-w-4xl min-w-0">
           {/* Header */}
           <div className="mb-8">{header}</div>
 
@@ -100,6 +102,9 @@ export function ArticleLayout({
           {/* Footer Navigation / Continue Reading */}
           {navigation && <div className="mt-12">{navigation}</div>}
         </div>
+
+        {/* Right Wing: Balanced spacer so the article remains mathematically centered on desktop */}
+        <div className="hidden xl:block w-16 shrink-0" aria-hidden="true" />
       </div>
     </Container>
   );
