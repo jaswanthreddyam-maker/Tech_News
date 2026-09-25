@@ -97,7 +97,7 @@ async def get_briefing_preferences(
 
     if current_user:
         subscriber = await DailyBriefingService.get_subscriber_for_user(
-            db, user_id=str(current_user.id), email=current_user.email
+            db, user_id=current_user.id, email=current_user.email
         )
         await db.commit()
     elif email:
@@ -170,7 +170,7 @@ async def update_briefing_preferences(
     """
     if current_user:
         subscriber = await DailyBriefingService.get_subscriber_for_user(
-            db, user_id=str(current_user.id), email=current_user.email
+            db, user_id=current_user.id, email=current_user.email
         )
     else:
         if not req.email:
@@ -179,6 +179,12 @@ async def update_briefing_preferences(
                 detail="Email address is required for Daily Briefing subscription.",
             )
         subscriber = await DailyBriefingService.get_or_create_subscriber(db, email=req.email)
+
+    if req.email and req.email.strip().lower() != subscriber.email.strip().lower():
+        subscriber.email = req.email.strip().lower()
+        subscriber.email_verified_at = None
+        if current_user:
+            await DailyBriefingService._ensure_oauth_verified(db, subscriber, current_user.id)
 
     subscriber.delivery_time = req.delivery_time
     subscriber.timezone = req.timezone
@@ -233,7 +239,7 @@ async def request_email_verification(
     """Dispatch a verification email to the user's or requested email address."""
     if current_user:
         subscriber = await DailyBriefingService.get_subscriber_for_user(
-            db, user_id=str(current_user.id), email=current_user.email
+            db, user_id=current_user.id, email=current_user.email
         )
     else:
         if not req.email:
@@ -361,7 +367,7 @@ async def send_test_briefing(
 
     try:
         result = await DailyBriefingService.send_test_briefing(
-            db, email=target_email, user_id=str(current_user.id)
+            db, email=target_email, user_id=current_user.id
         )
         await db.commit()
         return result

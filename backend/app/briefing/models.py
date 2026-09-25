@@ -1,8 +1,9 @@
 import enum
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+from typing import Optional
 from sqlalchemy import (
     Column, Integer, String, DateTime, Enum, Boolean, ForeignKey,
-    UniqueConstraint, Text,
+    UniqueConstraint, Text, Date,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -72,13 +73,15 @@ class DailyBriefingSubscriber(Base):
     __tablename__ = "daily_briefing_subscribers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
 
     # Email verification
-    email_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    verification_token_hash: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
-    verification_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verification_token_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    verification_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Preferences — off until verified
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -88,8 +91,8 @@ class DailyBriefingSubscriber(Base):
     topics: Mapped[dict] = mapped_column(JSONB, default=list, nullable=False)
 
     # Unsubscribe — optional fallback hash; primary verification is cryptographic HMAC token
-    unsubscribe_token_hash: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
-    unsubscribed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    unsubscribe_token_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    unsubscribed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
@@ -112,7 +115,7 @@ class DailyBriefingEdition(Base):
     __tablename__ = "daily_briefing_editions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    edition_date: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
+    edition_date: Mapped[date] = mapped_column(Date, unique=True, index=True, nullable=False)
     selection_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     algorithm_version: Mapped[str] = mapped_column(String(50), default="v2.2", nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="PUBLISHED", nullable=False)
@@ -143,14 +146,14 @@ class DailyBriefingItem(Base):
         nullable=False, index=True
     )
     article_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    cluster_id: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
+    cluster_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
 
     rank: Mapped[int] = mapped_column(Integer, nullable=False)   # 1..N, bounded by app
     headline: Mapped[str] = mapped_column(String(500), nullable=False)
     why_it_matters: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(100), nullable=False)
-    source: Mapped[str] = mapped_column(String(255), nullable=True)
-    url: Mapped[str] = mapped_column(Text, nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     read_time: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
     edition = relationship("DailyBriefingEdition", back_populates="items")
@@ -189,13 +192,13 @@ class DailyBriefingDelivery(Base):
 
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[BriefingDeliveryStatus] = mapped_column(
-        Enum(BriefingDeliveryStatus, name="briefingdeliverystatus"),
+        Enum(BriefingDeliveryStatus, native_enum=False, name="briefingdeliverystatus"),
         default=BriefingDeliveryStatus.PENDING, nullable=False
     )
     stories_delivered: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
 
-    provider_message_id: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
-    provider_idempotency_key: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
+    provider_message_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    provider_idempotency_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
 
     # Delivery timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

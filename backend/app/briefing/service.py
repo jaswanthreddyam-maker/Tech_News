@@ -4,8 +4,8 @@ import hashlib
 import base64
 import json
 import logging
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone, timedelta
+from typing import Optional, Dict, Any, List, Union
+from datetime import datetime, timezone, timedelta, date
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, and_, delete, func, cast, String
@@ -169,21 +169,62 @@ class DailyBriefingService:
     # ------------------------------------------------------------------
 
     @classmethod
+    async def _ensure_oauth_verified(
+        cls,
+        db: AsyncSession,
+        subscriber: DailyBriefingSubscriber,
+        user_id: Optional[int],
+    ) -> None:
+        """
+        If authenticated user is signed in via Google OAuth, their email address
+        is cryptographically verified by Google. Automatically acknowledge verification.
+        """
+        if not user_id or subscriber.email_verified_at is not None:
+            return
+
+        from app.models.user import OAuthAccount, User
+        user_res = await db.execute(select(User).where(User.id == user_id))
+        user = user_res.scalar_one_or_none()
+        if not user:
+            return
+
+        # Ensure subscriber email matches the user account email
+        if subscriber.email.strip().lower() == user.email.strip().lower():
+            oauth_res = await db.execute(
+                select(OAuthAccount).where(
+                    OAuthAccount.user_id == user_id,
+                    OAuthAccount.provider == "google",
+                )
+            )
+            oauth_account = oauth_res.scalar_one_or_none()
+            if oauth_account:
+                subscriber.email_verified_at = datetime.now(timezone.utc)
+                subscriber.enabled = True
+                subscriber.verification_token_hash = None
+                subscriber.verification_expires_at = None
+                await db.flush()
+                logger.info(
+                    f"DailyBriefingService: Auto-verified Google OAuth user {user_id} ({subscriber.email})"
+                )
+
+    @classmethod
     async def get_subscriber_for_user(
         cls,
         db: AsyncSession,
-        user_id: str,
+        user_id: Any,
         email: Optional[str] = None,
     ) -> DailyBriefingSubscriber:
         """
         Lookup or create a subscriber strictly bounded by authenticated user_id.
         User A cannot mutate or select User B's subscriber.
         """
-        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.user_id == str(user_id))
+        uid = int(user_id) if user_id is not None else None
+        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.user_id == uid)
         res = await db.execute(stmt)
         subscriber = res.scalar_one_or_none()
 
         if subscriber:
+            await cls._ensure_oauth_verified(db, subscriber, uid)
             return subscriber
 
         # If email provided, check if an unowned subscriber exists for that email
@@ -194,25 +235,30 @@ class DailyBriefingService:
             existing = res_email.scalar_one_or_none()
             if existing:
                 if not existing.user_id:
-                    existing.user_id = str(user_id)
+                    existing.user_id = uid
+                    await cls._ensure_oauth_verified(db, existing, uid)
                     await db.flush()
                     return existing
-                elif existing.user_id == str(user_id):
+                elif existing.user_id == uid:
+                    await cls._ensure_oauth_verified(db, existing, uid)
                     return existing
                 # If existing is bound to another user, do not hijack it
 
         # Create new subscriber for this user
         subscriber_email = (email or f"user_{user_id}@technewstoday.local").strip().lower()
-        return await cls.get_or_create_subscriber(db, email=subscriber_email, user_id=str(user_id))
+        sub = await cls.get_or_create_subscriber(db, email=subscriber_email, user_id=uid)
+        await cls._ensure_oauth_verified(db, sub, uid)
+        return sub
 
     @classmethod
     async def get_or_create_subscriber(
         cls,
         db: AsyncSession,
         email: str,
-        user_id: Optional[str] = None,
+        user_id: Optional[Any] = None,
     ) -> DailyBriefingSubscriber:
         email_clean = email.strip().lower()
+        uid = int(user_id) if user_id is not None else None
         stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.email == email_clean)
         res = await db.execute(stmt)
         subscriber = res.scalar_one_or_none()
@@ -221,7 +267,7 @@ class DailyBriefingService:
             try:
                 async with db.begin_nested():
                     subscriber = DailyBriefingSubscriber(
-                        user_id=user_id,
+                        user_id=uid,
                         email=email_clean,
                         enabled=False,  # Requires email verification
                         delivery_time="08:00",
@@ -238,8 +284,8 @@ class DailyBriefingService:
                 res = await db.execute(stmt)
                 subscriber = res.scalar_one()
 
-        elif user_id and not subscriber.user_id:
-            subscriber.user_id = str(user_id)
+        elif uid and not subscriber.user_id:
+            subscriber.user_id = uid
             await db.flush()
 
         return subscriber
@@ -355,7 +401,7 @@ class DailyBriefingService:
     async def get_or_create_daily_edition(
         cls,
         db: AsyncSession,
-        edition_date: Optional[str] = None,
+        edition_date: Optional[Union[str, date]] = None,
     ) -> "DailyBriefingEdition":
         """
         Get today's edition or create it.
@@ -365,9 +411,20 @@ class DailyBriefingService:
         3. Concurrency safe: simultaneous workers do not crash with duplicate key errors.
         """
         if not edition_date:
-            edition_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            edition_date_obj = datetime.now(timezone.utc).date()
+        elif isinstance(edition_date, str):
+            try:
+                edition_date_obj = datetime.strptime(edition_date, "%Y-%m-%d").date()
+            except ValueError:
+                edition_date_obj = datetime.now(timezone.utc).date()
+        elif isinstance(edition_date, datetime):
+            edition_date_obj = edition_date.date()
+        elif isinstance(edition_date, date):
+            edition_date_obj = edition_date
+        else:
+            edition_date_obj = datetime.now(timezone.utc).date()
 
-        stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date)
+        stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date_obj)
         res = await db.execute(stmt)
         edition = res.scalar_one_or_none()
 
@@ -412,7 +469,7 @@ class DailyBriefingService:
             try:
                 async with db.begin_nested():
                     edition = DailyBriefingEdition(
-                        edition_date=edition_date,
+                        edition_date=edition_date_obj,
                         selection_hash=selection_hash,
                         algorithm_version="v2.2",
                         status=edition_status,
@@ -421,7 +478,7 @@ class DailyBriefingService:
                     await db.flush()
             except IntegrityError:
                 # Concurrent worker insert race rescue
-                stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date)
+                stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date_obj)
                 res = await db.execute(stmt)
                 edition = res.scalar_one()
                 return edition
@@ -457,7 +514,7 @@ class DailyBriefingService:
                 payload={
                     "schema_version": 1,
                     "edition_id": edition.id,
-                    "edition_date": edition.edition_date,
+                    "edition_date": str(edition.edition_date),
                     "story_count": len(item_models),
                     "selection_hash": selection_hash,
                     "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -467,7 +524,7 @@ class DailyBriefingService:
             await db.flush()
 
         logger.info(
-            f"DailyBriefingService: Edition {edition.id} ({edition_date}) "
+            f"DailyBriefingService: Edition {edition.id} ({str(edition.edition_date)}) "
             f"has {len(item_models)} items at max capacity {EDITION_MAX_CAPACITY}."
         )
         return edition
@@ -589,7 +646,7 @@ class DailyBriefingService:
         settings_url = f"{web_url}/dashboard/settings"
 
         rendered = DailyBriefingRenderer.render_email(
-            edition_date=edition.edition_date,
+            edition_date=str(edition.edition_date),
             items=items_dict,
             subscriber_email=subscriber.email,
             click_url_builder=click_url_builder,
@@ -633,7 +690,7 @@ class DailyBriefingService:
         cls,
         db: AsyncSession,
         email: str,
-        user_id: Optional[str] = None,
+        user_id: Optional[Any] = None,
     ) -> Dict[str, Any]:
         email_clean = email.strip().lower()
         stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.email == email_clean)
@@ -655,7 +712,7 @@ class DailyBriefingService:
         )
         return {
             "status": "success",
-            "message": f"Test briefing for {edition.edition_date} dispatched to {email_clean}.",
+            "message": f"Test briefing for {str(edition.edition_date)} dispatched to {email_clean}.",
             "delivery_id": delivery.id,
             "provider_message_id": delivery.provider_message_id,
             "delivery_status": delivery.status,
@@ -675,10 +732,8 @@ class DailyBriefingService:
         if now_utc is None:
             now_utc = datetime.now(timezone.utc)
 
-        edition_date = now_utc.strftime("%Y-%m-%d")
-
         # Get/create today's edition
-        edition = await cls.get_or_create_daily_edition(db, edition_date=edition_date)
+        edition = await cls.get_or_create_daily_edition(db, edition_date=now_utc.date())
         await db.flush()
 
         # Load eligible subscribers (Strict: enabled, verified, not unsubscribed)
