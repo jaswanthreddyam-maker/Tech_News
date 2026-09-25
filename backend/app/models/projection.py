@@ -24,7 +24,7 @@ class HomepageProjection(Base):
     generated_by = Column(String(64), nullable=False, default="HomepageBuilder")
     stories_json = Column(JSON, nullable=False)
     explanation_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
 
 
 class CategoryDeskProjection(Base):
@@ -42,5 +42,5 @@ class CategoryDeskProjection(Base):
     algorithm_version = Column(String(32), nullable=False, default="1.0.0")
     policy_version = Column(String(32), nullable=False, default="1.0.0")
     build_duration_ms = Column(Integer, nullable=False, default=0)
-    rebuilt_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    rebuilt_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)

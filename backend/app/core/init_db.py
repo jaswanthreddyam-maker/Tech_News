@@ -25,6 +25,7 @@ from app.models.base import Base
 from app.models.growth import FeatureFlag
 from app.models.source import Source
 from app.models.user import Permission, Role, RolePermission, User
+from app.models.projection import HomepageProjection, CategoryDeskProjection
 
 logger = logging.getLogger("tech_news.init_db")
 
@@ -338,7 +339,9 @@ async def main():
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s [%(name)s] - %(message)s")
     logger.info("Starting database initialization...")
 
-    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    from app.core.database import async_engine, configure_database_pool
+    configure_database_pool()
+    engine = async_engine
 
     # Validate Seeded Permissions against Registry
     valid_permissions = {p.value for p in PermissionEnum}

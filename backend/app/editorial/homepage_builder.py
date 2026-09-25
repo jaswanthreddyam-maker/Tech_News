@@ -303,6 +303,7 @@ class HomepageBuilder:
                 generated_by="HomepageBuilder",
                 stories_json=stories_json,
                 explanation_json=explanation_json,
+                created_at=datetime.now(timezone.utc),
             )
             db.add(projection)
             await db.commit()
@@ -518,6 +519,7 @@ class HomepageBuilder:
                     article_ids=article_ids,
                     article_count=len(article_ids),
                     rebuilt_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(timezone.utc),
                     projection_version=pipeline_ver,
                     algorithm_version=algo_ver,
                     policy_version="v1",

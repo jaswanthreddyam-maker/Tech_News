@@ -37,6 +37,10 @@ import app.core.events.models
 import app.newsletter.models
 import app.briefing.models
 import app.models.ingestion
+import app.models.projection
+import app.models.certification
+import app.models.followed_source
+import app.models.inference
 
 
 # Import models for Alembic autogenerate support
