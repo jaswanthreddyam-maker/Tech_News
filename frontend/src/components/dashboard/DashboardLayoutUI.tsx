@@ -11,6 +11,7 @@ import {
   Sparkles,
   SlidersHorizontal,
   Settings,
+  ArrowLeft,
 } from "lucide-react";
 
 interface NavItem {
@@ -103,12 +104,32 @@ function DashboardSidebarNav() {
 }
 
 export function DashboardLayoutUI({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/");
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-12 flex flex-col lg:flex-row gap-12 mt-16">
       {/* Sidebar Navigation */}
       <aside className="w-full lg:w-64 shrink-0">
         <div className="sticky top-24">
-          <div className="mb-8">
+          {/* Back Navigation directly under Tech News Today header */}
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-card/40 hover:bg-card hover:border-white/20 text-xs font-mono text-muted-foreground hover:text-foreground transition-all cursor-pointer group mb-5"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+              <span>Back</span>
+            </button>
             <h1 className="text-3xl font-serif font-bold text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-2 font-mono">Personalization & Settings</p>
           </div>

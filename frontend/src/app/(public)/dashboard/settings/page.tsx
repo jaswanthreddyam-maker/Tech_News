@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Shield, User, Mail, Send, CheckCircle2,
   ChevronDown, ChevronUp, Sparkles, Clock, AlertCircle, MailCheck,
-  Bell, BellRing, LogOut, ArrowLeft,
+  Bell, BellRing, LogOut, Check,
 } from "lucide-react";
 import {
   getBriefingPreferences,
@@ -26,6 +26,13 @@ const AVAILABLE_TOPICS = [
   { id: "hardware", label: "Hardware & Devices" },
   { id: "startups-and-business", label: "Startups & VC" },
   { id: "science", label: "Science & Quantum" },
+];
+
+const DELIVERY_TIME_OPTIONS = [
+  { value: "07:00", label: "Every day at 7:00 AM", period: "Early Morning" },
+  { value: "08:00", label: "Every day at 8:00 AM", period: "Morning Edition (Default)" },
+  { value: "09:00", label: "Every day at 9:00 AM", period: "Mid-Morning" },
+  { value: "18:00", label: "Every evening at 6:00 PM", period: "Evening Edition" },
 ];
 
 function formatDeliveryTime(isoString?: string | null): string {
@@ -60,6 +67,29 @@ export default function SettingsPage() {
   const [isSendingVerification, setIsSendingVerification] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
+  const timeDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
+        setIsTimeDropdownOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsTimeDropdownOpen(false);
+      }
+    }
+    if (isTimeDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isTimeDropdownOpen]);
   const [lastTelemetry, setLastTelemetry] = useState<{
     delivered_at?: string | null;
     status?: string;
@@ -170,28 +200,15 @@ export default function SettingsPage() {
       ? "text-red-400"
       : "text-muted-foreground";
 
-  const handleBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-    } else {
-      router.push("/dashboard");
-    }
-  };
+  const selectedTimeOption =
+    DELIVERY_TIME_OPTIONS.find((opt) => opt.value === deliveryTime) || {
+      value: deliveryTime,
+      label: `Every day at ${deliveryTime}`,
+      period: "Custom Time",
+    };
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <button
-          type="button"
-          onClick={handleBack}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-card/40 hover:bg-card hover:border-white/20 text-xs font-mono text-muted-foreground hover:text-foreground transition-all cursor-pointer group"
-          aria-label="Go back"
-        >
-          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-          <span>Back</span>
-        </button>
-      </div>
-
       <PageHeader
         title="Settings & Preferences"
         description="Customize your account identity, daily briefing, notifications, and data privacy."
@@ -301,8 +318,12 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            {/* Toggle — disabled until verified */}
+            {/* Toggle — high-contrast cybernetic switch with non-blending colors */}
             <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              aria-label="Toggle Daily Briefing"
               onClick={() => {
                 if (!emailVerified) {
                   showToast("Verify your email to enable Daily Briefing.");
@@ -312,40 +333,110 @@ export default function SettingsPage() {
                 setEnabled(nextVal);
                 handleSavePreferences({ enabled: nextVal });
               }}
-              className={`flex items-center gap-2.5 px-4 py-2 rounded-full font-mono text-xs font-semibold tracking-wider transition-all ${
+              className={`group flex items-center gap-3 px-3.5 py-1.5 rounded-full font-mono text-xs font-bold tracking-wider transition-all duration-300 border select-none ${
                 enabled
-                  ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              } ${!emailVerified ? "opacity-50 cursor-not-allowed" : ""}`}
+                  ? "bg-emerald-500/15 border-emerald-500/60 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:bg-emerald-500/25 hover:border-emerald-400"
+                  : "bg-neutral-900 border-neutral-700/80 text-neutral-300 hover:border-neutral-500 hover:text-white hover:bg-neutral-800/80 shadow-inner"
+              } ${!emailVerified ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
             >
-              <span>{enabled ? "ON" : "OFF"}</span>
-              <span className={`w-2 h-2 rounded-full ${enabled ? "bg-white animate-pulse" : "bg-muted-foreground"}`} />
+              <span className="tracking-widest font-mono text-[11px]">
+                {enabled ? "ON" : "OFF"}
+              </span>
+
+              {/* High-contrast sliding switch track */}
+              <span
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors duration-300 ${
+                  enabled ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : "bg-neutral-700"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                    enabled ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </span>
             </button>
           </div>
 
           <div className="space-y-6 animate-in fade-in duration-300">
             {/* Delivery Time & Recipient Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Delivery Time */}
-              <div className="space-y-2">
-                <label htmlFor="delivery-time-select" className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Delivery Time</label>
-                <div className="flex items-center gap-2 bg-background/60 border border-white/10 rounded-xl px-3.5 py-2.5">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <select
-                    id="delivery-time-select"
-                    value={deliveryTime}
-                    onChange={(e) => {
-                      setDeliveryTime(e.target.value);
-                      handleSavePreferences({ deliveryTime: e.target.value });
-                    }}
-                    className="bg-transparent text-sm font-mono text-foreground focus:outline-none w-full cursor-pointer"
+              {/* Delivery Time — Custom Cybernetic Dropdown */}
+              <div className="space-y-2 relative" ref={timeDropdownRef}>
+                <span id="delivery-time-label" className="text-xs font-mono text-muted-foreground uppercase tracking-wider block">
+                  Delivery Time
+                </span>
+                <button
+                  type="button"
+                  id="delivery-time-select"
+                  aria-haspopup="listbox"
+                  aria-expanded={isTimeDropdownOpen}
+                  aria-labelledby="delivery-time-label"
+                  onClick={() => setIsTimeDropdownOpen((prev) => !prev)}
+                  className={`w-full flex items-center justify-between gap-3 bg-background/80 hover:bg-card/90 border rounded-xl px-3.5 py-2.5 transition-all text-left group cursor-pointer ${
+                    isTimeDropdownOpen
+                      ? "border-primary/60 ring-2 ring-primary/20 shadow-lg"
+                      : "border-white/10 hover:border-white/25"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Clock className={`w-4 h-4 transition-colors shrink-0 ${isTimeDropdownOpen ? "text-primary" : "text-muted-foreground group-hover:text-primary"}`} />
+                    <span className="text-sm font-mono text-foreground font-medium truncate">
+                      {selectedTimeOption.label}
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-muted-foreground transition-transform duration-200 shrink-0 ${
+                      isTimeDropdownOpen ? "rotate-180 text-primary" : "group-hover:text-foreground"
+                    }`}
+                  />
+                </button>
+
+                {/* Custom Cybernetic Dropdown Menu */}
+                {isTimeDropdownOpen && (
+                  <div
+                    role="listbox"
+                    aria-labelledby="delivery-time-label"
+                    className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#121214] border border-white/15 rounded-xl shadow-[0_16px_36px_rgba(0,0,0,0.85)] backdrop-blur-2xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150"
                   >
-                    <option value="07:00">Every day at 7:00 AM</option>
-                    <option value="08:00">Every day at 8:00 AM</option>
-                    <option value="09:00">Every day at 9:00 AM</option>
-                    <option value="18:00">Every evening at 6:00 PM</option>
-                  </select>
-                </div>
+                    {DELIVERY_TIME_OPTIONS.map((opt) => {
+                      const isSelected = opt.value === deliveryTime;
+                      return (
+                        <button
+                          key={opt.value}
+                          role="option"
+                          aria-selected={isSelected}
+                          type="button"
+                          onClick={() => {
+                            setDeliveryTime(opt.value);
+                            handleSavePreferences({ deliveryTime: opt.value });
+                            setIsTimeDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left text-xs font-mono transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-primary/15 text-primary border border-primary/30 font-semibold shadow-sm"
+                              : "text-neutral-200 hover:bg-white/[0.08] hover:text-white border border-transparent"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Clock className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                            <div className="flex flex-col min-w-0">
+                              <span className={`truncate ${isSelected ? "text-primary font-semibold" : "text-foreground"}`}>
+                                {opt.label}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {opt.period}
+                              </span>
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-primary shrink-0 ml-2" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Recipient Email */}
