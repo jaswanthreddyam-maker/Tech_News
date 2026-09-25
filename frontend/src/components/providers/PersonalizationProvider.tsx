@@ -11,6 +11,8 @@ export interface ReadingHistoryItem {
   slug: string;
   title: string;
   source: string;
+  topic?: string;
+  category?: string;
   openedAt: number;
   lastReadAt: number;
   completed: boolean;
@@ -92,6 +94,7 @@ interface PersonalizationContextType extends PersonalizationState {
   // Methods for Reading History
   addReadArticle: (article: Omit<ReadingHistoryItem, "openedAt" | "lastReadAt" | "completed" | "readingTime">) => void;
   updateReadTime: (articleId: number, additionalSeconds: number, completed: boolean) => void;
+  removeHistoryItem: (articleId: number) => void;
   clearHistory: () => void;
   
   // Methods for Bookmarks
@@ -212,7 +215,20 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
   }, []);
 
   const clearHistory = useCallback(() => {
-    setState(prev => ({ ...prev, readingHistory: [] }));
+    setState(prev => {
+      const nextState = { ...prev, readingHistory: [] };
+      PersonalizationSync.uploadState(nextState).catch(() => {});
+      return nextState;
+    });
+  }, []);
+
+  const removeHistoryItem = useCallback((articleId: number) => {
+    setState(prev => {
+      const nextHistory = prev.readingHistory.filter(item => item.articleId !== articleId);
+      const nextState = { ...prev, readingHistory: nextHistory };
+      PersonalizationSync.uploadState(nextState).catch(() => {});
+      return nextState;
+    });
   }, []);
 
   const toggleBookmark = useCallback((articleId: number, collectionId?: string) => {
@@ -222,7 +238,9 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
         ? prev.bookmarkedArticles.filter(b => b.articleId !== articleId)
         : [{ articleId, savedAt: Date.now(), collectionId }, ...prev.bookmarkedArticles];
       
-      return { ...prev, bookmarkedArticles: nextBookmarks.slice(0, CONFIG.MAX_BOOKMARKS) };
+      const nextState = { ...prev, bookmarkedArticles: nextBookmarks.slice(0, CONFIG.MAX_BOOKMARKS) };
+      PersonalizationSync.uploadState(nextState).catch(() => {});
+      return nextState;
     });
   }, []);
 
@@ -236,14 +254,22 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
   }, []);
 
   const updateSettings = useCallback((newSettings: Partial<RecommendationSettings>) => {
-    setState(prev => ({
-      ...prev,
-      recommendationSettings: { ...prev.recommendationSettings, ...newSettings }
-    }));
+    setState(prev => {
+      const nextState = {
+        ...prev,
+        recommendationSettings: { ...prev.recommendationSettings, ...newSettings }
+      };
+      PersonalizationSync.uploadState(nextState).catch(() => {});
+      return nextState;
+    });
   }, []);
 
   const updateTopicPreferences = useCallback((topics: TopicPreference[]) => {
-    setState(prev => ({ ...prev, topicPreferences: topics }));
+    setState(prev => {
+      const nextState = { ...prev, topicPreferences: topics };
+      PersonalizationSync.uploadState(nextState).catch(() => {});
+      return nextState;
+    });
   }, []);
 
 
@@ -253,6 +279,7 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
       ...state,
       addReadArticle,
       updateReadTime,
+      removeHistoryItem,
       clearHistory,
       toggleBookmark,
       addSearchRecord,

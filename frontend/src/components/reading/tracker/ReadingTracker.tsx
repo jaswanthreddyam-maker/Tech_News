@@ -8,6 +8,7 @@ import { useScrollTracker } from './useScrollTracker';
 import { useOfflineQueue, BehavioralEventPayload } from './useOfflineQueue';
 
 import { getAnonymousId } from '@/lib/api/anonymousId';
+import { usePersonalization } from '@/components/providers/PersonalizationProvider';
 
 function generateUUID() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -22,12 +23,24 @@ function generateUUID() {
 
 interface ReadingTrackerProps {
   articleId: string;
+  slug?: string;
+  title?: string;
+  source?: string;
+  category?: string;
   contentVersion?: string;
 }
 
-export function ReadingTracker({ articleId, contentVersion }: ReadingTrackerProps) {
+export function ReadingTracker({
+  articleId,
+  slug,
+  title,
+  source,
+  category,
+  contentVersion,
+}: ReadingTrackerProps) {
   const sessionId = useRef(generateUUID());
   const { enqueue, flush } = useOfflineQueue();
+  const { addReadArticle, updateReadTime } = usePersonalization();
   
   const isVisible = useVisibilityTracker();
   const isIdle = useIdleTracker();
@@ -37,6 +50,35 @@ export function ReadingTracker({ articleId, contentVersion }: ReadingTrackerProp
 
   const latestScroll = useRef(0);
   const isCompleted = useRef(false);
+  const prevReportedSeconds = useRef(0);
+
+  // Automatically record to Reading History on mount / article change
+  useEffect(() => {
+    if (articleId) {
+      const numId = Number(articleId);
+      if (!isNaN(numId)) {
+        addReadArticle({
+          articleId: numId,
+          slug: slug || String(articleId),
+          title: title || 'Tech Article',
+          source: source || 'Tech News Today',
+          topic: category || 'Technology',
+        });
+      }
+    }
+  }, [articleId, slug, title, source, category, addReadArticle]);
+
+  // Sync accumulated reading time to local history and reading statistics
+  useEffect(() => {
+    if (articleId && accumulatedSeconds > prevReportedSeconds.current) {
+      const diff = accumulatedSeconds - prevReportedSeconds.current;
+      prevReportedSeconds.current = accumulatedSeconds;
+      const numId = Number(articleId);
+      if (!isNaN(numId)) {
+        updateReadTime(numId, diff, isCompleted.current);
+      }
+    }
+  }, [articleId, accumulatedSeconds, updateReadTime]);
 
   const reportHistory = useCallback(() => {
     import('@/lib/session/sessionManager').then(({ sessionManager }) => {

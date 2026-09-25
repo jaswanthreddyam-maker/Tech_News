@@ -9,37 +9,70 @@ export function ReadingStats({ compact = false }: { compact?: boolean }) {
 
   const stats = useMemo(() => {
     const totalFinished = readingHistory.filter(h => h.completed).length;
-    const totalTimeSeconds = readingHistory.reduce((acc, curr) => acc + curr.readingTime, 0);
-    const avgTimeSeconds = totalFinished > 0 ? totalTimeSeconds / totalFinished : 0;
+    const totalTimeSeconds = readingHistory.reduce((acc, curr) => acc + (curr.readingTime || 0), 0);
+    const avgTimeSeconds = readingHistory.length > 0 ? totalTimeSeconds / readingHistory.length : 0;
     
-    // Very naive streak calculation for UI purposes
-    const streak = totalFinished > 0 ? 1 : 0; // Requires actual day-by-day calculation
+    // Accurate day-by-day streak calculation
+    let streak = 0;
+    if (readingHistory.length > 0) {
+      const readDates = new Set(
+        readingHistory.map(h => {
+          const d = new Date(h.lastReadAt || h.openedAt);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        })
+      );
+
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+      const checkDate = readDates.has(todayStr) ? today : (readDates.has(yesterdayStr) ? yesterday : null);
+      if (checkDate) {
+        const cur = new Date(checkDate);
+        while (true) {
+          const curStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+          if (readDates.has(curStr)) {
+            streak++;
+            cur.setDate(cur.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+      }
+    }
 
     // Favorite topic calculation
-    // Naively extract from category or just mock
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const topics = readingHistory.reduce((acc, curr) => {
-      // we don't store category in ReadingHistoryItem currently, so let's mock "Technology"
-      const cat = "Technology"; 
-      acc[cat] = (acc[cat] || 0) + 1;
+      const cat = curr.topic || curr.category;
+      if (cat) {
+        acc[cat] = (acc[cat] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
-    
     const favTopic = Object.entries(topics).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
 
     // Favorite source
     const sources = readingHistory.reduce((acc, curr) => {
-      const src = curr.source || "Unknown";
-      acc[src] = (acc[src] || 0) + 1;
+      const src = curr.source;
+      if (src && src !== "Unknown") {
+        acc[src] = (acc[src] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
-
     const favSource = Object.entries(sources).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
+
+    const formatTimeDisplay = (secs: number) => {
+      if (!secs || secs === 0) return "0 min";
+      if (secs < 60) return "< 1 min";
+      return `${Math.round(secs / 60)} min`;
+    };
 
     return {
       totalFinished,
-      totalTimeMinutes: Math.floor(totalTimeSeconds / 60),
-      avgTimeMinutes: Math.floor(avgTimeSeconds / 60),
+      totalTimeDisplay: formatTimeDisplay(totalTimeSeconds),
+      avgTimeDisplay: formatTimeDisplay(avgTimeSeconds),
       streak,
       favTopic,
       favSource
@@ -60,7 +93,7 @@ export function ReadingStats({ compact = false }: { compact?: boolean }) {
           </div>
           <div className="p-4 bg-background/50 rounded-lg">
             <p className="text-sm text-muted-foreground font-mono uppercase tracking-wider mb-1">Time</p>
-            <p className="text-2xl font-bold">{stats.totalTimeMinutes}m</p>
+            <p className="text-2xl font-bold">{stats.totalTimeDisplay}</p>
           </div>
         </div>
       </div>
@@ -81,12 +114,12 @@ export function ReadingStats({ compact = false }: { compact?: boolean }) {
       />
       <StatCard 
         title="Total Time" 
-        value={`${stats.totalTimeMinutes} min`} 
+        value={stats.totalTimeDisplay} 
         icon={<Clock className="w-5 h-5 text-emerald-500" />} 
       />
       <StatCard 
         title="Avg Time / Article" 
-        value={`${stats.avgTimeMinutes} min`} 
+        value={stats.avgTimeDisplay} 
         icon={<Clock className="w-5 h-5 text-purple-500" />} 
       />
       

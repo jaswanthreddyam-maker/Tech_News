@@ -20,6 +20,7 @@ from app.services.cache_service import in_memory_homepage_cache as _in_memory_ho
 @router.get("", response_model=PaginatedResponse[ArticleCard])
 async def list_articles(
     response: Response,
+    ids: str | None = Query(None, description="Comma-separated article IDs to fetch"),
     category: str | None = Query(None, description="Topic filter slug"),
     cursor: str | None = Query(None, description="Cursor for pagination"),
     sort_by: str | None = Query(None, description="Sort ordering"),
@@ -31,19 +32,58 @@ async def list_articles(
     import time
     t0 = time.time()
     now_ts = time.time()
+    correlation_id = correlation_id_ctx.get() or "system"
+
+    # Direct ID lookup path (e.g. for user bookmarks / saved articles)
+    if ids:
+        id_list = [i.strip() for i in ids.split(",") if i.strip()]
+        if not id_list:
+            return PaginatedResponse(
+                correlation_id=correlation_id,
+                data=[],
+                pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
+            )
+        
+        async def fetch_ids_data(db):
+            from sqlalchemy.orm import defer
+            stmt = (
+                select(ArticleReadModel)
+                .where(ArticleReadModel.id.in_(id_list))
+                .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
+            )
+            res = await db.execute(stmt)
+            articles = res.scalars().all()
+            art_map = {str(a.id): a for a in articles}
+            return [ArticleCard.from_model(art_map[i]) for i in id_list if i in art_map]
+
+        try:
+            from app.core.database import safe_db_execute
+            matched_cards = await safe_db_execute(fetch_ids_data, fallback=[])
+            response.headers["Server-Timing"] = f"db_ids;dur={(time.time()-t0)*1000:.1f}"
+            return PaginatedResponse(
+                correlation_id=correlation_id,
+                data=matched_cards,
+                pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=len(matched_cards)),
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("tech_news.routes.news").error(f"Error querying articles by ids: {e}", exc_info=True)
+            return PaginatedResponse(
+                correlation_id=correlation_id,
+                data=[],
+                pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
+            )
 
     # Fast Path 0: Process-level in-memory cache (1ms response, completely immune to DB/Redis latency)
-    if not category and not cursor and not sort_by and _in_memory_homepage_cache.get("cards") and now_ts < _in_memory_homepage_cache.get("expires_at", 0):
+    if not category and not cursor and not sort_by and not ids and _in_memory_homepage_cache.get("cards") and now_ts < _in_memory_homepage_cache.get("expires_at", 0):
         cards_data = _in_memory_homepage_cache["cards"]
         t_total = time.time() - t0
         response.headers["Server-Timing"] = f"mem_hit;dur={t_total*1000:.1f}"
         return PaginatedResponse(
-            correlation_id=correlation_id_ctx.get() or "system",
+            correlation_id=correlation_id,
             data=cards_data[:limit],
             pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
         )
-
-    correlation_id = correlation_id_ctx.get() or "system"
 
     import asyncio
     import json

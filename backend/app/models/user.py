@@ -64,6 +64,7 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active", index=True)
     last_login: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    personalization_state: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useDashboard } from "@/components/providers/DashboardProvider";
 import { Clock, Compass, User, History, Sparkles, Settings } from "lucide-react";
 import { dashboardWidgets } from "./registry";
-import { EmptyState, EmptyIllustration } from "@/components/common/EmptyState";
+import { ReadingHistoryList } from "./ReadingHistoryList";
+import { RecommendationsList } from "./RecommendationsList";
 
 export function DashboardContent() {
   const { activeTab } = useDashboard();
@@ -53,23 +54,17 @@ export function DashboardContent() {
       )}
 
       {activeTab === "history" && (
-        <EmptyState size="lg">
-          <EmptyIllustration
-            icon={History}
-            title="No reading history"
-            description="Articles you read will appear here."
-          />
-        </EmptyState>
+        <div>
+          <h2 className="text-2xl font-serif font-bold mb-6">Your Reading History</h2>
+          <ReadingHistoryList />
+        </div>
       )}
 
       {activeTab === "recommendations" && (
-        <EmptyState size="lg">
-          <EmptyIllustration
-            icon={Sparkles}
-            title="No recommendations"
-            description="We are computing your personalized feed."
-          />
-        </EmptyState>
+        <div>
+          <h2 className="text-2xl font-serif font-bold mb-6">Personalized Recommendations</h2>
+          <RecommendationsList />
+        </div>
       )}
 
       {activeTab === "account" && (

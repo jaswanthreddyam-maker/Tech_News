@@ -71,7 +71,14 @@ export default async function ArticlePage({ params }: PageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ReadingTracker articleId={article.id} contentVersion="v1" />
+      <ReadingTracker
+        articleId={article.id}
+        slug={article.slug || slug}
+        title={article.title}
+        source={article.sourceName || article.source || "Tech News Today"}
+        category={article.category || data.related?.topics?.[0]?.name || "Technology"}
+        contentVersion="v1"
+      />
       <ArticlePageClient article={data} />
     </>
   );

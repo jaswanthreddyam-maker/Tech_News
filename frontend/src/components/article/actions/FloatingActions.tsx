@@ -18,6 +18,7 @@ import { useNavigationType } from "@/hooks/useNavigationType";
 import { DURATION, EASING, REVEAL_DELAYS } from "@/design-system/motion/tokens";
 import { useAuthGate } from "@/hooks/useAuthGate";
 import { FeatureCapability } from "@/lib/auth/features";
+import { usePersonalization } from "@/components/providers/PersonalizationProvider";
 
 interface FloatingActionsProps {
   url: string;
@@ -35,7 +36,13 @@ const iconBtnClass =
 export function FloatingActions({ url, title, articleId }: FloatingActionsProps) {
   const { toast } = useToast();
   const { isAuthenticated, requireAuthentication } = useAuthGate();
-  const [isSaved, setIsSaved] = React.useState(false);
+  const { bookmarkedArticles, toggleBookmark } = usePersonalization();
+  
+  const numId = articleId ? Number(articleId) : null;
+  const isBookmarkedInContext = numId ? bookmarkedArticles.some((b) => b.articleId === numId) : false;
+  const [isSavedLocal, setIsSavedLocal] = React.useState<boolean | null>(null);
+  const isSaved = isSavedLocal !== null ? isSavedLocal : isBookmarkedInContext;
+
   const shouldReduceMotion = useReducedMotion();
 
   React.useEffect(() => {
@@ -44,9 +51,9 @@ export function FloatingActions({ url, title, articleId }: FloatingActionsProps)
         .then((savedList) => {
           if (Array.isArray(savedList)) {
             const exists = savedList.some(
-              (item: any) => String(item.article_id || item.id) === String(articleId)
+              (item: any) => String(item.article_id || item.id || item) === String(articleId)
             );
-            setIsSaved(exists);
+            setIsSavedLocal(exists);
           }
         })
         .catch(() => {});
@@ -75,11 +82,14 @@ export function FloatingActions({ url, title, articleId }: FloatingActionsProps)
       toast({ title: "Cannot save", description: "Article ID not found." });
       return;
     }
+    if (numId) {
+      toggleBookmark(numId);
+    }
     try {
       const res = await apiFetch<{ active: boolean }>(`/me/saved/${articleId}`, {
         method: "POST",
       });
-      setIsSaved(res.active);
+      setIsSavedLocal(res.active);
       toast({
         title: res.active ? "Bookmarked" : "Bookmark removed",
         description: res.active
