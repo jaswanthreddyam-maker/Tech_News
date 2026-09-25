@@ -73,9 +73,7 @@ class DailyBriefingSubscriber(Base):
     __tablename__ = "daily_briefing_subscribers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
-    )
+    user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
 
     # Email verification
@@ -115,7 +113,7 @@ class DailyBriefingEdition(Base):
     __tablename__ = "daily_briefing_editions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    edition_date: Mapped[date] = mapped_column(Date, unique=True, index=True, nullable=False)
+    edition_date: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
     selection_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     algorithm_version: Mapped[str] = mapped_column(String(50), default="v2.2", nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="PUBLISHED", nullable=False)

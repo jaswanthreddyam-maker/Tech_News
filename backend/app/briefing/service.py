@@ -173,7 +173,7 @@ class DailyBriefingService:
         cls,
         db: AsyncSession,
         subscriber: DailyBriefingSubscriber,
-        user_id: Optional[int],
+        user_id: Optional[Any],
     ) -> None:
         """
         If authenticated user is signed in via Google OAuth, their email address
@@ -182,8 +182,13 @@ class DailyBriefingService:
         if not user_id or subscriber.email_verified_at is not None:
             return
 
+        try:
+            uid_int = int(user_id)
+        except (ValueError, TypeError):
+            return
+
         from app.models.user import OAuthAccount, User
-        user_res = await db.execute(select(User).where(User.id == user_id))
+        user_res = await db.execute(select(User).where(User.id == uid_int))
         user = user_res.scalar_one_or_none()
         if not user:
             return
@@ -192,7 +197,7 @@ class DailyBriefingService:
         if subscriber.email.strip().lower() == user.email.strip().lower():
             oauth_res = await db.execute(
                 select(OAuthAccount).where(
-                    OAuthAccount.user_id == user_id,
+                    OAuthAccount.user_id == uid_int,
                     OAuthAccount.provider == "google",
                 )
             )
@@ -218,13 +223,13 @@ class DailyBriefingService:
         Lookup or create a subscriber strictly bounded by authenticated user_id.
         User A cannot mutate or select User B's subscriber.
         """
-        uid = int(user_id) if user_id is not None else None
-        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.user_id == uid)
+        uid_str = str(user_id) if user_id is not None else None
+        stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.user_id == uid_str)
         res = await db.execute(stmt)
         subscriber = res.scalar_one_or_none()
 
         if subscriber:
-            await cls._ensure_oauth_verified(db, subscriber, uid)
+            await cls._ensure_oauth_verified(db, subscriber, user_id)
             return subscriber
 
         # If email provided, check if an unowned subscriber exists for that email
@@ -235,19 +240,19 @@ class DailyBriefingService:
             existing = res_email.scalar_one_or_none()
             if existing:
                 if not existing.user_id:
-                    existing.user_id = uid
-                    await cls._ensure_oauth_verified(db, existing, uid)
+                    existing.user_id = uid_str
+                    await cls._ensure_oauth_verified(db, existing, user_id)
                     await db.flush()
                     return existing
-                elif existing.user_id == uid:
-                    await cls._ensure_oauth_verified(db, existing, uid)
+                elif existing.user_id == uid_str:
+                    await cls._ensure_oauth_verified(db, existing, user_id)
                     return existing
                 # If existing is bound to another user, do not hijack it
 
         # Create new subscriber for this user
         subscriber_email = (email or f"user_{user_id}@technewstoday.local").strip().lower()
-        sub = await cls.get_or_create_subscriber(db, email=subscriber_email, user_id=uid)
-        await cls._ensure_oauth_verified(db, sub, uid)
+        sub = await cls.get_or_create_subscriber(db, email=subscriber_email, user_id=uid_str)
+        await cls._ensure_oauth_verified(db, sub, user_id)
         return sub
 
     @classmethod
@@ -258,7 +263,7 @@ class DailyBriefingService:
         user_id: Optional[Any] = None,
     ) -> DailyBriefingSubscriber:
         email_clean = email.strip().lower()
-        uid = int(user_id) if user_id is not None else None
+        uid_str = str(user_id) if user_id is not None else None
         stmt = select(DailyBriefingSubscriber).where(DailyBriefingSubscriber.email == email_clean)
         res = await db.execute(stmt)
         subscriber = res.scalar_one_or_none()
@@ -267,7 +272,7 @@ class DailyBriefingService:
             try:
                 async with db.begin_nested():
                     subscriber = DailyBriefingSubscriber(
-                        user_id=uid,
+                        user_id=uid_str,
                         email=email_clean,
                         enabled=False,  # Requires email verification
                         delivery_time="08:00",
@@ -284,8 +289,8 @@ class DailyBriefingService:
                 res = await db.execute(stmt)
                 subscriber = res.scalar_one()
 
-        elif uid and not subscriber.user_id:
-            subscriber.user_id = uid
+        elif uid_str and not subscriber.user_id:
+            subscriber.user_id = uid_str
             await db.flush()
 
         return subscriber
@@ -411,20 +416,13 @@ class DailyBriefingService:
         3. Concurrency safe: simultaneous workers do not crash with duplicate key errors.
         """
         if not edition_date:
-            edition_date_obj = datetime.now(timezone.utc).date()
-        elif isinstance(edition_date, str):
-            try:
-                edition_date_obj = datetime.strptime(edition_date, "%Y-%m-%d").date()
-            except ValueError:
-                edition_date_obj = datetime.now(timezone.utc).date()
-        elif isinstance(edition_date, datetime):
-            edition_date_obj = edition_date.date()
-        elif isinstance(edition_date, date):
-            edition_date_obj = edition_date
+            edition_date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        elif isinstance(edition_date, (datetime, date)):
+            edition_date_str = edition_date.strftime("%Y-%m-%d")
         else:
-            edition_date_obj = datetime.now(timezone.utc).date()
+            edition_date_str = str(edition_date)
 
-        stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date_obj)
+        stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date_str)
         res = await db.execute(stmt)
         edition = res.scalar_one_or_none()
 
@@ -469,7 +467,7 @@ class DailyBriefingService:
             try:
                 async with db.begin_nested():
                     edition = DailyBriefingEdition(
-                        edition_date=edition_date_obj,
+                        edition_date=edition_date_str,
                         selection_hash=selection_hash,
                         algorithm_version="v2.2",
                         status=edition_status,
@@ -478,7 +476,7 @@ class DailyBriefingService:
                     await db.flush()
             except IntegrityError:
                 # Concurrent worker insert race rescue
-                stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date_obj)
+                stmt = select(DailyBriefingEdition).where(DailyBriefingEdition.edition_date == edition_date_str)
                 res = await db.execute(stmt)
                 edition = res.scalar_one()
                 return edition
@@ -733,7 +731,7 @@ class DailyBriefingService:
             now_utc = datetime.now(timezone.utc)
 
         # Get/create today's edition
-        edition = await cls.get_or_create_daily_edition(db, edition_date=now_utc.date())
+        edition = await cls.get_or_create_daily_edition(db, edition_date=now_utc.strftime("%Y-%m-%d"))
         await db.flush()
 
         # Load eligible subscribers (Strict: enabled, verified, not unsubscribed)
