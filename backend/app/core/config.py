@@ -1,4 +1,6 @@
 import json
+import os
+import re
 from typing import Annotated
 
 from pydantic import BeforeValidator, field_validator, model_validator
@@ -70,6 +72,12 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
+        if not v:
+            return cls.DATABASE_URL
+        v = v.strip().strip("'\"")
+        if v.startswith("DATABASE_URL="):
+            v = v.split("DATABASE_URL=", 1)[1].strip().strip("'\"")
+
         if v.startswith("postgresql://"):
             v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif v.startswith("postgres://"):
@@ -80,6 +88,19 @@ class Settings(BaseSettings):
         # Port 6543 is Transaction Mode (supports high concurrency with statement_cache_size=0)
         if "supabase" in v and ":5432" in v:
             v = v.replace(":5432", ":6543")
+
+        # Encode unencoded @ in password if present before host delimiter
+        match = re.match(r"^(?P<prefix>[\w\+]+://)(?P<user>[^:]+):(?P<auth>.+)@(?P<host>[^@/:]+)(?P<rest>.*)$", v)
+        if match:
+            prefix = match.group("prefix")
+            user = match.group("user")
+            auth = match.group("auth")
+            host = match.group("host")
+            rest = match.group("rest")
+            if "@" in auth:
+                auth = auth.replace("@", "%40")
+            v = f"{prefix}{user}:{auth}@{host}{rest}"
+
         return v
 
     # Observability and Health Configurations
