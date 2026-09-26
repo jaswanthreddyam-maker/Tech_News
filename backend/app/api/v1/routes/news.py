@@ -658,7 +658,7 @@ async def get_category_desks():
     import json
     import logging
     from app.core.redis import get_redis_client
-    from app.schemas.article import ArticleCard
+    from app.schemas.news import ArticleCard
     from app.models.tnt_knowledge import ArticleTopicLink, ArticleEntityLink, EntityNode
 
     cache_key_desks = "editorial:v2:category_desks_json"

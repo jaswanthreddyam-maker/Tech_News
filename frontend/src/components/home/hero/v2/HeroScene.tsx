@@ -22,10 +22,10 @@ export function HeroScene(props: HeroSceneProps) {
     if (!sectionRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setIsInView(entry.isIntersecting && entry.intersectionRatio >= 0.15);
+        setIsInView(entry.isIntersecting && entry.intersectionRatio >= 0.05);
       },
       {
-        threshold: [0, 0.15, 0.35, 0.5, 0.75, 1.0],
+        threshold: [0, 0.05, 0.2, 0.5, 1.0],
       }
     );
 
@@ -37,7 +37,7 @@ export function HeroScene(props: HeroSceneProps) {
     target: sectionRef,
     offset: ["start start", "end start"],
   });
-  const stageOpacity = useTransform(scrollYProgress, [0.7, 1], [1, 0.1]);
+  const stageOpacity = useTransform(scrollYProgress, [0.9, 1], [1, 0.2]);
 
   return (
     <HeroSceneProvider {...props} isInView={isInView}>
@@ -46,20 +46,20 @@ export function HeroScene(props: HeroSceneProps) {
         style={{ opacity: stageOpacity }}
         data-testid="hero-scene-stage"
         aria-label="Featured AI Newsroom Stage"
-        className="relative w-full overflow-visible bg-transparent min-h-[580px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-4 group/hero-stage select-none"
+        className="relative w-full overflow-visible bg-transparent min-h-[500px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-20 sm:pb-24 md:pb-12 lg:pb-4 group/hero-stage select-none"
       >
         <HeroStageBackground />
         <HeroAtmosphere />
 
         {/* Editorial Panel & 3D Carousel Ring */}
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 xl:gap-12 items-center overflow-visible">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-4 lg:gap-8 xl:gap-12 items-center overflow-visible">
           {/* Left Editorial Panel */}
-          <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-1 lg:order-1 lg:-translate-y-[40px] pt-4 lg:pt-0">
+          <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-1 lg:order-1 lg:-translate-y-[40px] pt-1 sm:pt-2 lg:pt-0">
             <HeroEditorialPanel />
           </div>
 
-          {/* Right 3D Ring Assembly */}
-          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-2 lg:order-2 overflow-visible h-[420px] sm:h-[460px] lg:h-[480px] mt-4 sm:mt-6 lg:mt-0 lg:-translate-y-[30px]">
+          {/* Right 3D Ring Assembly - Lifted upwards on mobile with clean spacing */}
+          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-2 lg:order-2 overflow-visible h-[310px] sm:h-[370px] md:h-[440px] lg:h-[480px] -mt-6 sm:-mt-8 lg:mt-0 -translate-y-4 sm:-translate-y-6 lg:-translate-y-[30px]">
             <div className="relative w-full h-full flex items-center justify-center overflow-visible">
               <Hero3DRing />
             </div>

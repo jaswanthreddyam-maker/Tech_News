@@ -51,15 +51,15 @@ export function HeroSceneProvider({
     const calculateRadius = () => {
       if (typeof window === "undefined" || itemCount === 0) return;
       const windowWidth = window.innerWidth;
-      const cardWidth = windowWidth < 768 ? 240 : (windowWidth < 1280 ? 275 : 304);
-      const coefficient = windowWidth < 768 ? 0.52 : (windowWidth < 1280 ? 0.55 : 0.60);
+      const cardWidth = windowWidth < 640 ? 220 : (windowWidth < 1024 ? 260 : 304);
+      const coefficient = windowWidth < 640 ? 0.58 : (windowWidth < 1024 ? 0.59 : 0.60);
       if (itemCount <= 2) {
-        setRadius(windowWidth < 768 ? 440 : 640);
+        setRadius(windowWidth < 640 ? 460 : 640);
         return;
       }
       const angleInRadians = Math.PI / itemCount;
       const derivedRadius = Math.round((cardWidth * coefficient) / Math.tan(angleInRadians));
-      const minRadius = windowWidth < 768 ? 440 : (windowWidth < 1280 ? 560 : 640);
+      const minRadius = windowWidth < 640 ? 460 : (windowWidth < 1024 ? 540 : 640);
       setRadius(Math.max(minRadius, derivedRadius));
     };
 

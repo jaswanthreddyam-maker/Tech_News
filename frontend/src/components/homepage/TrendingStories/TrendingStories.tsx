@@ -33,16 +33,23 @@ import { MediaService } from "@/domains/article/media";
  * Before: 7 cards × 2 CSS vars = 14 main-thread style recalculations per frame (~60/s)
  * After:  compositor-owned transform, zero main-thread work per frame during animation
  */
-export function TrendingStories() {
+interface TrendingStoriesProps {
+  initialArticles?: FeedResponseItem[] | any[];
+}
+
+export function TrendingStories({ initialArticles }: TrendingStoriesProps = {}) {
   const queryClient = useQueryClient();
   const { enqueue } = useOfflineQueue();
 
   const trendingQuery = useTrending();
   const desksQuery = useCategoryDesks();
 
-  const data = trendingQuery.data;
-  const isLoading = trendingQuery.isLoading && desksQuery.isLoading;
-  const error = trendingQuery.isError && desksQuery.isError;
+  const data = trendingQuery.data ?? initialArticles;
+  const rawArticles = Array.isArray(data) ? data : (data as any)?.data || [];
+  const hasArticles = rawArticles.length > 0;
+
+  const isLoading = !hasArticles && (trendingQuery.isLoading || desksQuery.isLoading);
+  const error = !hasArticles && trendingQuery.isError && desksQuery.isError;
 
   // Animation Hooks
   const shouldReduceMotion = useReducedMotion();
@@ -165,7 +172,12 @@ export function TrendingStories() {
     return null;
   }
 
-  if (!featured && compact.length === 0) return null;
+  if (!featured && compact.length === 0) {
+    if (trendingQuery.isLoading || desksQuery.isLoading) {
+      return <StorySkeleton />;
+    }
+    return null;
+  }
 
   const TitleIcon = isPersonalized ? Sparkles : TrendingUp;
 

@@ -82,7 +82,7 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
         ...style,
         transformStyle: "preserve-3d",
       }}
-      className={`group absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[240px] sm:w-[275px] md:w-[304px] aspect-[4/5] cursor-pointer transition-[box-shadow,border-color] duration-300 select-none outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
+      className={`group absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] sm:w-[260px] lg:w-[304px] aspect-[4/5] cursor-pointer transition-[box-shadow,border-color] duration-300 select-none outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
     >
       {/* 3D Slab Thickness Ring Frame */}
       <div 
@@ -145,7 +145,7 @@ export const HeroMediaCard = React.forwardRef<HTMLElement, HeroMediaCardProps>(f
                       alt={article.title}
                       fill
                       unoptimized={true}
-                      sizes="(max-width: 768px) 275px, 304px"
+                      sizes="(max-width: 640px) 220px, (max-width: 1024px) 260px, 304px"
                       quality={90}
                       priority={isActive || index === 0}
                       onError={() => setImgSrc("")}

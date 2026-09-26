@@ -232,9 +232,18 @@ function detectCategorySlug(article: any): string {
   return "technology";
 }
 
-export function LatestNews() {
-  const { data: categoryGroups, isLoading: isDesksLoading, error: desksError } = useCategoryDesks();
-  const { data: trendingArticles, isLoading: isTrendingLoading, error: trendingError } = useTrending();
+interface LatestNewsProps {
+  initialDesks?: any[];
+  initialArticles?: any[];
+}
+
+export function LatestNews({ initialDesks, initialArticles }: LatestNewsProps = {}) {
+  const { data: categoryGroupsData, isLoading: isDesksLoading, error: desksError } = useCategoryDesks();
+  const { data: trendingArticlesData, isLoading: isTrendingLoading, error: trendingError } = useTrending();
+
+  const categoryGroups = categoryGroupsData ?? initialDesks;
+  const trendingArticles = trendingArticlesData ?? initialArticles;
+
   const { scrollYProgress } = useScroll();
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -402,7 +411,7 @@ export function LatestNews() {
     return displayArticles.slice(0, visibleCount);
   }, [displayArticles, visibleCount]);
 
-  const isLoading = (isDesksLoading && isTrendingLoading) && individualCategories.length === 0;
+  const isLoading = (isDesksLoading || isTrendingLoading) && individualCategories.length === 0;
   const hasError = desksError && trendingError && individualCategories.length === 0;
 
   if (isLoading) {
@@ -413,7 +422,7 @@ export function LatestNews() {
             <Layers className="w-5 h-5 text-primary" strokeWidth={1.5} />
           </div>
           <div>
-            <h2 className="text-2xl sm:text-3xl font-sans font-bold tracking-tight text-foreground">Explore by Category</h2>
+            <h2 className="text-2xl sm:text-3xl font-sans font-bold tracking-tight text-foreground">Browse by Category</h2>
             <p className="text-xs font-mono text-muted-foreground/70 mt-0.5">Discover the latest stories organized by topic.</p>
           </div>
         </div>

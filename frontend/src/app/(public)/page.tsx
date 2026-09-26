@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getArticles } from "@/lib/api/articles";
+import { getArticles, getCategoryDesks } from "@/lib/api/articles";
 import {
   HomepageScene,
   BreakingNews,
@@ -79,10 +79,24 @@ const jsonLd = {
 
 export default async function HomePage() {
   let initialItems: any[] = [];
+  let rawArticles: any[] = [];
+  let initialDesks: any[] = [];
   try {
-    const raw = await getArticles({ limit: 25, sort_by: "trending" });
-    const rawArticles = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+    const [raw, desks] = await Promise.all([
+      getArticles({ limit: 25, sort_by: "trending" }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("Failed server-side fetch of trending articles:", err);
+        return [];
+      }),
+      getCategoryDesks().catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("Failed server-side fetch of category desks:", err);
+        return [];
+      }),
+    ]);
+    rawArticles = Array.isArray(raw) ? raw : (raw as any)?.data || [];
     initialItems = mapArticlesToFeatured(rawArticles);
+    initialDesks = Array.isArray(desks) ? desks : (desks as any)?.data || [];
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Failed server-side fetch of homepage articles:", err);
@@ -125,7 +139,7 @@ export default async function HomePage() {
           fallback={<TrendingSkeleton />}
         >
           <Suspense fallback={<TrendingSkeleton />}>
-            <TrendingStories />
+            <TrendingStories initialArticles={rawArticles} />
           </Suspense>
         </SectionErrorBoundary>
       </Container>
@@ -147,7 +161,7 @@ export default async function HomePage() {
           fallback={<CategoryNewsSkeleton />}
         >
           <Suspense fallback={<CategoryNewsSkeleton />}>
-            <LatestNews />
+            <LatestNews initialDesks={initialDesks} initialArticles={rawArticles} />
           </Suspense>
         </SectionErrorBoundary>
       </Container>

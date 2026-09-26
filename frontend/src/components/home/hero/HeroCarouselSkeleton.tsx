@@ -9,11 +9,11 @@ import { ShimmerBase } from "@/components/skeletons/ShimmerBase";
  */
 export function HeroCarouselSkeleton() {
   return (
-    <div className="relative w-full min-h-[580px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-4 flex items-center justify-center">
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 xl:gap-12 items-center w-full max-w-[1400px] mx-auto">
+    <div className="relative w-full min-h-[500px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-20 sm:pb-24 md:pb-12 lg:pb-4 flex items-center justify-center">
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-4 lg:gap-8 xl:gap-12 items-center w-full max-w-[1400px] mx-auto">
         
         {/* Left Editorial Panel Skeleton (lg:col-span-5) — Exact 1:1 match with HeroEditorialPanel */}
-        <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-1 lg:order-1 lg:-translate-y-[40px] pt-4 lg:pt-0 flex flex-col gap-5">
+        <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-1 lg:order-1 lg:-translate-y-[40px] pt-1 sm:pt-2 lg:pt-0 flex flex-col gap-5">
           {/* Badge, Category & Read Time Row */}
           <div className="flex items-center gap-3">
             <ShimmerBase className="h-6 w-28 rounded-md" />
@@ -37,13 +37,13 @@ export function HeroCarouselSkeleton() {
         </div>
 
         {/* Right 3D Ring Stage Skeleton (lg:col-span-7) — Exact 1:1 match with HeroScene line 62 */}
-        <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 order-2 lg:order-2 h-[420px] sm:h-[460px] lg:h-[480px] mt-4 sm:mt-6 lg:mt-0 lg:-translate-y-[30px]">
+        <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 order-2 lg:order-2 h-[310px] sm:h-[370px] md:h-[440px] lg:h-[480px] -mt-6 sm:-mt-8 lg:mt-0 -translate-y-4 sm:-translate-y-6 lg:-translate-y-[30px]">
           <div className="relative w-full h-full flex items-center justify-center">
             {/* Left Flanking Perspective Card Skeleton */}
-            <div className="hidden sm:block absolute left-4 lg:left-10 w-[210px] sm:w-[240px] md:w-[260px] aspect-[4/5] rounded-2xl bg-neutral-900/60 border border-white/10 opacity-30 transform -rotate-12 scale-90 pointer-events-none" />
+            <div className="hidden sm:block absolute left-4 lg:left-10 w-[190px] sm:w-[220px] lg:w-[260px] aspect-[4/5] rounded-2xl bg-neutral-900/60 border border-white/10 opacity-30 transform -rotate-12 scale-90 pointer-events-none" />
 
             {/* Active Center 3D Extruded Slab Card Skeleton (1:1 match with HeroMediaCard) */}
-            <div className="relative z-20 w-[240px] sm:w-[275px] md:w-[304px] aspect-[4/5] rounded-2xl bg-black border border-white/20 overflow-hidden shadow-[0_25px_50px_-10px_rgba(0,0,0,0.95)]">
+            <div className="relative z-20 w-[220px] sm:w-[260px] lg:w-[304px] aspect-[4/5] rounded-2xl bg-black border border-white/20 overflow-hidden shadow-[0_25px_50px_-10px_rgba(0,0,0,0.95)]">
               {/* Foreground Image Layer (Top 55% Full Width Edge-to-Edge) */}
               <div className="absolute top-0 inset-x-0 w-full h-[55%] overflow-hidden bg-neutral-900">
                 <ShimmerBase className="w-full h-full" />
@@ -65,7 +65,7 @@ export function HeroCarouselSkeleton() {
             </div>
 
             {/* Right Flanking Perspective Card Skeleton */}
-            <div className="hidden sm:block absolute right-4 lg:right-10 w-[210px] sm:w-[240px] md:w-[260px] aspect-[4/5] rounded-2xl bg-neutral-900/60 border border-white/10 opacity-30 transform rotate-12 scale-90 pointer-events-none" />
+            <div className="hidden sm:block absolute right-4 lg:right-10 w-[190px] sm:w-[220px] lg:w-[260px] aspect-[4/5] rounded-2xl bg-neutral-900/60 border border-white/10 opacity-30 transform rotate-12 scale-90 pointer-events-none" />
           </div>
         </div>
 

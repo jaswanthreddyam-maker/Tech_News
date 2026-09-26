@@ -105,7 +105,7 @@ const ARRIVAL_CONFIG = {
 
 /** Active Card Extraction Configuration */
 const ACTIVE_CARD_CONFIG = {
-  EXTRACTION_Z: 75, // Prominently extrudes active card 75px forward out of the 3D ring
+  EXTRACTION_Z: 60, // Extrudes active card 60px forward cleanly out of the 3D ring
   LIFT_Y: -14, // Lifts active card -14px
 };
 
@@ -555,7 +555,7 @@ export function Hero3DRing() {
 
             cardEl.style.opacity = String(depthOpacity);
             cardEl.style.visibility = "visible";
-            cardEl.style.pointerEvents = shortestAngle > 165 ? "none" : "auto";
+            cardEl.style.pointerEvents = shortestAngle > 135 ? "none" : "auto";
           }
 
           const frontIndex = ((Math.round(normalizeAngle(-netAngle) / perItem) % count) + count) % count;
@@ -685,7 +685,7 @@ export function Hero3DRing() {
 
               const depthOpacity = Math.max(0.60, 1 - (shortestAngleFromFront / 180) * 0.40);
               const cardPointerEvents: React.CSSProperties["pointerEvents"] =
-                shortestAngleFromFront > 165 ? "none" : "auto";
+                shortestAngleFromFront > 135 ? "none" : "auto";
 
               const cardZ = radius + (isActive ? ACTIVE_CARD_CONFIG.EXTRACTION_Z : 0);
               const cardY = isActive ? ACTIVE_CARD_CONFIG.LIFT_Y : 0;
