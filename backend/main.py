@@ -2,7 +2,7 @@ import logging
 import mimetypes
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Depends, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,6 +21,7 @@ from app.core.database import async_engine, verify_database_connection, get_db
 from app.core.logging import LoggingMiddleware, correlation_id_ctx, setup_logging
 from app.core.middleware import MaintenanceModeMiddleware
 from app.core.redis import close_redis_connection, verify_redis_connection
+from app.core.security import require_role
 from app.schemas.responses import ErrorDetails, ErrorResponse
 
 # Setup rotating files and console formatting
@@ -385,11 +386,19 @@ async def root_health_ready(db=Depends(get_db)):
 
 
 @app.get("/health/redis-diag", tags=["System"])
-async def root_health_redis_diag():
+async def root_health_redis_diag(
+    current_user=Depends(require_role("super_admin")),
+):
     """Diagnoses Redis connection under different auth schemes from inside the Railway network."""
     import urllib.parse
     import redis.asyncio as aioredis
     from app.core.config import settings
+
+    if settings.effective_environment == "production":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diagnostic endpoint disabled in production.",
+        )
 
     raw_url = settings.REDIS_URL
     parsed = urllib.parse.urlparse(raw_url)

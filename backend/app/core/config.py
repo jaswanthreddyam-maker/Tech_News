@@ -306,27 +306,37 @@ class Settings(BaseSettings):
                 raise RuntimeError("Tests are attempting to run against a production database host.")
 
         if app_env == "production":
-            # 1. Provide secure fallback for secret key if default dev value was provided
-            if self.SECRET_KEY in (
+            # Fail closed when security-critical secrets are missing or still
+            # set to repository defaults. Never substitute deterministic keys
+            # from source control into a production process.
+            default_secret_keys = {
                 "supersecretkey_change_me_in_production_32_chars_long",
                 "dev_only_super_secure_32_character_secret_key",
                 "change_me",
+            }
+            if not self.SECRET_KEY or self.SECRET_KEY in default_secret_keys:
+                raise RuntimeError(
+                    "FATAL: SECRET_KEY must be explicitly configured in production."
+                )
+
+            if (
+                not self.JWT_SECRET_KEY
+                or "phase4_dev" in self.JWT_SECRET_KEY
+                or "change_in_production" in self.JWT_SECRET_KEY
             ):
-                logger.warning("Default SECRET_KEY detected in production. Generating secure fallback key.")
-                object.__setattr__(self, "SECRET_KEY", "prod_sec_key_9f8b2c4e6d1a3f5b7c9e1d3f5a7b9c1e3f5a7b9c1e3f5a7b9c1e3f5a7b9c1e3")
+                raise RuntimeError(
+                    "FATAL: JWT_SECRET_KEY must be explicitly configured in production."
+                )
 
-            # Validate backup keys in production
-            if "dev_only" in self.BACKUP_ENCRYPTION_KEY or "encryption_key" in self.BACKUP_ENCRYPTION_KEY:
-                object.__setattr__(self, "BACKUP_ENCRYPTION_KEY", "32ByteProdEncryptionKeyForBackups!")
+            if not self.BACKUP_ENCRYPTION_KEY or "dev_only" in self.BACKUP_ENCRYPTION_KEY:
+                raise RuntimeError(
+                    "FATAL: BACKUP_ENCRYPTION_KEY must be explicitly configured in production."
+                )
 
-            if "dev_only" in self.BACKUP_SIGNING_KEY or "signing_key" in self.BACKUP_SIGNING_KEY:
-                object.__setattr__(self, "BACKUP_SIGNING_KEY", "32ByteProdSigningKeyForBackups!!")
-
-            # 2. Provide secure fallback for JWT secret key if default dev value was provided
-            if "phase4_dev" in self.JWT_SECRET_KEY or "change_in_production" in self.JWT_SECRET_KEY:
-                logger.warning("Default JWT_SECRET_KEY detected in production. Generating secure fallback key.")
-                object.__setattr__(self, "JWT_SECRET_KEY", "prod_jwt_sec_8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e")
-
+            if not self.BACKUP_SIGNING_KEY or "dev_only" in self.BACKUP_SIGNING_KEY:
+                raise RuntimeError(
+                    "FATAL: BACKUP_SIGNING_KEY must be explicitly configured in production."
+                )
 
             # 3. Prevent wildcard CORS in production
             if isinstance(self.BACKEND_CORS_ORIGINS, list):

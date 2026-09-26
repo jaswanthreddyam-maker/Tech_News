@@ -14,6 +14,9 @@ from PIL import Image
 
 logger = logging.getLogger("tech_news.image_helper")
 
+REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+MAX_REDIRECTS = 5
+
 
 def is_safe_url(url: str) -> bool:
     """
@@ -27,6 +30,10 @@ def is_safe_url(url: str) -> bool:
 
         hostname = parsed.hostname
         if not hostname:
+            return False
+
+        # Embedded credentials have no legitimate role in article image URLs.
+        if parsed.username or parsed.password:
             return False
 
         # Resolve hostname to IP addresses
@@ -48,6 +55,45 @@ def is_safe_url(url: str) -> bool:
     except Exception as e:
         logger.warning(f"Image Helper: DNS resolution / URL validation failed for {url}: {e}")
         return False
+
+
+async def _request_with_ssrf_protection(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    **kwargs,
+) -> httpx.Response | None:
+    """Request a URL while validating each redirect target before connecting."""
+    current_url = url
+    for _ in range(MAX_REDIRECTS + 1):
+        if not is_safe_url(current_url):
+            logger.warning("Image Helper: SSRF blocked URL: %s", current_url)
+            return None
+
+        if method.upper() == "HEAD":
+            response = await client.head(
+                current_url,
+                follow_redirects=False,
+                **kwargs,
+            )
+        else:
+            response = await client.get(
+                current_url,
+                follow_redirects=False,
+                **kwargs,
+            )
+
+        if response.status_code not in REDIRECT_STATUSES:
+            return response
+
+        location = response.headers.get("location")
+        if not location:
+            return response
+
+        current_url = urljoin(current_url, location)
+
+    logger.warning("Image Helper: redirect limit exceeded for %s", url)
+    return None
 
 
 PRE_SCORING_WEIGHTS = {
@@ -591,13 +637,22 @@ async def validate_and_score_thumbnail(url: str, source_confidence: int) -> dict
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=5.0, headers=BROWSER_HEADERS, follow_redirects=True) as client:
-            resp = await client.head(url)
+        async with httpx.AsyncClient(
+            timeout=5.0,
+            headers=BROWSER_HEADERS,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
+            resp = await _request_with_ssrf_protection(client, "HEAD", url)
+            if resp is None:
+                return None
 
             # If HEAD fails or returns 405 (Method Not Allowed), fallback to lightweight GET Range
             if resp.status_code >= 400 or resp.status_code == 405:
                 headers = {**BROWSER_HEADERS, "Range": "bytes=0-8192"}
-                resp = await client.get(url, headers=headers)
+                resp = await _request_with_ssrf_protection(client, "GET", url, headers=headers)
+                if resp is None:
+                    return None
 
             if resp.status_code not in (200, 206):
                 return None
@@ -678,12 +733,14 @@ async def download_and_validate_in_memory(
             return None, None, "keyword_penalty", None
 
         logger.info(f"Image Helper: Downloading image in-memory: {url}")
-        async with httpx.AsyncClient(timeout=10.0, headers=BROWSER_HEADERS, follow_redirects=True) as client:
-            resp = await client.get(url)
-
-            # Verify redirect target URL if redirected
-            if str(resp.url) != url and not is_safe_url(str(resp.url)):
-                logger.warning(f"Image Helper: SSRF redirect target blocked: {resp.url}")
+        async with httpx.AsyncClient(
+            timeout=10.0,
+            headers=BROWSER_HEADERS,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
+            resp = await _request_with_ssrf_protection(client, "GET", url)
+            if resp is None:
                 return None, None, "ssrf_blocked_redirect", None
 
             if resp.status_code != 200:

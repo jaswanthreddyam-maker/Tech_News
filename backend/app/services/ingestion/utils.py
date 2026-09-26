@@ -1,7 +1,7 @@
 import hashlib
 import re
 import zlib
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 
 def normalize_url(url: str) -> str:
@@ -108,27 +108,42 @@ async def resolve_redirects(url: str) -> str:
     3. Fallback to original input URL on any error
     """
     import httpx
+    from app.services.ingestion.image_helper import is_safe_url
+
+    current_url = url
 
     try:
         async with httpx.AsyncClient(
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=httpx.Timeout(3.0, connect=1.5),
             headers={"User-Agent": "TechNewsTodayBot/1.0 (+http://localhost/bot)"},
+            trust_env=False,
         ) as client:
-            try:
-                # 1. Try HEAD first
-                resp = await client.head(url)
-                if resp.status_code < 400:
-                    return str(resp.url)
-            except Exception:
-                pass
+            for _ in range(6):
+                if not is_safe_url(current_url):
+                    return url
 
-            # 2. Fallback to streaming GET (read headers only, don't download body)
-            try:
-                async with client.stream("GET", url) as resp:
-                    return str(resp.url)
-            except Exception:
-                pass
+                try:
+                    resp = await client.head(current_url, follow_redirects=False)
+                    if resp.status_code < 400:
+                        location = resp.headers.get("location")
+                        if location:
+                            current_url = urljoin(current_url, location)
+                            continue
+                        return str(resp.url)
+                except Exception:
+                    pass
+
+                try:
+                    async with client.stream("GET", current_url, follow_redirects=False) as resp:
+                        if resp.status_code in {301, 302, 303, 307, 308}:
+                            location = resp.headers.get("location")
+                            if location:
+                                current_url = urljoin(current_url, location)
+                                continue
+                        return str(resp.url)
+                except Exception:
+                    pass
     except Exception:
         pass
 

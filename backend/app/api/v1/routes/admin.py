@@ -14,6 +14,7 @@ from app.core.security import require_role
 from app.models.article import ProcessedArticle
 from app.models.growth import FeatureFlag
 from app.models.source import Source
+from app.models.telemetry import TimelineNode
 from app.models.user import AIJobHistory, ArticleRevision, AuditLog, Role, User
 from app.schemas.admin import (
     AI_CostAggregationResponse,
@@ -375,7 +376,10 @@ async def sync_sources_diagnostic(current_user: User = Depends(require_role("sup
         return {"status": "error", "message": str(e)}
 
 @router.get("/diagnostic/db-truth")
-async def get_db_truth(db: AsyncSession = Depends(get_db)):
+async def get_db_truth(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("super_admin")),
+):
     """
     Forensic diagnostic endpoint to get exact counts and status distribution.
     """
@@ -421,7 +425,11 @@ async def get_db_truth(db: AsyncSession = Depends(get_db)):
     }
 
 @router.get("/diagnostic/filtered-samples")
-async def get_filtered_samples(limit: int = 5, db: AsyncSession = Depends(get_db)):
+async def get_filtered_samples(
+    limit: int = 5,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("super_admin")),
+):
     """
     Forensic endpoint to dump sample filtered RawArticles for Phase 0 extraction debugging.
     """
