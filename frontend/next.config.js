@@ -9,6 +9,7 @@ if (baseTarget.endsWith('/api/v1')) {
 const apiProxyTarget = baseTarget;
 
 const nextConfig = {
+  staticPageGenerationTimeout: 180,
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns'],
   },

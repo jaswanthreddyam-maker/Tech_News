@@ -15,7 +15,8 @@ export async function getArticles(params: {
   return apiFetch<PaginatedResponse<Article>>("/news", { 
     params: queryParams,
     revalidate: 60,
-    tags: ["news"] 
+    tags: ["news"],
+    timeoutMs: 8000,
   });
 }
 

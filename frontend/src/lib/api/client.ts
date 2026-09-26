@@ -70,9 +70,9 @@ export class ApiClient {
           throw err;
         }
 
-        if (attempt > maxRetries) {
+        if (isTimeout || attempt > maxRetries) {
           if (isTimeout) {
-            throw new TimeoutError(`Request timed out after ${options.timeoutMs || 10000}ms.`);
+            throw new TimeoutError(`Request timed out after ${options.timeoutMs || 15000}ms.`);
           }
           if (isNetworkError) {
             throw new NetworkError("API Gateway connection offline or network dropped.");

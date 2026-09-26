@@ -1,31 +1,22 @@
-import { getTrendingArticles } from "@/lib/api/articles";
-import { mapArticlesToFeatured } from "@/lib/mappers/homepage";
 import { getImageProps } from "next/image";
 
-export async function HeroLcpPreloader({ article }: { article?: any }) {
-  try {
-    let first = article;
-    if (!first) {
-      const res = await getTrendingArticles();
-      const rawArticles = Array.isArray(res) ? res : (res as any)?.data || [];
-      const featured = mapArticlesToFeatured(rawArticles);
-      first = featured[0];
-    }
-    if (!first) return null;
+export function HeroLcpPreloader({ article }: { article?: any }) {
+  if (!article) return null;
 
+  try {
     const imgUrl =
-      first.thumbnail ||
-      (first as any).thumbnail_local ||
-      (first as any).image_url ||
-      (first as any).image ||
-      (first as any).thumbnail_url ||
+      article.thumbnail ||
+      (article as any).thumbnail_local ||
+      (article as any).image_url ||
+      (article as any).image ||
+      (article as any).thumbnail_url ||
       "";
 
     if (!imgUrl) return null;
 
     const { props } = getImageProps({
       src: imgUrl,
-      alt: first.title || "",
+      alt: article.title || "",
       fill: true,
       sizes: "(max-width: 768px) 275px, 304px",
       quality: 90,

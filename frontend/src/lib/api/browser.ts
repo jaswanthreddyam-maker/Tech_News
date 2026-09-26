@@ -54,7 +54,18 @@ export class BrowserTransport implements ApiTransport {
     requestHeaders.set("X-Correlation-ID", correlationId);
 
     const { useAppStore } = require("@/store/useStore");
-    const token = sessionManager.getAccessToken() || useAppStore.getState().adminToken;
+    let token = sessionManager.getAccessToken() || useAppStore.getState().adminToken;
+    if (!token && sessionManager.hasSession()) {
+      const currentState = useAppStore.getState();
+      const suppressed = currentState.authRefreshSuppressUntil && currentState.authRefreshSuppressUntil > Date.now();
+      if (!suppressed) {
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed) {
+          token = sessionManager.getAccessToken() || useAppStore.getState().adminToken;
+        }
+      }
+    }
+
     if (token) {
       requestHeaders.set("Authorization", `Bearer ${token}`);
     } else {

@@ -94,7 +94,7 @@ const customMarkdownComponents = {
 };
 
 export function GlobalAssistant() {
-  const { requireAuthentication } = useAuthGate();
+  const { requireAuthentication, openAuthGate } = useAuthGate();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -332,9 +332,20 @@ export function GlobalAssistant() {
       if (e.name !== "AbortError") {
         console.error("Assistant request error:", e);
         const msg = e?.message || "Connection lost or request timed out. Please try again.";
-        setErrorMessage(msg);
+        const isAuthExpired =
+          msg.toLowerCase().includes("access token has expired") ||
+          msg.toLowerCase().includes("token") ||
+          e?.status === 401;
+
+        if (isAuthExpired) {
+          setErrorMessage("Your session has expired. Please sign in again to continue.");
+        } else {
+          setErrorMessage(msg);
+        }
+
+        // Clean up empty placeholder assistant message so it doesn't stay stuck on "Synthesizing answer..."
         setMessages((prev) =>
-          prev.map((msg) => (msg.status === "streaming" ? { ...msg, status: "error" } : msg))
+          prev.filter((msg) => msg.id !== tempAssistantMsgId || (msg.content && msg.content.trim().length > 0))
         );
       }
     } finally {
@@ -469,12 +480,21 @@ export function GlobalAssistant() {
                   <span>{errorMessage}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button 
-                    onClick={handleRetry} 
-                    className="text-xs font-semibold underline hover:no-underline text-red-600 dark:text-red-400"
-                  >
-                    Retry
-                  </button>
+                  {errorMessage.toLowerCase().includes("sign in") || errorMessage.toLowerCase().includes("expired") ? (
+                    <button 
+                      onClick={() => openAuthGate(FeatureCapability.AI_PERSONAL_ASSISTANT)} 
+                      className="text-xs font-semibold px-2.5 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
+                    >
+                      Sign In
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleRetry} 
+                      className="text-xs font-semibold underline hover:no-underline text-red-600 dark:text-red-400"
+                    >
+                      Retry
+                    </button>
+                  )}
                   <button 
                     onClick={() => setErrorMessage(null)} 
                     className="text-xs text-muted-foreground hover:text-foreground"
@@ -565,7 +585,7 @@ export function GlobalAssistant() {
                           </button>
                         )}
 
-                        {/* Content or Skeleton Loading */}
+                        {/* Content or Skeleton Loading or Error State */}
                         {msg.content ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown components={customMarkdownComponents}>
@@ -574,6 +594,13 @@ export function GlobalAssistant() {
                             {msg.status === "streaming" && (
                               <span className="inline-block w-1.5 h-4 bg-primary ml-1 animate-pulse rounded-sm align-middle" />
                             )}
+                          </div>
+                        ) : msg.status === "error" ? (
+                          <div className="py-2 text-xs text-red-500/90 dark:text-red-400 flex items-center gap-2">
+                            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Unable to generate response. Please sign in again or try another question.</span>
                           </div>
                         ) : (
                           <div className="space-y-3 py-1">

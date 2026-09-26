@@ -15,6 +15,28 @@ let tokenExpiresAt: number | null = null;
 // Default session expiration: 7 days (604800 seconds)
 const DEFAULT_SESSION_EXPIRY = 7 * 86400;
 
+function getJwtExpiry(token: string): number | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const parsed = JSON.parse(jsonPayload);
+    if (typeof parsed?.exp === "number") {
+      return parsed.exp * 1000;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export const sessionManager = {
   isAuthenticated(): boolean {
     if (!accessToken && typeof window !== "undefined") {
@@ -38,6 +60,15 @@ export const sessionManager = {
     return Date.now() < tokenExpiresAt - 10000;
   },
 
+  hasSession(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(HAS_SESSION_KEY) === "true";
+    } catch {
+      return false;
+    }
+  },
+
   getAccessToken(): string | null {
     return this.isAuthenticated() ? accessToken : null;
   },
@@ -54,7 +85,8 @@ export const sessionManager = {
 
   setSession(token: string, expiresInSeconds: number = DEFAULT_SESSION_EXPIRY) {
     accessToken = token;
-    tokenExpiresAt = Date.now() + (expiresInSeconds * 1000);
+    const jwtExp = getJwtExpiry(token);
+    tokenExpiresAt = jwtExp || (Date.now() + (expiresInSeconds * 1000));
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem(ACCESS_TOKEN_KEY, token);
@@ -185,8 +217,8 @@ export const sessionManager = {
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        // ONLY clear session if our locally stored token is ALSO expired
-        if ((res.status === 401 || res.status === 403) && !this.isAuthenticated()) {
+        // If refresh fails with 401 or 403, the refresh token is missing, expired, or revoked
+        if (res.status === 401 || res.status === 403) {
           this.clearSession();
         }
         return null;
