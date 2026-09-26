@@ -22,6 +22,7 @@ interface ConversationalSearchProps {
   hideModeSelector?: boolean;
   showOpenFullChat?: boolean;
   workspaceId?: number;
+  onConversationCreated?: (id: string) => void;
 }
 
 const EvidenceBadge: React.FC<{ evidence?: any }> = () => null;
@@ -35,11 +36,23 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
   className = '',
   hideModeSelector = false,
   showOpenFullChat = false,
+  workspaceId,
+  onConversationCreated,
 }) => {
   const { requireAuthentication } = useAuthGate();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { messages, isLoading, mode, title, setMode, sendMessage, stopGeneration, capabilityError, checkCapability } =
-    useConversation(conversationId, initialMode, articleId);
+  const {
+    messages,
+    isLoading,
+    mode,
+    title,
+    conversationId: activeConvId,
+    setMode,
+    sendMessage,
+    stopGeneration,
+    capabilityError,
+    checkCapability,
+  } = useConversation(conversationId, initialMode, articleId, workspaceId, onConversationCreated);
 
   const [input, setInput] = useState('');
   const [showComparePanel, setShowComparePanel] = useState(false);
@@ -75,6 +88,13 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
   };
 
   const handleFollowUp = (question: string) => {
+    if (!requireAuthentication(FeatureCapability.AI_ARTICLE_CHAT)) {
+      return;
+    }
+    sendMessage(question);
+  };
+
+  const handleSuggestionClick = (question: string) => {
     if (!requireAuthentication(FeatureCapability.AI_ARTICLE_CHAT)) {
       return;
     }
@@ -146,9 +166,9 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
               <option value="TOPIC">Explore Topic</option>
             </select>
           )}
-          {showOpenFullChat && conversationId && (
+          {showOpenFullChat && (activeConvId || conversationId) && (
             <Link
-              href={`/chat?id=${conversationId}`}
+              href={`/chat?id=${activeConvId || conversationId}`}
               className="text-xs text-primary hover:text-primary/90 font-medium whitespace-nowrap"
             >
               Open Full Chat →
@@ -174,7 +194,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
               {mode === 'ARTICLE' ? (
                 <>
                   <m.button
-                    onClick={() => sendMessage('Explain this article in simpler terms.')}
+                    onClick={() => handleSuggestionClick('Explain this article in simpler terms.')}
                     whileHover={{ scale: MotionScales.hover }}
                     whileTap={{ scale: MotionScales.tap }}
                     className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-full transition-colors text-secondary-foreground"
@@ -182,7 +202,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
                     Explain simply
                   </m.button>
                   <m.button
-                    onClick={() => sendMessage('What are the biggest takeaways?')}
+                    onClick={() => handleSuggestionClick('What are the biggest takeaways?')}
                     whileHover={{ scale: MotionScales.hover }}
                     whileTap={{ scale: MotionScales.tap }}
                     className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-full transition-colors text-secondary-foreground"
@@ -190,7 +210,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
                     Key takeaways
                   </m.button>
                   <m.button
-                    onClick={() => sendMessage('Why does this matter?')}
+                    onClick={() => handleSuggestionClick('Why does this matter?')}
                     whileHover={{ scale: MotionScales.hover }}
                     whileTap={{ scale: MotionScales.tap }}
                     className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-full transition-colors text-secondary-foreground"
@@ -198,7 +218,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
                     Why it matters
                   </m.button>
                   <m.button
-                    onClick={() => sendMessage('Summarize the technical details.')}
+                    onClick={() => handleSuggestionClick('Summarize the technical details.')}
                     whileHover={{ scale: MotionScales.hover }}
                     whileTap={{ scale: MotionScales.tap }}
                     className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-full transition-colors text-secondary-foreground"
@@ -209,7 +229,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
               ) : (
                 <>
                   <m.button
-                    onClick={() => sendMessage('What are the latest developments in AI?')}
+                    onClick={() => handleSuggestionClick('What are the latest developments in AI?')}
                     whileHover={{ scale: MotionScales.hover }}
                     whileTap={{ scale: MotionScales.tap }}
                     className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-full transition-colors text-secondary-foreground"
@@ -498,7 +518,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
               className="w-full py-3 pl-4 pr-24 text-sm text-foreground bg-muted/15 border border-border/60 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-colors placeholder:text-muted-foreground/50"
               rows={1}
               style={{ minHeight: '52px', maxHeight: '120px' }}
-              disabled={isLoading || !conversationId}
+              disabled={isLoading}
             />
             <div className="absolute right-2 bottom-2 flex items-center gap-1">
               {!isLoading && (
@@ -530,7 +550,7 @@ export const ConversationalSearch: React.FC<ConversationalSearchProps> = ({
               ) : (
                 <m.button
                   type="submit"
-                  disabled={!input.trim() || !conversationId}
+                  disabled={!input.trim() || isLoading}
                   whileHover={{ scale: MotionScales.hover }}
                   whileTap={{ scale: MotionScales.tap }}
                   className="p-2 text-primary-foreground bg-primary rounded-lg hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

@@ -547,7 +547,8 @@ export default function ArticlePageClient({ article: rawData }: { article: any }
         askAI={
           <ConversationalSearch
             conversationId={conversationId}
-            articleId={article.id}
+            onConversationCreated={setConversationId}
+            articleId={typeof article.id === "number" ? article.id : parseInt(article.id, 10) || undefined}
             articleTitle={article.title}
             keywords={[]}
             initialMode="ARTICLE"

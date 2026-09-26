@@ -71,6 +71,7 @@ interface UseConversationReturn {
   isLoading: boolean;
   mode: ConversationMode;
   title: string;
+  conversationId: string | null;
   setMode: (mode: ConversationMode) => void;
   sendMessage: (content: string, contextA?: ComparisonContext, contextB?: ComparisonContext) => Promise<void>;
   stopGeneration: () => void;
@@ -82,13 +83,21 @@ export function useConversation(
   conversationId: string | null,
   initialMode: ConversationMode = 'GENERAL',
   articleId?: number,
-  workspaceId?: number
+  workspaceId?: number,
+  onConversationCreated?: (id: string) => void
 ): UseConversationReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<ConversationMode>(initialMode);
   const [title, setTitle] = useState('New Conversation');
   const [capabilityError, setCapabilityError] = useState<CapabilityError>(null);
+  const [internalConversationId, setInternalConversationId] = useState<string | null>(conversationId);
+  const activeConversationIdRef = useRef<string | null>(conversationId);
+
+  useEffect(() => {
+    setInternalConversationId(conversationId);
+    activeConversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   const checkCapability = useCallback(async () => {
     if (typeof window !== 'undefined' && !navigator.onLine) {
@@ -171,7 +180,7 @@ export function useConversation(
       await checkCapability();
       if (!content.trim()) return;
 
-      let activeConvId = conversationId;
+      let activeConvId = activeConversationIdRef.current || conversationId;
       if (!activeConvId) {
         try {
           const created = await apiFetch<{ conversation_id: string }>('/chat/conversations', {
@@ -180,6 +189,9 @@ export function useConversation(
           });
           if (created?.conversation_id) {
             activeConvId = created.conversation_id;
+            activeConversationIdRef.current = activeConvId;
+            setInternalConversationId(activeConvId);
+            onConversationCreated?.(activeConvId);
           }
         } catch {
           // If creation fails, proceed to attempt
@@ -232,6 +244,9 @@ export function useConversation(
             });
             if (recreated?.conversation_id) {
               activeConvId = recreated.conversation_id;
+              activeConversationIdRef.current = activeConvId;
+              setInternalConversationId(activeConvId);
+              onConversationCreated?.(activeConvId);
               response = await apiClient.fetchRaw('/chat/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -363,7 +378,7 @@ export function useConversation(
         setIsLoading(false);
       }
     },
-    [conversationId, mode, articleId, workspaceId, checkCapability]
+    [conversationId, mode, articleId, workspaceId, checkCapability, onConversationCreated]
   );
 
   const stopGeneration = useCallback(() => {
@@ -378,6 +393,7 @@ export function useConversation(
     isLoading,
     mode,
     title,
+    conversationId: internalConversationId,
     setMode,
     sendMessage,
     stopGeneration,
