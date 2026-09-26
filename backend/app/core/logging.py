@@ -120,12 +120,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             # Graceful degradation for public read-only GET endpoints
             if request.method == "GET":
                 path = request.url.path
+                from app.core.security import is_allowed_cors_origin
+
                 cors_headers = {
-                    "Access-Control-Allow-Origin": origin or "*",
-                    "Access-Control-Allow-Credentials": "true",
                     "X-Correlation-ID": correlation_id,
                     "X-Process-Time-Ms": f"{process_time:.2f}",
                 }
+                if is_allowed_cors_origin(origin):
+                    cors_headers["Access-Control-Allow-Origin"] = origin
+                    cors_headers["Access-Control-Allow-Credentials"] = "true"
                 if "stories" in path or "desks" in path or "sessions" in path:
                     from starlette.responses import JSONResponse
                     return JSONResponse(status_code=200, content=[], headers=cors_headers)

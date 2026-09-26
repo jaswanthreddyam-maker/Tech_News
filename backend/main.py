@@ -21,7 +21,7 @@ from app.core.database import async_engine, verify_database_connection, get_db
 from app.core.logging import LoggingMiddleware, correlation_id_ctx, setup_logging
 from app.core.middleware import MaintenanceModeMiddleware
 from app.core.redis import close_redis_connection, verify_redis_connection
-from app.core.security import require_role
+from app.core.security import get_allowed_cors_origins, is_allowed_cors_origin, require_role
 from app.schemas.responses import ErrorDetails, ErrorResponse
 
 # Setup rotating files and console formatting
@@ -155,34 +155,23 @@ app = FastAPI(
 
 
 # 2.5 CORS Origins List
-cors_origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "https://tech-news-alpha-eosin.vercel.app",
-]
-if isinstance(settings.BACKEND_CORS_ORIGINS, list):
-    for o in settings.BACKEND_CORS_ORIGINS:
-        if isinstance(o, str) and o.strip():
-            clean_o = o.strip().rstrip("/")
-            if clean_o not in cors_origins:
-                cors_origins.append(clean_o)
+cors_origins = get_allowed_cors_origins()
+cors_origin_regex = (
+    r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
+    if settings.effective_environment != "production"
+    else None
+)
 
 
 def _get_cors_headers(request: Request) -> dict[str, str]:
     origin = request.headers.get("origin")
     headers = {}
-    if origin and (
-        origin in cors_origins
-        or origin.endswith(".vercel.app")
-        or "localhost" in origin
-        or "127.0.0.1" in origin
-    ):
+    if is_allowed_cors_origin(origin):
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "*"
-        headers["Access-Control-Allow-Headers"] = "*"
+        headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Correlation-ID"
+        headers["Access-Control-Expose-Headers"] = "X-Correlation-ID, X-Process-Time-Ms"
     return headers
 
 
@@ -249,9 +238,14 @@ async def generic_exception_handler(request: Request, exc: Exception):
                 headers=_get_cors_headers(request)
             )
 
+    message = (
+        f"An unexpected server error occurred. {str(exc)}"
+        if settings.DEBUG
+        else "An unexpected server error occurred."
+    )
     error_details = ErrorDetails(
         code="INTERNAL_SERVER_ERROR",
-        message=f"An unexpected server error occurred. {str(exc)}",
+        message=message,
     )
     response_content = ErrorResponse(correlation_id=correlation_id, error=error_details)
     return JSONResponse(
@@ -318,10 +312,11 @@ app.add_middleware(DatabaseDegradeMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID", "Accept", "Origin"],
     expose_headers=["X-Correlation-ID", "X-Process-Time-Ms"],
 )
 

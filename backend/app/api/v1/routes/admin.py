@@ -10,12 +10,12 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import log_audit
 from app.core.database import get_db
 from app.core.logging import correlation_id_ctx
-from app.core.security import require_role
+from app.core.security import clear_all_permission_caches, clear_permission_cache, require_role
 from app.models.article import ProcessedArticle
 from app.models.growth import FeatureFlag
 from app.models.source import Source
 from app.models.telemetry import TimelineNode
-from app.models.user import AIJobHistory, ArticleRevision, AuditLog, Role, User
+from app.models.user import AIJobHistory, ArticleRevision, AuditLog, Role, User, UserSession
 from app.schemas.admin import (
     AI_CostAggregationResponse,
     AIJobHistoryResponse,
@@ -706,6 +706,151 @@ async def trigger_article_replay(
         data={
             "message": "Replay task enqueued successfully.",
             "enqueued_ids": request.article_ids,
-            "enqueued_reason": request.filter_reason
-        }
+            "enqueued_reason": request.filter_reason,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8. User Management & Permission Cache Invalidation
+# ---------------------------------------------------------------------------
+
+
+@router.put("/users/{user_id}/role", response_model=StandardResponse[dict])
+async def update_user_role(
+    user_id: int,
+    payload: UserRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("super_admin")),
+):
+    """
+    Update a user's role and immediately invalidate their Redis permission cache.
+    """
+    correlation_id = correlation_id_ctx.get() or "system"
+
+    stmt = select(User).where(User.id == user_id)
+    res = await db.execute(stmt)
+    target_user = res.scalars().first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found.",
+        )
+
+    role_stmt = select(Role).where(Role.name == payload.role)
+    role_res = await db.execute(role_stmt)
+    role = role_res.scalars().first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role '{payload.role}' does not exist.",
+        )
+
+    target_user.role_id = role.id
+    target_user.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    # Invalidate Redis permission cache immediately
+    await clear_permission_cache(user_id)
+
+    logger.info(
+        "Super admin %s updated user %s (ID: %d) role to %s. Permission cache invalidated.",
+        current_user.email,
+        target_user.email,
+        user_id,
+        role.name,
+    )
+
+    return StandardResponse(
+        correlation_id=correlation_id,
+        data={
+            "user_id": user_id,
+            "role": role.name,
+            "message": f"Successfully updated user role to {role.name} and cleared permission cache.",
+        },
+    )
+
+
+@router.put("/users/{user_id}/status", response_model=StandardResponse[dict])
+async def update_user_status(
+    user_id: int,
+    payload: UserStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("super_admin")),
+):
+    """
+    Update a user's status. If deactivated/suspended, revokes all active sessions
+    and clears their Redis permission cache.
+    """
+    correlation_id = correlation_id_ctx.get() or "system"
+
+    stmt = select(User).where(User.id == user_id)
+    res = await db.execute(stmt)
+    target_user = res.scalars().first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found.",
+        )
+
+    allowed_statuses = {"active", "disabled", "suspended"}
+    if payload.status not in allowed_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status '{payload.status}'. Must be one of: {', '.join(allowed_statuses)}",
+        )
+
+    target_user.status = payload.status
+    target_user.updated_at = datetime.now(timezone.utc)
+
+    # If user is no longer active, revoke all their active sessions
+    if payload.status != "active":
+        session_stmt = select(UserSession).where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+        )
+        sessions_res = await db.execute(session_stmt)
+        for s in sessions_res.scalars().all():
+            s.revoked_at = datetime.now(timezone.utc)
+            s.revocation_reason = f"user_status_changed_to_{payload.status}"
+
+    await db.commit()
+
+    # Invalidate Redis permission cache immediately
+    await clear_permission_cache(user_id)
+
+    logger.info(
+        "Super admin %s updated user %s (ID: %d) status to %s.",
+        current_user.email,
+        target_user.email,
+        user_id,
+        payload.status,
+    )
+
+    return StandardResponse(
+        correlation_id=correlation_id,
+        data={
+            "user_id": user_id,
+            "status": payload.status,
+            "message": f"Successfully updated user status to {payload.status} and cleared permission cache.",
+        },
+    )
+
+
+@router.post("/permissions/cache/clear", response_model=StandardResponse[dict])
+async def clear_all_permissions_cache_endpoint(
+    current_user: User = Depends(require_role("super_admin")),
+):
+    """
+    Clear all user permission caches from Redis platform-wide.
+    """
+    correlation_id = correlation_id_ctx.get() or "system"
+    cleared = await clear_all_permission_caches()
+
+    return StandardResponse(
+        correlation_id=correlation_id,
+        data={
+            "cleared_keys": cleared,
+            "message": f"Successfully cleared {cleared} permission cache keys from Redis.",
+        },
     )

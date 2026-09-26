@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useEffect, useRef } from "react";
+import DOMPurify from "dompurify";
 import { useReadingPreferences } from "./ReadingPreferences";
 import "@/styles/prose-theme.css";
 
@@ -33,9 +34,12 @@ export function ArticleReader({ content, fallbackSummary }: ArticleReaderProps) 
   // Process heading IDs for TOC and anchor link support
   const processedContent = useMemo(() => {
     if (plainTextLength < 25 && fallbackSummary) {
-      return `<p class="lead">${fallbackSummary}</p>`;
+      const sanitizedFallback = typeof window !== "undefined"
+        ? DOMPurify.sanitize(fallbackSummary)
+        : fallbackSummary;
+      return `<p class="lead">${sanitizedFallback}</p>`;
     }
-    if (typeof window === "undefined") return content;
+    if (typeof window === "undefined") return "";
 
     try {
       const parser = new DOMParser();
@@ -65,10 +69,13 @@ export function ArticleReader({ content, fallbackSummary }: ArticleReaderProps) 
         }
       });
 
-      return doc.body.innerHTML;
+      return DOMPurify.sanitize(doc.body.innerHTML, {
+        USE_PROFILES: { html: true },
+        ADD_ATTR: ["target", "rel", "aria-hidden", "tabindex"],
+      });
     } catch (e) {
       console.error("Error processing article headings:", e);
-      return content;
+      return typeof window !== "undefined" ? DOMPurify.sanitize(content) : "";
     }
   }, [content, plainTextLength, fallbackSummary]);
 

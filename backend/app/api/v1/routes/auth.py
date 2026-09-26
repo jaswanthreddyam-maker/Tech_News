@@ -18,6 +18,7 @@ from app.core.redis import get_redis_client
 from app.core.security import (
     _load_user_permissions,
     apply_rate_limit,
+    clear_permission_cache,
     create_access_token,
     create_refresh_token,
     get_cached_permissions,
@@ -507,6 +508,7 @@ async def logout(
             session_record.revocation_reason = "user_logout"
             await db.flush()
             await db.commit()
+            await clear_permission_cache(session_record.user_id)
 
     _delete_refresh_cookie(response)
 
@@ -549,6 +551,7 @@ async def logout_all(
 
     await db.flush()
     await db.commit()
+    await clear_permission_cache(current_user.id)
     _delete_refresh_cookie(response)
 
     logger.info(f"User {current_user.email} logged out of all {revoked_count} sessions.")

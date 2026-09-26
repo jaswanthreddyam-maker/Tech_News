@@ -161,6 +161,83 @@ async def clear_permission_cache(user_id: int) -> None:
         logger.warning(f"Redis permission cache DEL failed for user {user_id}: {e}")
 
 
+async def clear_all_permission_caches() -> int:
+    """Delete all cached user permissions from Redis. Returns count of deleted keys."""
+    try:
+        client = get_redis_client()
+        keys = []
+        async for key in client.scan_iter(match="user:permissions:*"):
+            keys.append(key)
+        if keys:
+            deleted = await client.delete(*keys)
+            logger.info("Cleared %d user permission cache keys from Redis.", deleted)
+            return deleted
+        return 0
+    except Exception as e:
+        logger.warning("Redis permission cache clear_all failed: %s", e)
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# CORS Origin Validation Helpers
+# ---------------------------------------------------------------------------
+
+
+def get_allowed_cors_origins() -> list[str]:
+    """Compile the exact allowed CORS origins based on environment and settings."""
+    origins: list[str] = []
+    is_prod = settings.effective_environment == "production"
+
+    if isinstance(settings.BACKEND_CORS_ORIGINS, list):
+        for o in settings.BACKEND_CORS_ORIGINS:
+            if isinstance(o, str) and o.strip() and o.strip() != "*":
+                clean_o = o.strip().rstrip("/")
+                # In production, reject localhost/loopback origins
+                if is_prod and ("localhost" in clean_o or "127.0.0.1" in clean_o):
+                    continue
+                if clean_o not in origins:
+                    origins.append(clean_o)
+
+    prod_frontend = "https://tech-news-alpha-eosin.vercel.app"
+    if prod_frontend not in origins:
+        origins.append(prod_frontend)
+
+    if not is_prod:
+        dev_defaults = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
+        for d in dev_defaults:
+            if d not in origins:
+                origins.append(d)
+
+    return origins
+
+
+def is_allowed_cors_origin(origin: str | None) -> bool:
+    """Check if an Origin header is strictly allowed."""
+    if not origin:
+        return False
+    clean_origin = origin.strip().rstrip("/")
+    if clean_origin in get_allowed_cors_origins():
+        return True
+
+    # In non-production only, allow local hosts with any port
+    if settings.effective_environment != "production":
+        import urllib.parse
+
+        try:
+            parsed = urllib.parse.urlparse(origin)
+            if parsed.hostname in ("localhost", "127.0.0.1"):
+                return True
+        except Exception:
+            pass
+
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Permission Loading Helper
 # ---------------------------------------------------------------------------
