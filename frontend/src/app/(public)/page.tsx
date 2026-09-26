@@ -125,7 +125,7 @@ export default async function HomePage() {
       </Container>
 
       {/* Resume Reading (Your Library) */}
-      <Container size="wide" className={SPACING.SECTION_GAP_M}>
+      <Container size="wide" className={`mt-16 sm:mt-0 ${SPACING.SECTION_GAP_M}`}>
         <SectionErrorBoundary fallback={<div className="h-0" />}>
           <Suspense fallback={<div className="h-0" />}>
             <ResumeReading />
