@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -14,9 +13,24 @@ import { ArticleLink } from "@/domains/article/ArticleLink";
 import { getApiBaseUrl } from "@/lib/api/getApiBaseUrl";
 import { useAuthGate } from "@/hooks/useAuthGate";
 import { FeatureCapability } from "@/lib/auth/features";
+import { ProgressiveImage } from "@/components/common/ProgressiveImage";
 
 /** Apple / Arc Signature Easing Curve */
 const EASE_CUBIC = [0.16, 1, 0.3, 1] as const;
+
+/** Get descriptive source category badge label */
+function getCategoryLabel(category?: string): string {
+  switch (category) {
+    case "official":
+      return "Official Newsroom";
+    case "editorial":
+      return "Editorial Publisher";
+    case "community":
+      return "Community Hub";
+    default:
+      return "News Source";
+  }
+}
 
 /** Format published time safely */
 function formatTime(dateStr?: string | null): string {
@@ -35,15 +49,8 @@ export function BreakingNews() {
   const { isAuthenticated, requireAuthentication } = useAuthGate();
   const [activeTab, setActiveTab] = useState<"latest" | "following">("latest");
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
-
-  // Switch to following if user is authenticated and has followed sources
-  useEffect(() => {
-    if (isAuthenticated) {
-      setActiveTab("following");
-    } else {
-      setActiveTab("latest");
-    }
-  }, [isAuthenticated]);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const userSelectedTabRef = useRef(false);
 
   // 1. Latest Chronological Stream (with real-time SSE additions)
   const { data: breakingData, isLoading: isLatestLoading, error: latestError } = useBreaking();
@@ -61,6 +68,24 @@ export function BreakingNews() {
     toggleFollow,
     isToggling,
   } = useSourceFollow();
+
+  // Reset onboarding dismissed state if user unfollows all sources
+  useEffect(() => {
+    if (followedCount === 0) {
+      setOnboardingDismissed(false);
+    }
+  }, [followedCount]);
+
+  // Default to following only if user is authenticated AND has followed sources,
+  // respecting explicit manual tab selection by user.
+  useEffect(() => {
+    if (userSelectedTabRef.current) return;
+    if (isAuthenticated && followedCount > 0) {
+      setActiveTab("following");
+    } else {
+      setActiveTab("latest");
+    }
+  }, [isAuthenticated, followedCount]);
 
   const handleOpenSourceModal = () => {
     if (!requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
@@ -94,8 +119,11 @@ export function BreakingNews() {
         const payload = JSON.parse(event.data);
         if (payload.agent === "INGESTION" && payload.meta) {
           const newArt = payload.meta as Article;
-          if (!bufferRef.current.some((a) => a.id === newArt.id)) {
-            bufferRef.current.push(newArt);
+          // Validate required fields so thumbnail/metadata events don't corrupt the article list
+          if (newArt && newArt.id && newArt.title && (newArt.slug || (newArt as any).url)) {
+            if (!bufferRef.current.some((a) => a.id === newArt.id)) {
+              bufferRef.current.push(newArt);
+            }
           }
         }
       } catch {
@@ -161,6 +189,7 @@ export function BreakingNews() {
               if (!requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
                 return;
               }
+              userSelectedTabRef.current = true;
               setActiveTab("following");
             }}
             className={`px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
@@ -174,7 +203,10 @@ export function BreakingNews() {
           <button
             type="button"
             id="tab-latest"
-            onClick={() => setActiveTab("latest")}
+            onClick={() => {
+              userSelectedTabRef.current = true;
+              setActiveTab("latest");
+            }}
             className={`px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
               activeTab === "latest"
                 ? "bg-white/10 text-foreground border border-white/20 shadow-sm"
@@ -237,11 +269,11 @@ export function BreakingNews() {
           <p className="text-sm font-sans font-medium text-foreground">Unable to load feed</p>
           <p className="text-xs font-mono text-muted-foreground">Please refresh or check your connection.</p>
         </div>
-      ) : activeTab === "following" && followedCount === 0 ? (
-        /* Case A Empty State: 0 Sources Followed */
+      ) : activeTab === "following" && (followedCount === 0 || !onboardingDismissed) ? (
+        /* Case A Onboarding / Suggested Sources State */
         <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl bg-white/[0.02] border border-white/10 space-y-6">
           <div className="space-y-2 max-w-md">
-            <h3 className="text-lg sm:xl font-sans font-bold text-foreground">
+            <h3 className="text-lg sm:text-xl font-sans font-bold text-foreground">
               Stay close to the companies shaping technology
             </h3>
             <p className="text-xs font-mono text-muted-foreground/80 leading-relaxed">
@@ -251,43 +283,75 @@ export function BreakingNews() {
 
           {/* Quick-Follow Suggested Sources */}
           <div className="w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
-            {suggestedSources.map((source) => (
-              <div
-                key={source.slug}
-                className="flex items-center justify-between p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 transition-all"
-              >
-                <div className="flex flex-col">
-                  <span className="text-xs font-sans font-semibold text-foreground">
-                    {source.name}
-                  </span>
-                  <span className="text-[10px] font-mono text-muted-foreground/70">
-                    Official Newsroom
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
-                      toggleFollow(source.slug);
-                    }
-                  }}
-                  disabled={isToggling}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono font-semibold text-foreground transition-all cursor-pointer"
+            {suggestedSources.map((source) => {
+              const isFollowed = followedSources.some((s) => s.slug === source.slug);
+              return (
+                <div
+                  key={source.slug}
+                  className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                    isFollowed
+                      ? "bg-emerald-500/[0.04] border-emerald-500/20"
+                      : "bg-white/[0.04] border-white/10 hover:border-white/20"
+                  }`}
                 >
-                  <Plus className="w-3 h-3" />
-                  <span>Follow</span>
-                </button>
-              </div>
-            ))}
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <span className="text-xs font-sans font-semibold text-foreground truncate">
+                      {source.name}
+                    </span>
+                    <span className="text-[10px] font-mono text-muted-foreground/70">
+                      {getCategoryLabel(source.category)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
+                        toggleFollow(source.slug);
+                      }
+                    }}
+                    disabled={isToggling}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold transition-all cursor-pointer shrink-0 ${
+                      isFollowed
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
+                        : "bg-white/10 hover:bg-white/20 text-foreground"
+                    }`}
+                    title={isFollowed ? "Click to unfollow" : "Click to follow"}
+                  >
+                    {isFollowed ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        <span>Following</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3 h-3" />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
-          <button
-            type="button"
-            onClick={handleOpenSourceModal}
-            className="text-xs font-mono font-semibold text-primary hover:underline cursor-pointer"
-          >
-            Browse all sources →
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-1">
+            {followedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setOnboardingDismissed(true)}
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-mono text-xs font-semibold hover:opacity-90 transition-all cursor-pointer shadow-sm"
+              >
+                View Your Feed ({followedCount} followed) →
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleOpenSourceModal}
+              className="text-xs font-mono font-semibold text-primary hover:underline cursor-pointer"
+            >
+              Browse all sources →
+            </button>
+          </div>
         </div>
       ) : activeTab === "following" && feedArticles.length === 0 ? (
         /* Case B Empty State: Sources Followed, but 0 Articles */
@@ -366,11 +430,12 @@ export function BreakingNews() {
 
                         {articleImage && (
                           <div className="hidden sm:block shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-white/10 bg-neutral-900">
-                            <img
+                            <ProgressiveImage
                               src={articleImage}
-                              alt=""
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              loading="lazy"
+                              alt={article.title || "Article thumbnail"}
+                              className="w-full h-full"
+                              imgClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              sizes="96px"
                             />
                           </div>
                         )}

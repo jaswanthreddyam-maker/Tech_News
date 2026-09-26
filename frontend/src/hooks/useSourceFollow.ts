@@ -7,6 +7,7 @@ import { useAppStore } from "@/store/useStore";
 import { useAuthGate } from "@/hooks/useAuthGate";
 import { FeatureCapability } from "@/lib/auth/features";
 import { Article } from "@/lib/api/types";
+import { FALLBACK_SOURCES } from "@/components/sources/SourceSelectorModal";
 
 export interface SourceItem {
   id?: number;
@@ -102,14 +103,13 @@ export function useSourceFollow() {
       const prevSources = queryClient.getQueryData<SourceItem[]>(["sources", user?.id ?? "guest"]);
 
       // Optimistically update
-      if (prevSources) {
-        queryClient.setQueryData<SourceItem[]>(
-          ["sources", user?.id ?? "guest"],
-          prevSources.map((s) =>
-            s.slug === sourceSlug ? { ...s, is_following: !currentlyFollowing } : s
-          )
-        );
-      }
+      const baseSources = prevSources || FALLBACK_SOURCES;
+      queryClient.setQueryData<SourceItem[]>(
+        ["sources", user?.id ?? "guest"],
+        baseSources.map((s) =>
+          s.slug === sourceSlug ? { ...s, is_following: !currentlyFollowing } : s
+        )
+      );
 
       return { prevSources };
     },
@@ -129,7 +129,8 @@ export function useSourceFollow() {
     if (!requireAuthentication(FeatureCapability.SOURCE_FOLLOWING)) {
       return;
     }
-    const currentSource = sources.find((s) => s.slug === sourceSlug);
+    const allSources = sources.length > 0 ? sources : FALLBACK_SOURCES;
+    const currentSource = allSources.find((s) => s.slug === sourceSlug);
     const currentlyFollowing = currentSource ? currentSource.is_following : false;
 
     try {
