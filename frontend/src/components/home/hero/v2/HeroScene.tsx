@@ -46,20 +46,20 @@ export function HeroScene(props: HeroSceneProps) {
         style={{ opacity: stageOpacity }}
         data-testid="hero-scene-stage"
         aria-label="Featured AI Newsroom Stage"
-        className="relative w-full overflow-visible bg-transparent min-h-[480px] sm:min-h-[520px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-12 sm:pb-16 md:pb-12 lg:pb-4 group/hero-stage select-none"
+        className="relative w-full overflow-visible bg-transparent min-h-[460px] sm:min-h-[500px] md:min-h-[640px] xl:min-h-[680px] pt-1 px-4 sm:px-6 lg:px-8 pb-10 sm:pb-14 md:pb-12 lg:pb-4 group/hero-stage select-none"
       >
         <HeroStageBackground />
         <HeroAtmosphere />
 
         {/* Editorial Panel & 3D Carousel Ring */}
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-4 lg:gap-8 xl:gap-12 items-center overflow-visible">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-1 sm:gap-3 lg:gap-8 xl:gap-12 items-start lg:items-center overflow-visible">
           {/* Left Editorial Panel */}
-          <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-1 lg:order-1 -translate-y-2 sm:-translate-y-4 lg:-translate-y-[40px] pt-1 sm:pt-2 lg:pt-0">
+          <div className="lg:col-span-5 flex flex-col justify-start max-w-[540px] w-full mx-auto lg:mx-0 z-20 order-1 lg:order-1 pt-1 sm:pt-2 lg:pt-0 lg:-translate-y-[40px]">
             <HeroEditorialPanel />
           </div>
 
-          {/* Right 3D Ring Assembly - Lifted upwards on mobile by up to 1 inch (~80px) */}
-          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-2 lg:order-2 overflow-visible h-[310px] sm:h-[370px] md:h-[440px] lg:h-[480px] -mt-8 sm:-mt-8 lg:mt-0 -translate-y-[80px] sm:-translate-y-[60px] md:-translate-y-[40px] lg:-translate-y-[30px]">
+          {/* Right 3D Ring Assembly - Positioned close beneath the article title on mobile */}
+          <div className="lg:col-span-7 relative w-full flex flex-col items-center justify-center z-10 pointer-events-auto order-2 lg:order-2 overflow-visible h-[260px] sm:h-[320px] md:h-[400px] lg:h-[480px] -mt-24 sm:-mt-16 md:-mt-8 lg:mt-0 -translate-y-8 sm:-translate-y-10 md:-translate-y-8 lg:-translate-y-[30px]">
             <div className="relative w-full h-full flex items-center justify-center overflow-visible">
               <Hero3DRing />
             </div>

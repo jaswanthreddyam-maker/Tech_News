@@ -626,7 +626,7 @@ export function Hero3DRing() {
     <div
       ref={containerRef}
       data-testid="hero-3d-ring-container"
-      className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-visible py-8 touch-pan-y"
+      className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-visible py-0 sm:py-4 lg:py-8 touch-pan-y"
       style={{
         perspective: "1450px",
         perspectiveOrigin: "50% 50%",
