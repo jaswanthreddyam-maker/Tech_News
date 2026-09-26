@@ -62,7 +62,7 @@ export function HeroEditorialPanel() {
           initial="hidden"
           animate="visible"
           exit="exit"
-          className="flex flex-col gap-5"
+          className="flex flex-col gap-3.5 sm:gap-5"
         >
           {/* Staggered Element 1: Publisher & Category Emblem */}
           <m.div variants={itemVariants} className="flex items-center gap-3">
