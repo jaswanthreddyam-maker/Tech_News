@@ -104,10 +104,12 @@ export function HeroCarousel({
     return pool;
   }, [genuinePool, allPool]);
 
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+
   // If server provided initialItems or activePool has articles, we are NOT loading!
   const hasLoadedArticles = activePool.length > 0 || initialItems.length > 0;
-  const isLoading = !hasLoadedArticles && trendingQuery.isLoading;
-  const isError = !hasLoadedArticles && trendingQuery.isError;
+  const isLoading = !hasLoadedArticles && trendingQuery.isLoading && !hasTimedOut;
+  const isError = !hasLoadedArticles && (trendingQuery.isError || (hasTimedOut && !hasLoadedArticles));
   const isEmpty = !hasLoadedArticles && trendingQuery.isSuccess && activePool.length === 0;
 
   const items = React.useMemo(() => {
@@ -136,6 +138,10 @@ export function HeroCarousel({
 
   useEffect(() => {
     setMounted(true);
+    const timer = setTimeout(() => {
+      setHasTimedOut(true);
+    }, 7000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Render skeleton during SSR / initial hydration so HeroScene mounts fresh on the client,

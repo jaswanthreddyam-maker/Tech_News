@@ -411,7 +411,7 @@ export function LatestNews({ initialDesks, initialArticles }: LatestNewsProps = 
     return displayArticles.slice(0, visibleCount);
   }, [displayArticles, visibleCount]);
 
-  const isLoading = (isDesksLoading || isTrendingLoading) && individualCategories.length === 0;
+  const isLoading = isDesksLoading && isTrendingLoading && individualCategories.length === 0;
   const hasError = desksError && trendingError && individualCategories.length === 0;
 
   if (isLoading) {

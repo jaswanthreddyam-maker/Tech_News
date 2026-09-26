@@ -75,7 +75,8 @@ async def list_articles(
             )
 
     # Fast Path 0: Process-level in-memory cache (1ms response, completely immune to DB/Redis latency)
-    if not category and not cursor and not sort_by and not ids and _in_memory_homepage_cache.get("cards") and now_ts < _in_memory_homepage_cache.get("expires_at", 0):
+    is_homepage_feed = not category and not cursor and not ids and (not sort_by or sort_by in ("trending", "default"))
+    if is_homepage_feed and _in_memory_homepage_cache.get("cards") and now_ts < _in_memory_homepage_cache.get("expires_at", 0):
         cards_data = _in_memory_homepage_cache["cards"]
         t_total = time.time() - t0
         response.headers["Server-Timing"] = f"mem_hit;dur={t_total*1000:.1f}"
@@ -359,11 +360,9 @@ async def list_articles(
                             res = await db.execute(stmt)
                             articles_map = {str(art.id): art for art in res.scalars().all()}
                             
-                            if set(articles_map.keys()) != set(story_ids):
-                                logger.warning(f"Partial resolution in HomepageProjection v{latest_projection.projection_version}: requested {len(story_ids)}, resolved {len(articles_map)}. Triggering rebuild.")
-                                is_stale_state = True
-                            else:
-                                resolved_articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
+                            resolved_articles = [articles_map[aid] for aid in story_ids if aid in articles_map]
+                            if len(resolved_articles) >= 8:
+                                is_stale_state = False
                                 ranked_ids = [str(a.id) for a in resolved_articles]
                                 try:
                                     import asyncio
@@ -381,6 +380,9 @@ async def list_articles(
                                         await asyncio.wait_for(redis.set(cache_key, json.dumps(cache_payload), ex=3600), timeout=REDIS_OP_TIMEOUT)
                                 except Exception as e:
                                     logger.warning(f"Redis cache write failed: {e}")
+                            else:
+                                logger.warning(f"Insufficient resolution in HomepageProjection v{latest_projection.projection_version}: requested {len(story_ids)}, resolved {len(resolved_articles)}. Triggering rebuild.")
+                                is_stale_state = True
                 except Exception as e:
                     logger.warning(f"HomepageProjection Path 2 read failed: {e}. Falling back to rebuild.")
 
@@ -398,7 +400,14 @@ async def list_articles(
                         await CacheService.invalidate_homepage_cache(reason="projection_rebuild")
                         await expire_articles(db)
                         global_articles = await HomepageBuilder.build_and_persist_homepage_projection(db)
-                        await HomepageBuilder.build_and_persist_category_desks(db)
+                        # Offload category desks build to background task to avoid stalling the /news response
+                        async def _bg_desks():
+                            try:
+                                async with AsyncSessionLocal() as bg_db:
+                                    await HomepageBuilder.build_and_persist_category_desks(bg_db)
+                            except Exception as bg_err:
+                                logger.warning(f"Background desks rebuild failed: {bg_err}")
+                        asyncio.create_task(_bg_desks())
                         resolved_articles = global_articles
                         ranked_ids = [str(a.id) for a in global_articles]
 
@@ -547,7 +556,7 @@ async def list_articles(
                 logger.warning(f"Failed to cache freshness payload: {cache_err}")
         else:
             _in_memory_homepage_cache["cards"] = raw_cards
-            _in_memory_homepage_cache["expires_at"] = time.time() + 60.0
+            _in_memory_homepage_cache["expires_at"] = time.time() + 300.0
             try:
                 redis = get_redis_client()
                 if redis:

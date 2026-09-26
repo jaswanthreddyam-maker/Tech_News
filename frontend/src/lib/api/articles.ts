@@ -16,24 +16,30 @@ export async function getArticles(params: {
     params: queryParams,
     revalidate: 60,
     tags: ["news"],
-    timeoutMs: 8000,
+    timeoutMs: 25000,
   });
 }
 
-export async function getArticleById(id: number): Promise<StandardResponse<Article>> {
-  return apiFetch<StandardResponse<Article>>(`/news/${id}`);
+export async function getArticleById(id: number | string): Promise<StandardResponse<Article>> {
+  return apiFetch<StandardResponse<Article>>(`/articles/${id}`);
 }
 
 export async function getTrendingArticles(): Promise<PaginatedResponse<Article>> {
   return apiFetch<PaginatedResponse<Article>>("/news", { 
     params: { limit: "25", sort_by: "trending" },
     revalidate: 60,
-    tags: ["trending"] 
+    tags: ["trending"],
+    timeoutMs: 25000,
   });
 }
 
 export async function getBreakingNews(): Promise<PaginatedResponse<Article>> {
-  return apiFetch<PaginatedResponse<Article>>("/news", { params: { limit: "25", sort_by: "freshness" } });
+  return apiFetch<PaginatedResponse<Article>>("/news", { 
+    params: { limit: "25", sort_by: "freshness" },
+    revalidate: 60,
+    tags: ["breaking"],
+    timeoutMs: 25000,
+  });
 }
 
 export async function getPersonalizedFeed(anonymousId?: string | null): Promise<StandardResponse<any[]>> {
@@ -57,7 +63,11 @@ export async function getTrends(): Promise<string[]> {
 }
 
 export async function getCategoryDesks(): Promise<any[]> {
-  return apiFetch<any[]>("/news/desks");
+  return apiFetch<any[]>("/news/desks", {
+    revalidate: 60,
+    tags: ["desks"],
+    timeoutMs: 25000,
+  });
 }
 
 

@@ -48,8 +48,8 @@ export function TrendingStories({ initialArticles }: TrendingStoriesProps = {}) 
   const rawArticles = Array.isArray(data) ? data : (data as any)?.data || [];
   const hasArticles = rawArticles.length > 0;
 
-  const isLoading = !hasArticles && (trendingQuery.isLoading || desksQuery.isLoading);
-  const error = !hasArticles && trendingQuery.isError && desksQuery.isError;
+  const isLoading = !hasArticles && trendingQuery.isLoading;
+  const error = !hasArticles && trendingQuery.isError;
 
   // Animation Hooks
   const shouldReduceMotion = useReducedMotion();
@@ -173,7 +173,7 @@ export function TrendingStories({ initialArticles }: TrendingStoriesProps = {}) 
   }
 
   if (!featured && compact.length === 0) {
-    if (trendingQuery.isLoading || desksQuery.isLoading) {
+    if (trendingQuery.isLoading) {
       return <StorySkeleton />;
     }
     return null;
