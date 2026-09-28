@@ -41,7 +41,7 @@ export function TrendingStories({ initialArticles }: TrendingStoriesProps = {}) 
   const queryClient = useQueryClient();
   const { enqueue } = useOfflineQueue();
 
-  const trendingQuery = useTrending();
+  const trendingQuery = useTrending(initialArticles);
   const desksQuery = useCategoryDesks();
 
   const data = trendingQuery.data ?? initialArticles;
@@ -80,24 +80,21 @@ export function TrendingStories({ initialArticles }: TrendingStoriesProps = {}) 
   const getAnimationProps = (idx: number, isFeatured: boolean): any => {
     if (shouldReduceMotion) return {};
 
-    const delay = isFeatured ? 0 : 0.12 + idx * 0.06;
-    const duration = isFeatured ? 0.7 : 0.5;
-
     return {
       initial: {
-        opacity: 0,
-        y: isFeatured ? 24 : 16,
-        scale: 0.97,
+        opacity: 0.85,
+        y: isFeatured ? 8 : 6,
+        scale: 0.99,
       },
       whileInView: {
         opacity: 1,
         y: 0,
         scale: 1,
       },
-      viewport: { once: true, amount: 0.1, margin: "80px" },
+      viewport: { once: true, amount: 0, margin: "300px" },
       transition: {
-        duration,
-        delay,
+        duration: 0.25,
+        delay: isFeatured ? 0 : Math.min(0.06, idx * 0.015),
         ease: [0.16, 1, 0.3, 1] as const,
       },
     };
@@ -200,7 +197,7 @@ export function TrendingStories({ initialArticles }: TrendingStoriesProps = {}) 
   };
 
   return (
-    <section className="TrendingWall py-8 my-6 w-full">
+    <section className="TrendingWall py-2 sm:py-4 my-1 sm:my-2 w-full">
       {/* Editorial Section Header */}
       <div className="flex items-center gap-3 mb-9">
         <div className="p-2 bg-primary/10 rounded-xl">

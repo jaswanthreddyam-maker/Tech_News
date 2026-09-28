@@ -1,13 +1,14 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { getTrendingArticles, getBreakingNews, getLatestNews, getArticles } from "@/lib/api/articles";
 
-export function useTrending() {
+export function useTrending(initialData?: any) {
   return useQuery({
     queryKey: ["articles", "trending"],
     queryFn: () => getTrendingArticles(),
-    staleTime: 30 * 1000,
-    gcTime: 2 * 60 * 1000,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     retry: 2,
+    initialData,
   });
 }
 

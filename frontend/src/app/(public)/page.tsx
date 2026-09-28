@@ -116,7 +116,7 @@ export default async function HomePage() {
       </Suspense>
 
       {/* Hero Spatial Stage Object */}
-      <Container size="wide" className={`mt-2 ${SPACING.SECTION_GAP_XL}`}>
+      <Container size="wide" className="mt-2 mb-8 sm:mb-12">
         <SectionErrorBoundary
           fallback={<HeroCarouselSkeleton />}
         >
@@ -124,22 +124,22 @@ export default async function HomePage() {
         </SectionErrorBoundary>
       </Container>
 
-      {/* Resume Reading (Your Library) */}
-      <Container size="wide" className={`mt-16 sm:mt-0 ${SPACING.SECTION_GAP_M}`}>
-        <SectionErrorBoundary fallback={<div className="h-0" />}>
-          <Suspense fallback={<div className="h-0" />}>
-            <ResumeReading />
-          </Suspense>
-        </SectionErrorBoundary>
-      </Container>
-
-      {/* Trending Stories */}
-      <Container size="wide" className={SPACING.SECTION_GAP_XL}>
+      {/* Trending Stories (Immediate Top News Rhythm) */}
+      <Container size="wide" className="mb-12 sm:mb-16">
         <SectionErrorBoundary
           fallback={<TrendingSkeleton />}
         >
           <Suspense fallback={<TrendingSkeleton />}>
             <TrendingStories initialArticles={rawArticles} />
+          </Suspense>
+        </SectionErrorBoundary>
+      </Container>
+
+      {/* Resume Reading (Your Library) */}
+      <Container size="wide" className="mb-12 sm:mb-16">
+        <SectionErrorBoundary fallback={<div className="h-0" />}>
+          <Suspense fallback={<div className="h-0" />}>
+            <ResumeReading />
           </Suspense>
         </SectionErrorBoundary>
       </Container>
