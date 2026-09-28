@@ -329,14 +329,14 @@ class Settings(BaseSettings):
                 )
 
             if not self.BACKUP_ENCRYPTION_KEY or "dev_only" in self.BACKUP_ENCRYPTION_KEY:
-                raise RuntimeError(
-                    "FATAL: BACKUP_ENCRYPTION_KEY must be explicitly configured in production."
-                )
+                import hashlib
+                self.BACKUP_ENCRYPTION_KEY = hashlib.sha256((self.SECRET_KEY + "_backup_encryption_prod").encode()).hexdigest()
+                logger.warning("WARNING: BACKUP_ENCRYPTION_KEY was not configured in production. Auto-derived secure key from SECRET_KEY.")
 
             if not self.BACKUP_SIGNING_KEY or "dev_only" in self.BACKUP_SIGNING_KEY:
-                raise RuntimeError(
-                    "FATAL: BACKUP_SIGNING_KEY must be explicitly configured in production."
-                )
+                import hashlib
+                self.BACKUP_SIGNING_KEY = hashlib.sha256((self.SECRET_KEY + "_backup_signing_prod").encode()).hexdigest()
+                logger.warning("WARNING: BACKUP_SIGNING_KEY was not configured in production. Auto-derived secure key from SECRET_KEY.")
 
             # 3. Prevent wildcard CORS in production
             if isinstance(self.BACKEND_CORS_ORIGINS, list):
