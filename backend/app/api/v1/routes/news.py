@@ -92,13 +92,14 @@ async def list_articles(
     is_homepage_feed = not category and not cursor and not ids and (not sort_by or sort_by in ("trending", "default"))
     if is_homepage_feed and _in_memory_homepage_cache.get("cards") and now_ts < _in_memory_homepage_cache.get("expires_at", 0):
         cards_data = _in_memory_homepage_cache["cards"]
-        t_total = time.time() - t0
-        response.headers["Server-Timing"] = f"mem_hit;dur={t_total*1000:.1f}"
-        return PaginatedResponse(
-            correlation_id=correlation_id,
-            data=cards_data[:limit],
-            pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
-        )
+        if len(cards_data) >= limit:
+            t_total = time.time() - t0
+            response.headers["Server-Timing"] = f"mem_hit;dur={t_total*1000:.1f}"
+            return PaginatedResponse(
+                correlation_id=correlation_id,
+                data=cards_data[:limit],
+                pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
+            )
 
     t_redis = 0.0
     cache_key_full = "editorial:v2:homepage_cards_full_json"
@@ -220,7 +221,7 @@ async def list_articles(
                                     break
                             except Exception:
                                 pass
-                    if all_fresh:
+                    if all_fresh and len(cards_data) >= limit:
                         t_total = time.time() - t0
                         response.headers["Server-Timing"] = f"redis_hit;dur={(time.time()-t0)*1000:.1f}"
                         return PaginatedResponse(
@@ -547,8 +548,9 @@ async def list_articles(
             except Exception as cache_err:
                 logger.warning(f"Failed to cache freshness payload: {cache_err}")
         else:
-            _in_memory_homepage_cache["cards"] = raw_cards
-            _in_memory_homepage_cache["expires_at"] = time.time() + 300.0
+            if len(raw_cards) >= len(_in_memory_homepage_cache.get("cards") or []):
+                _in_memory_homepage_cache["cards"] = raw_cards
+                _in_memory_homepage_cache["expires_at"] = time.time() + 300.0
             try:
                 redis = get_redis_client()
                 if redis:
