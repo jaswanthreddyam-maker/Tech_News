@@ -1,16 +1,25 @@
+import hashlib
+import json
 import logging
+import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import yaml
 
-from sqlalchemy import select
+from sqlalchemy import and_, cast, func, or_, select, String, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.core.config import settings
 from app.editorial.diversity import apply_diversity_filter
 from app.editorial.freshness import calculate_freshness_multiplier
 from app.editorial.models import EditorialDecisionLog
 from app.editorial.ranking import sort_candidates_deterministically
-from app.models.article import ArticleReadModel
+from app.models.article import ArticleReadModel, Category, ProcessedArticle
+from app.models.projection import CategoryDeskProjection, HomepageProjection
 from app.models.tnt_knowledge import ArticleTopicLink
+from app.services.cache_service import CacheService
+from app.services.ingestion.replenishment import AutoReplenishmentService
 
 logger = logging.getLogger("tech_news.editorial.homepage_builder")
 
@@ -35,10 +44,7 @@ class HomepageBuilder:
         cutoff_hours = getattr(settings, "EDITORIAL_WINDOW_HOURS", 24)
         cutoff = now - timedelta(hours=cutoff_hours)
 
-        from sqlalchemy.orm import defer
-        from sqlalchemy import or_, and_, cast, String
-        from app.models.article import ProcessedArticle
-        from app.services.ingestion.replenishment import AutoReplenishmentService
+
         
         # 1. Primary candidate selection: Strictly within EDITORIAL_WINDOW_HOURS and unexpired
         stmt = (
@@ -97,8 +103,27 @@ class HomepageBuilder:
             res_fb = await db.execute(stmt_fb)
             articles = res_fb.scalars().all()
             if not articles:
-                logger.warning("HomepageBuilder: No unexpired articles found within 48h. Awaiting auto-replenishment.")
-                return []
+                logger.warning("HomepageBuilder: No unexpired articles found within 48h. Expanding selection to most recent available non-test articles.")
+                stmt_fb_any = (
+                    select(ArticleReadModel)
+                    .where(
+                        ArticleReadModel.is_test_data == False,
+                        or_(
+                            ArticleReadModel.publication_status == "PUBLISHED",
+                            ArticleReadModel.publication_status == "EXPIRED",
+                        )
+                    )
+                    .order_by(ArticleReadModel.published_at.desc())
+                    .limit(50)
+                    .options(
+                        defer(ArticleReadModel.content),
+                        defer(ArticleReadModel.embedding)
+                    )
+                )
+                res_fb_any = await db.execute(stmt_fb_any)
+                articles = res_fb_any.scalars().all()
+                if not articles:
+                    return []
 
         # 2. Fetch all topic links for the actual selected candidates in a single query
         candidate_ids = [art.id for art in articles]
@@ -233,13 +258,10 @@ class HomepageBuilder:
         homepage_limit = getattr(settings, "MAX_HOMEPAGE_ARTICLES", 20)
         top_articles = final_articles[:homepage_limit]
 
-        import hashlib
-        import json
         story_ids = [str(art.id) for art in top_articles]
         current_checksum = hashlib.sha256(json.dumps(story_ids).encode("utf-8")).hexdigest()
 
         try:
-            from app.models.projection import HomepageProjection
             # Fetch latest projection to check checksum idempotency
             latest_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
             latest_res = await db.execute(latest_stmt)
@@ -310,11 +332,9 @@ class HomepageBuilder:
             logger.info(f"HomepageBuilder: Successfully persisted HomepageProjection v{new_version} ({ranking_ver}) with Top {len(stories_json)} stories.")
 
             # Invalidate Redis cache via CacheService
-            from app.services.cache_service import CacheService
             await CacheService.invalidate_homepage_cache()
 
             # Retention Cleanup Policy: Keep only the 50 most recent projections
-            from sqlalchemy import text
             cleanup_stmt = text(
                 "DELETE FROM homepage_projections WHERE id NOT IN ("
                 "SELECT id FROM homepage_projections ORDER BY created_at DESC LIMIT 50"
@@ -343,15 +363,8 @@ class HomepageBuilder:
         now = datetime.now(timezone.utc)
         cutoff_hours = getattr(settings, "EDITORIAL_WINDOW_HOURS", 24)
         cutoff = now - timedelta(hours=cutoff_hours)
-        import time
         start_time = time.time()
 
-        from sqlalchemy.orm import defer
-        from sqlalchemy import or_, and_, cast, String
-        from app.models.article import ProcessedArticle, Category
-        from app.models.projection import CategoryDeskProjection
-
-        from sqlalchemy import func
         cat_slug_expr = func.coalesce(Category.slug, func.lower(func.replace(ArticleReadModel.category, ' ', '-'))).label("cat_slug")
 
         # Fetch articles and their category slug strictly within window
@@ -403,8 +416,8 @@ class HomepageBuilder:
             res_fb = await db.execute(stmt_fb)
             rows = res_fb.all()
 
-        if not rows or len(rows) < 10:
-            logger.info("HomepageBuilder Category Fallback: Expanding selection to recent published articles.")
+        if not rows or len(rows) < 15:
+            logger.info("HomepageBuilder Category Fallback: Expanding selection to recent articles.")
             is_fallback = True
             stmt_recent = (
                 select(ArticleReadModel, cat_slug_expr)
@@ -413,9 +426,11 @@ class HomepageBuilder:
                 .where(
                     and_(
                         ArticleReadModel.is_test_data == False,
-                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(
+                            ArticleReadModel.publication_status == "PUBLISHED",
+                            ArticleReadModel.publication_status == "EXPIRED",
+                        ),
                         or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
-                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
                     )
                 ).order_by(ArticleReadModel.published_at.desc()).limit(100).options(
                     defer(ArticleReadModel.content),
@@ -440,11 +455,11 @@ class HomepageBuilder:
                 cat_slug = "artificial-intelligence"
             elif raw_s in ("cybersecurity", "security", "privacy"):
                 cat_slug = "cybersecurity"
-            elif raw_s in ("hardware", "hardware-&-devices", "hardware-gadgets", "devices", "gadgets", "chips", "semiconductors"):
+            elif raw_s in ("hardware", "hardware-&-devices", "hardware-gadgets", "hardware-&-gadgets", "devices", "gadgets", "chips", "semiconductors"):
                 cat_slug = "hardware"
             elif raw_s in ("robotics", "automation", "drones", "autonomous"):
                 cat_slug = "robotics"
-            elif raw_s in ("science", "science-&-quantum", "science-future", "quantum", "space", "biotech"):
+            elif raw_s in ("science", "science-&-quantum", "science-future", "science-&-future", "quantum", "space", "biotech"):
                 cat_slug = "science"
             elif raw_s in ("startups", "startups-and-business", "startups-&-business", "business", "finance", "venture"):
                 cat_slug = "startups-and-business"
@@ -469,8 +484,6 @@ class HomepageBuilder:
                     "freshness_multiplier": mult,
                 })
 
-        import yaml
-        from pathlib import Path
         policy_path = Path(__file__).parent / "category_policy.yaml"
         policy_data = {}
         if policy_path.exists():

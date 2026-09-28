@@ -1,21 +1,39 @@
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import desc, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
+import html
+import json
+import logging
+import time
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Any
+import yaml
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import and_, cast, desc, func, or_, select, String, update, delete
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
+
+from app.core.config import settings
+from app.core.database import AsyncSessionLocal, get_db, safe_db_execute
 from app.core.logging import correlation_id_ctx
-from app.models.article import ArticleReadModel
+from app.core.redis import get_redis_client, RedisDistributedLock, mark_redis_failed
+from app.models.article import ArticleReadModel, ProcessedArticle, Category
+from app.models.projection import HomepageProjection, CategoryDeskProjection
 from app.models.tnt_knowledge import ArticleEntityLink, ArticleTopicLink, EntityNode
 from app.schemas.news import ArticleCard
 from app.schemas.responses import PaginatedResponse, PaginationMetadata
+from app.services.cache_service import in_memory_homepage_cache as _in_memory_homepage_cache, CacheService
+from app.services.ranking.news_ranking_engine import expire_articles
+from app.editorial.homepage_builder import HomepageBuilder
+from app.services.ingestion.replenishment import AutoReplenishmentService
+from agents.ingestion.rss_agent import RSSIngestionAgent
+
+logger = logging.getLogger("tech_news.routes.news")
+
+REDIS_OP_TIMEOUT = 1.0
 
 router = APIRouter()
-
-from typing import Any
-from fastapi import Response, Query, Depends
-
-from app.services.cache_service import in_memory_homepage_cache as _in_memory_homepage_cache
 
 @router.get("", response_model=PaginatedResponse[ArticleCard])
 async def list_articles(
@@ -29,7 +47,6 @@ async def list_articles(
     """
     Fetch articles from ArticleReadModel using the versioned Redis ranking cache.
     """
-    import time
     t0 = time.time()
     now_ts = time.time()
     correlation_id = correlation_id_ctx.get() or "system"
@@ -45,7 +62,6 @@ async def list_articles(
             )
         
         async def fetch_ids_data(db):
-            from sqlalchemy.orm import defer
             stmt = (
                 select(ArticleReadModel)
                 .where(ArticleReadModel.id.in_(id_list))
@@ -57,7 +73,6 @@ async def list_articles(
             return [ArticleCard.from_model(art_map[i]) for i in id_list if i in art_map]
 
         try:
-            from app.core.database import safe_db_execute
             matched_cards = await safe_db_execute(fetch_ids_data, fallback=[])
             response.headers["Server-Timing"] = f"db_ids;dur={(time.time()-t0)*1000:.1f}"
             return PaginatedResponse(
@@ -66,8 +81,7 @@ async def list_articles(
                 pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=len(matched_cards)),
             )
         except Exception as e:
-            import logging
-            logging.getLogger("tech_news.routes.news").error(f"Error querying articles by ids: {e}", exc_info=True)
+            logger.error(f"Error querying articles by ids: {e}", exc_info=True)
             return PaginatedResponse(
                 correlation_id=correlation_id,
                 data=[],
@@ -85,18 +99,6 @@ async def list_articles(
             data=cards_data[:limit],
             pagination=PaginationMetadata(next_cursor=None, has_more=False, limit=limit),
         )
-
-    import asyncio
-    import json
-    import logging
-    from app.core.database import AsyncSessionLocal
-    from app.core.redis import get_redis_client
-    from app.core.config import settings
-    from app.models.article import ProcessedArticle
-    from datetime import datetime, timezone, timedelta
-    from sqlalchemy import cast, String, func, and_, or_
-
-    logger = logging.getLogger("tech_news.routes.news")
 
     t_redis = 0.0
     cache_key_full = "editorial:v2:homepage_cards_full_json"
@@ -126,12 +128,14 @@ async def list_articles(
             pass
 
         async def fetch_fresh_data(db):
-            from sqlalchemy.orm import defer
             stmt_fresh = (
                 select(ArticleReadModel)
                 .where(
                     ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        ArticleReadModel.publication_status == "EXPIRED",
+                    ),
                 )
                 .order_by(desc(ArticleReadModel.published_at))
                 .limit(limit)
@@ -145,7 +149,6 @@ async def list_articles(
             entities_by_art: dict[str, list[str]] = {}
 
             if art_ids:
-                from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
                 try:
                     t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
                     t_res = await db.execute(t_stmt)
@@ -172,7 +175,6 @@ async def list_articles(
             ]
 
         try:
-            from app.core.database import safe_db_execute
             articles_list = await safe_db_execute(fetch_fresh_data, fallback=[])
 
             # Cache in Redis with 180s TTL
@@ -230,7 +232,6 @@ async def list_articles(
                         logger.info("Cached Redis cards contain stale/expired articles. Invalidating.")
                 cached = await asyncio.wait_for(redis.get(cache_key), timeout=REDIS_OP_TIMEOUT)
         except Exception as e:
-            from app.core.redis import mark_redis_failed
             mark_redis_failed()
             logger.warning(f"Redis cache read failed (proceeding without cache): {e}")
         t_redis = time.time() - t0
@@ -261,7 +262,6 @@ async def list_articles(
                 else:
                     # Invariant 2: Compare projection_id & projection_version against DB HomepageProjection
                     try:
-                        from app.models.projection import HomepageProjection
                         proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
                         proj_res = await db.execute(proj_stmt)
                         latest_projection = proj_res.scalars().first()
@@ -323,7 +323,6 @@ async def list_articles(
             # Path 2: Check latest HomepageProjection CQRS read model
             if not resolved_articles and not is_stale_state:
                 try:
-                    from app.models.projection import HomepageProjection
                     proj_stmt = select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1)
                     proj_res = await db.execute(proj_stmt)
                     latest_projection = proj_res.scalars().first()
@@ -365,7 +364,6 @@ async def list_articles(
                                 is_stale_state = False
                                 ranked_ids = [str(a.id) for a in resolved_articles]
                                 try:
-                                    import asyncio
                                     algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
                                     cache_payload = {
                                         "projection_id": str(latest_projection.id),
@@ -386,13 +384,7 @@ async def list_articles(
                 except Exception as e:
                     logger.warning(f"HomepageProjection Path 2 read failed: {e}. Falling back to rebuild.")
 
-            # Path 3: Concurrent-safe rebuild using RedisDistributedLock with safe fallback path (Guardrail #3)
             if not resolved_articles or is_stale_state:
-                from app.core.redis import RedisDistributedLock
-                from app.editorial.homepage_builder import HomepageBuilder
-                from app.services.cache_service import CacheService
-                from app.services.ranking.news_ranking_engine import expire_articles
-
                 lock = RedisDistributedLock("homepage_projection_rebuild", expire_seconds=30)
                 try:
                     async with lock:
@@ -412,12 +404,10 @@ async def list_articles(
                         ranked_ids = [str(a.id) for a in global_articles]
 
                         # Fetch the newly created projection metadata
-                        from app.models.projection import HomepageProjection
                         new_proj_res = await db.execute(select(HomepageProjection).order_by(HomepageProjection.created_at.desc()).limit(1))
                         new_proj = new_proj_res.scalars().first()
 
                         try:
-                            import asyncio
                             algo_ver = getattr(settings, "EDITORIAL_ALGORITHM_VERSION", "v1")
                             cache_payload = {
                                 "projection_id": str(new_proj.id) if new_proj else "",
@@ -434,7 +424,6 @@ async def list_articles(
                             logger.warning(f"Redis cache write failed: {e}")
                 except Exception as lock_err:
                     logger.warning(f"Could not acquire rebuild lock (or lock failed): {lock_err}. Falling back to DB read model.")
-                    from app.editorial.homepage_builder import HomepageBuilder
                     resolved_articles = await HomepageBuilder.build_homepage(db)
 
             # If category filter is active, find articles matching this category
@@ -453,13 +442,15 @@ async def list_articles(
 
                 # 2. If fewer than limit, query ArticleReadModel directly for published category stories
                 if len(matching_arts) < limit:
-                    from sqlalchemy import or_, desc
                     needed = limit - len(matching_arts)
                     cat_query = (
                         select(ArticleReadModel)
                         .where(
                             ArticleReadModel.is_test_data == False,
-                            ArticleReadModel.publication_status == "PUBLISHED",
+                            or_(
+                                ArticleReadModel.publication_status == "PUBLISHED",
+                                ArticleReadModel.publication_status == "EXPIRED",
+                            ),
                             or_(
                                 func.lower(ArticleReadModel.category).contains(category_lower),
                                 func.lower(ArticleReadModel.title).contains(category_lower),
@@ -480,7 +471,7 @@ async def list_articles(
 
                 resolved_articles = matching_arts
 
-            # If no category filter, but resolved_articles is fewer than limit, backfill from latest published articles
+            # If no category filter, but resolved_articles is fewer than limit, backfill from latest articles
             if not category and len(resolved_articles) < limit:
                 seen_ids = {str(art.id) for art in resolved_articles}
                 needed = limit - len(resolved_articles)
@@ -488,7 +479,10 @@ async def list_articles(
                     select(ArticleReadModel)
                     .where(
                         ArticleReadModel.is_test_data == False,
-                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(
+                            ArticleReadModel.publication_status == "PUBLISHED",
+                            ArticleReadModel.publication_status == "EXPIRED",
+                        ),
                     )
                 )
                 if seen_ids:
@@ -512,7 +506,6 @@ async def list_articles(
             entities_by_art: dict[str, list[str]] = {}
 
             if art_ids:
-                from app.models.tnt_knowledge import ArticleEntityLink, EntityNode
                 # 1. Batch topics
                 t_stmt = select(ArticleTopicLink.article_id, ArticleTopicLink.topic_name).where(ArticleTopicLink.article_id.in_(art_ids))
                 t_res = await db.execute(t_stmt)
@@ -538,7 +531,6 @@ async def list_articles(
             ]
 
         try:
-            from app.core.database import safe_db_execute
             articles_list = await safe_db_execute(fetch_homepage_articles, fallback=[])
         except Exception as exc:
             logger.error(f"Error fetching homepage articles: {exc}", exc_info=True)
@@ -583,11 +575,6 @@ async def purge_news_cache(db: AsyncSession = Depends(get_db)):
     """
     Clears stale Redis homepage cache and forces a fresh projection rebuild.
     """
-    from app.core.redis import get_redis_client
-    from app.editorial.homepage_builder import HomepageBuilder
-    from app.models.projection import HomepageProjection, CategoryDeskProjection
-    from sqlalchemy import delete
-
     _in_memory_homepage_cache["cards"] = None
     _in_memory_homepage_cache["expires_at"] = 0.0
 
@@ -614,13 +601,12 @@ async def get_rss_feed(db: AsyncSession = Depends(get_db)):
     """
     Generates standard RSS 2.0 feed of the latest published tech news articles.
     """
-    from app.models.article import ArticleReadModel
-    from datetime import datetime, timezone
-    import html
-
     stmt = select(ArticleReadModel).where(
         ArticleReadModel.is_test_data == False,
-        ArticleReadModel.publication_status == "PUBLISHED"
+        or_(
+            ArticleReadModel.publication_status == "PUBLISHED",
+            ArticleReadModel.publication_status == "EXPIRED",
+        )
     ).order_by(desc(ArticleReadModel.published_at)).limit(30)
     res = await db.execute(stmt)
     articles = res.scalars().all()
@@ -682,16 +668,7 @@ async def get_category_desks():
     except Exception:
         pass
 
-    from app.core.database import safe_db_execute
-    from app.models.projection import CategoryDeskProjection
-    from app.models.article import ArticleReadModel, ProcessedArticle
-    from pathlib import Path
-    from datetime import datetime, timezone
-    from sqlalchemy import cast, String, func, or_
-    import yaml
-
     now_utc = datetime.now(timezone.utc)
-    logger = logging.getLogger("tech_news.routes.news")
 
     async def fetch_category_desks(db):
         # 1. Load configuration
@@ -710,8 +687,6 @@ async def get_category_desks():
 
         # Auto-heal: rebuild if projections don't exist at all
         if not projections or not any(p.article_ids for p in projections if p.article_ids):
-            from app.core.redis import RedisDistributedLock
-            from app.editorial.homepage_builder import HomepageBuilder
             lock = RedisDistributedLock("category_desks_rebuild", expire_seconds=30)
             try:
                 async with lock:
@@ -730,17 +705,17 @@ async def get_category_desks():
         
         articles_map = {}
         if all_article_ids:
-            from sqlalchemy.orm import defer
             art_stmt = (
                 select(ArticleReadModel)
                 .outerjoin(ProcessedArticle, cast(ProcessedArticle.id, String) == ArticleReadModel.id)
                 .where(
                     ArticleReadModel.id.in_(all_article_ids),
                     ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        ArticleReadModel.publication_status == "EXPIRED",
+                    ),
                     or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
-                    or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
-                    or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
                 )
                 .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
             )
@@ -749,8 +724,6 @@ async def get_category_desks():
 
         # If projection articles are mostly expired/stale, trigger category desks rebuild
         if len(articles_map) < 5:
-            from app.core.redis import RedisDistributedLock
-            from app.editorial.homepage_builder import HomepageBuilder
             lock = RedisDistributedLock("category_desks_rebuild", expire_seconds=30)
             try:
                 async with lock:
@@ -773,10 +746,11 @@ async def get_category_desks():
                     .where(
                         ArticleReadModel.id.in_(all_article_ids),
                         ArticleReadModel.is_test_data == False,
-                        ArticleReadModel.publication_status == "PUBLISHED",
+                        or_(
+                            ArticleReadModel.publication_status == "PUBLISHED",
+                            ArticleReadModel.publication_status == "EXPIRED",
+                        ),
                         or_(ProcessedArticle.is_archived == None, ProcessedArticle.is_archived == False),
-                        or_(ProcessedArticle.is_expired == None, ProcessedArticle.is_expired == False),
-                        or_(ProcessedArticle.expires_at == None, ProcessedArticle.expires_at > now_utc),
                     )
                     .options(defer(ArticleReadModel.content), defer(ArticleReadModel.embedding))
                 )
@@ -839,7 +813,10 @@ async def get_category_desks():
                 select(ArticleReadModel)
                 .where(
                     ArticleReadModel.is_test_data == False,
-                    ArticleReadModel.publication_status == "PUBLISHED",
+                    or_(
+                        ArticleReadModel.publication_status == "PUBLISHED",
+                        ArticleReadModel.publication_status == "EXPIRED",
+                    ),
                 )
                 .order_by(ArticleReadModel.published_at.desc())
                 .limit(60)
@@ -904,10 +881,6 @@ async def get_category_desks():
 
 async def _backfill_missing_thumbnails(db: AsyncSession):
     """Backfills og:image thumbnails for unthumbnailed published articles."""
-    from app.models.article import ArticleReadModel, ProcessedArticle
-    from agents.ingestion.rss_agent import RSSIngestionAgent
-    from sqlalchemy import or_
-
     agent = RSSIngestionAgent()
 
     stmt = select(ProcessedArticle).where(
@@ -936,11 +909,6 @@ async def trigger_editorial_rebuild(db: AsyncSession = Depends(get_db)):
     Manually triggers article expiration, live auto-replenishment,
     projection reconstruction, and Redis cache invalidation.
     """
-    from app.services.ranking.news_ranking_engine import expire_articles
-    from app.editorial.homepage_builder import HomepageBuilder
-    from app.services.cache_service import CacheService
-    from app.services.ingestion.replenishment import AutoReplenishmentService
-
     expire_metrics = await expire_articles(db)
     repl_metrics = await AutoReplenishmentService.trigger_replenishment_if_needed(db, force=True)
     await _backfill_missing_thumbnails(db)
@@ -965,11 +933,6 @@ async def trigger_flush_and_crawl(db: AsyncSession = Depends(get_db)):
     Purges expired articles, triggers a full live crawl across all active RSS sources,
     enriches with Gemini AI, and generates fresh homepage and category desks.
     """
-    from app.services.ranking.news_ranking_engine import expire_articles
-    from app.services.ingestion.replenishment import AutoReplenishmentService
-    from app.editorial.homepage_builder import HomepageBuilder
-    from app.services.cache_service import CacheService
-
     expire_metrics = await expire_articles(db)
     repl_metrics = await AutoReplenishmentService.trigger_replenishment_if_needed(db, force=True)
     await _backfill_missing_thumbnails(db)
